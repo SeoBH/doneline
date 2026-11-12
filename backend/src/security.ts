@@ -117,6 +117,8 @@ export class SecurityGuard implements CanActivate {
           'AUDIT',
           'CUSTOMER_REGISTER',
           'SR_DESK',
+          'SLA_SETTINGS',
+          'SR_REPORT',
         ].includes(permission.screen)
       )
         throw new ForbiddenException('고객사 계정에서 사용할 수 없는 공통 관리 기능입니다.');

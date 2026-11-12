@@ -34,7 +34,8 @@ async function login(loginId, screen) {
   return who;
 }
 const user = async (name, w = ws) =>
-  (await db.query('SELECT id FROM app.users WHERE login_id=$1', [prefix + '_' + name], w)).rows[0].id;
+  (await db.query('SELECT id FROM app.users WHERE login_id=$1', [prefix + '_' + name], w)).rows[0]
+    .id;
 
 before(async () => {
   if (!process.env.PGDATABASE?.endsWith('_test')) throw Error('Isolated DB required');
@@ -203,4 +204,99 @@ test('customer confirms a resolved request and closed requests reject changes', 
   // 알림 모두 읽음 처리.
   await post(engineer, 'notifications/read', { ids: [] }).expect(201);
   assert.equal((await engineer.agent.get('/api/notifications').expect(200)).body.unread, 0);
+});
+
+test('workspace SLA settings apply to new requests and record first response', async () => {
+  const sla = (await get(admin, 'sla').expect(200)).body.items;
+  assert.deepEqual(
+    sla.map((r) => r.priority),
+    ['URGENT', 'HIGH', 'NORMAL', 'LOW'],
+  );
+  assert.ok(sla.every((r) => !r.custom));
+  // 첫 응답 기한이 처리 기한보다 길면 거절, 정상 값은 저장, 같은 행을 버전 없이 다시 만들면 충돌.
+  await post(admin, 'sla', {
+    rows: [{ priority: 'URGENT', responseHours: 9, resolveHours: 6 }],
+  }).expect(409);
+  await post(admin, 'sla', {
+    rows: [{ priority: 'URGENT', responseHours: 2, resolveHours: 6 }],
+  }).expect(201);
+  await post(admin, 'sla', {
+    rows: [{ priority: 'URGENT', responseHours: 3, resolveHours: 6 }],
+  }).expect(409);
+  await get(u1, 'sla').expect(403);
+  const scope = (await get(u1, 'requests/portal').expect(200)).body.scopes[0];
+  const r = (
+    await post(u1, 'requests/portal', {
+      title: '서버 다운',
+      body: '긴급 확인 바랍니다.',
+      category: 'INCIDENT',
+      priority: 'URGENT',
+      corporationId: String(scope.corporation_id),
+      departmentId: String(scope.department_id),
+    }).expect(201)
+  ).body;
+  const row = (
+    await db.query(
+      `SELECT extract(epoch FROM due_at-created_at)/3600 AS resolve,extract(epoch FROM response_due_at-created_at)/3600 AS response,
+       first_response_at FROM app.service_requests WHERE id=$1`,
+      [r.id],
+      ws,
+    )
+  ).rows[0];
+  assert.equal(Math.round(row.resolve), 6);
+  assert.equal(Math.round(row.response), 2);
+  assert.equal(row.first_response_at, null);
+  // 내부 메모는 첫 응답이 아니고, 고객에게 보이는 답변은 첫 응답이다.
+  let v = (await get(engineer, 'requests/desk/' + r.id).expect(200)).body.item.version;
+  await post(engineer, 'requests/desk/' + r.id, {
+    version: v,
+    comment: '메모',
+    internal: true,
+  }).expect(201);
+  const first = async () =>
+    (await db.query('SELECT first_response_at FROM app.service_requests WHERE id=$1', [r.id], ws))
+      .rows[0].first_response_at;
+  assert.equal(await first(), null);
+  v = (await get(engineer, 'requests/desk/' + r.id).expect(200)).body.item.version;
+  await post(engineer, 'requests/desk/' + r.id, { version: v, comment: '확인했습니다.' }).expect(
+    201,
+  );
+  assert.ok(await first());
+});
+
+test('monthly report summarizes the current month and exports Excel', async () => {
+  const ExcelJS = require('exceljs');
+  const month = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Seoul' }).slice(0, 7);
+  await get(admin, 'reports/monthly?month=2026-13').expect(400);
+  await get(u1, 'reports/monthly?month=' + month).expect(403);
+  const report = (await get(admin, 'reports/monthly?month=' + month).expect(200)).body;
+  const row = report.rows.find((x) => x.customer_name === prefix);
+  assert.equal(row.created, 2);
+  assert.equal(row.resolved, 1);
+  assert.equal(row.closed, 1);
+  assert.equal(row.resolveRate, 100);
+  assert.equal(row.open_now, 1);
+  assert.equal(report.total.created, row.created);
+  // 다른 업체의 고객사는 리포트에 나오지 않는다.
+  const platformReport = (await get(platformAdmin, 'reports/monthly?month=' + month).expect(200))
+    .body;
+  assert.ok(!platformReport.rows.some((x) => x.customer_name === prefix));
+  const file = await get(admin, 'reports/monthly.xlsx?month=' + month)
+    .buffer(true)
+    .parse((res, cb) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => cb(null, Buffer.concat(chunks)));
+    })
+    .expect(200)
+    .expect('Content-Type', /spreadsheetml/);
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(file.body);
+  assert.deepEqual(
+    wb.worksheets.map((w) => w.name),
+    ['요약', '요청 목록'],
+  );
+  const list = wb.getWorksheet('요청 목록');
+  assert.equal(list.rowCount, 1 + 2);
+  assert.equal(list.getRow(2).getCell(5).value, 'VPN 접속 불가');
 });

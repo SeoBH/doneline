@@ -14,6 +14,8 @@ import { WorkspaceSignupScreen } from './WorkspaceSignupScreen';
 import { SrPortalScreen } from './SrPortalScreen';
 import { SrDeskScreen } from './SrDeskScreen';
 import { NotificationBell } from './NotificationBell';
+import { SlaSettingsScreen } from './SlaSettingsScreen';
+import { SrReportScreen } from './SrReportScreen';
 import { RecoveryScreen, RecoveryLink } from './RecoveryScreen';
 import { sourceModules, buttonLabel } from './sourceModules';
 import { actions, Nav, Screen, ScreenHandle, Tab, tabKey, User, ViewState } from './types';
@@ -92,6 +94,13 @@ function Branch({
     </div>
   ) : null;
 }
+// 업무 화면 구현 키 → 컴포넌트. 모두 screen·notify·onState·ref 계약을 따른다.
+const workScreens: Record<string, typeof SrPortalScreen> = {
+  'sr-portal': SrPortalScreen,
+  'sr-desk': SrDeskScreen,
+  'sla-settings': SlaSettingsScreen,
+  'sr-report': SrReportScreen,
+};
 function App() {
   // 고객사 회원가입 링크의 가입 토큰. 고객사등록 화면이 만든 /?signup=<토큰> 주소에서 읽는다.
   const signupToken = new URLSearchParams(window.location.search).get('signup') || '';
@@ -522,10 +531,10 @@ function App() {
                     else handles.current.delete(tabKey(t));
                   }}
                 />
-              ) : t.component_key === 'sr-portal' || t.component_key === 'sr-desk' ? (
-                // 고객 요청·요청 작업함은 같은 props 계약을 쓰므로 구현 키로 컴포넌트만 고른다.
+              ) : Object.hasOwn(workScreens, t.component_key || '') ? (
+                // 고객 요청·작업함·SLA·리포트는 같은 props 계약을 쓰므로 구현 키로 컴포넌트만 고른다.
                 (() => {
-                  const Sr = t.component_key === 'sr-portal' ? SrPortalScreen : SrDeskScreen;
+                  const Sr = workScreens[t.component_key!];
                   return (
                     <Sr
                       screen={t}

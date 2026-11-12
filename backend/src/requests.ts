@@ -34,12 +34,11 @@ import { PoolClient } from 'pg';
 import { Db } from './db';
 import { Audit } from './audit';
 import { AppRequest, Permission } from './security';
+import { slaFor } from './sla';
 
 const CATEGORIES = ['INCIDENT', 'REQUEST', 'QUESTION'] as const;
 const PRIORITIES = ['LOW', 'NORMAL', 'HIGH', 'URGENT'] as const;
 const STATUSES = ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED', 'CANCELLED'] as const;
-// 우선순위별 처리 기한(시간). 등록 시 due_at 계산에 사용한다. 업체별 SLA 설정은 후속 범위.
-const SLA_HOURS: Record<string, number> = { URGENT: 4, HIGH: 24, NORMAL: 72, LOW: 168 };
 // 담당자가 바꿀 수 있는 상태 전이. RESOLVED→CLOSED는 고객 확인(portal)만 가능하다.
 const DESK_TRANSITIONS: Record<string, string[]> = {
   OPEN: ['IN_PROGRESS', 'CANCELLED'],
@@ -234,10 +233,12 @@ export class Requests {
       const no = (
         await c.query('SELECT coalesce(max(request_no),0)+1 AS n FROM app.service_requests')
       ).rows[0].n;
+      // 기한은 등록 시점에 현재 업체의 SLA(없으면 기본값)로 계산해 저장한다. 이후 SLA를 바꿔도 이 요청의 기한은 그대로다.
+      const sla = await slaFor(c, body.priority);
       const row = (
         await c.query(
-          `INSERT INTO app.service_requests(request_no,customer_id,corporation_id,department_id,requester_id,title,body,category,priority,due_at)
-           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,now()+make_interval(hours=>$10)) RETURNING id,request_no`,
+          `INSERT INTO app.service_requests(request_no,customer_id,corporation_id,department_id,requester_id,title,body,category,priority,due_at,response_due_at)
+           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,now()+make_interval(hours=>$10),now()+make_interval(hours=>$11)) RETURNING id,request_no`,
           [
             no,
             a.customer_id,
@@ -248,7 +249,8 @@ export class Requests {
             body.body.trim(),
             body.category,
             body.priority,
-            SLA_HOURS[body.priority],
+            sla.resolve,
+            sla.response,
           ],
         )
       ).rows[0];
@@ -393,8 +395,17 @@ export class Requests {
         `UPDATE app.service_requests SET status=coalesce($2,status),
          assignee_id=CASE WHEN $3 THEN $4::bigint ELSE assignee_id END,priority=coalesce($5,priority),updated_at=now(),
          resolved_at=CASE WHEN $2='RESOLVED' THEN now() WHEN $2 IS NOT NULL THEN NULL ELSE resolved_at END,
-         closed_at=CASE WHEN $2='CANCELLED' THEN now() ELSE closed_at END WHERE id=$1`,
-        [id, status, assignee !== undefined, assignee, priority],
+         closed_at=CASE WHEN $2='CANCELLED' THEN now() ELSE closed_at END,
+         first_response_at=CASE WHEN first_response_at IS NULL AND $6 THEN now() ELSE first_response_at END WHERE id=$1`,
+        // $6: 고객에게 보이는 첫 응답(상태 변경 또는 공개 답변)이면 첫 응답 시각을 한 번만 기록한다(응답 SLA 계산용).
+        [
+          id,
+          status,
+          assignee !== undefined,
+          assignee,
+          priority,
+          Boolean(status || (comment && !body.internal)),
+        ],
       );
       const toRequester: string[] = [];
       if (status) {

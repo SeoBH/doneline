@@ -988,3 +988,27 @@ button.primary:hover {
 .bell-panel li.unread {
   font-weight: 600;
 }
+
+/* SLA 설정·월간 리포트 표. 숫자 입력칸은 표 안에서 좁게 쓴다 */
+.sla-screen td input {
+  width: 120px;
+  margin: 0;
+  padding: 6px;
+}
+.report-screen .query-bar {
+  max-width: 560px;
+}
+.report-screen select {
+  width: 100%;
+  padding: 6px;
+  margin: 4px 0 0;
+  height: 30px;
+  border: 1px solid var(--color-border-input);
+  border-radius: 5px;
+  font: inherit;
+  background: var(--color-surface);
+}
+.total-row td {
+  font-weight: 700;
+  background: var(--color-surface-subtle);
+}

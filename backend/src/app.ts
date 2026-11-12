@@ -26,6 +26,8 @@ import { Mail } from './mail';
 import { Notifier } from './notifier';
 import { Workspaces, WorkspacesController } from './workspaces';
 import { Requests, RequestsController } from './requests';
+import { Sla, SlaController } from './sla';
+import { Reports, ReportsController } from './reports';
 @Module({
   controllers: [
     AuthController,
@@ -35,6 +37,8 @@ import { Requests, RequestsController } from './requests';
     RecoveryController,
     WorkspacesController,
     RequestsController,
+    SlaController,
+    ReportsController,
   ],
   providers: [
     Db,
@@ -43,6 +47,8 @@ import { Requests, RequestsController } from './requests';
     Notifier,
     Workspaces,
     Requests,
+    Sla,
+    Reports,
     Accounts,
     Audit,
     RegistrationService,
