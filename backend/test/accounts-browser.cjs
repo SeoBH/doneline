@@ -89,9 +89,8 @@ const path = require('node:path');
     await catalog('departments', '부서', 'D001', '개발');
     signup = await browser.newPage();
     signup.on('pageerror', (e) => errors.push(e.message));
-    const token = (
-      await db.query('SELECT signup_token FROM app.customers WHERE code=$1', [code])
-    ).rows[0].signup_token;
+    const token = (await db.query('SELECT signup_token FROM app.customers WHERE code=$1', [code]))
+      .rows[0].signup_token;
     await signup.goto('http://127.0.0.1:3002/?signup=' + token);
     await signup.getByRole('button', { name: '회원가입', exact: true }).click();
     await expect(signup.getByText(code + ' · 브라우저 고객사', { exact: true })).toHaveCount(0);
@@ -190,10 +189,9 @@ const path = require('node:path');
     await expect(panel.getByLabel('아이디', { exact: true })).toHaveValue('');
     await expect(panel.getByText(code + '_direct', { exact: true })).toBeVisible();
     const u = (
-      await db.query(
-        'SELECT id,account_status,password_hash FROM app.users WHERE login_id=$1',
-        [code + '_direct'],
-      )
+      await db.query('SELECT id,account_status,password_hash FROM app.users WHERE login_id=$1', [
+        code + '_direct',
+      ])
     ).rows[0];
     expect(u.account_status).toBe('ACTIVE');
     expect(u.password_hash).toBeNull();
@@ -233,8 +231,7 @@ const path = require('node:path');
     expect(deleted.status()).toBe(201);
     await expect(panel.getByText('수정된 사용자', { exact: true })).toHaveCount(0);
     expect(
-      (await db.query('SELECT id FROM app.users WHERE login_id=$1', [code + '_direct']))
-        .rowCount,
+      (await db.query('SELECT id FROM app.users WHERE login_id=$1', [code + '_direct'])).rowCount,
     ).toBe(0);
     expect(errors).toEqual([]);
     await mkdir(path.resolve(__dirname, '../../runtime'), { recursive: true });

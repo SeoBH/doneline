@@ -116,6 +116,7 @@ export class SecurityGuard implements CanActivate {
           'RESP_REGISTER',
           'AUDIT',
           'CUSTOMER_REGISTER',
+          'SR_DESK',
         ].includes(permission.screen)
       )
         throw new ForbiddenException('고객사 계정에서 사용할 수 없는 공통 관리 기능입니다.');
@@ -125,7 +126,9 @@ export class SecurityGuard implements CanActivate {
         !req.actor!.is_platform &&
         ['SCREEN_REGISTER', 'MENU_REGISTER', 'RESP_REGISTER'].includes(permission.screen)
       )
-        throw new ForbiddenException('운영 워크스페이스에서만 사용할 수 있는 공통 구성 기능입니다.');
+        throw new ForbiddenException(
+          '운영 워크스페이스에서만 사용할 수 있는 공통 구성 기능입니다.',
+        );
       const menu = req.get('x-menu-id');
       if (!menu || !/^\d{1,18}$/.test(menu)) throw new ForbiddenException('메뉴 권한이 없습니다.');
       if (

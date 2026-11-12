@@ -25,6 +25,7 @@ import { Recovery, RecoveryController } from './recovery';
 import { Mail } from './mail';
 import { Notifier } from './notifier';
 import { Workspaces, WorkspacesController } from './workspaces';
+import { Requests, RequestsController } from './requests';
 @Module({
   controllers: [
     AuthController,
@@ -33,6 +34,7 @@ import { Workspaces, WorkspacesController } from './workspaces';
     AccountsController,
     RecoveryController,
     WorkspacesController,
+    RequestsController,
   ],
   providers: [
     Db,
@@ -40,6 +42,7 @@ import { Workspaces, WorkspacesController } from './workspaces';
     Mail,
     Notifier,
     Workspaces,
+    Requests,
     Accounts,
     Audit,
     RegistrationService,

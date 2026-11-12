@@ -39,9 +39,8 @@ before(async () => {
   // 테스트 준비 SQL은 HTTP 요청 밖에서 실행되므로 운영 워크스페이스를 기본 범위로 지정한다.
   db.useScriptWorkspace(await db.platformWorkspaceId());
   await db.query("DELETE FROM app.login_limits WHERE bucket LIKE 'ip:%'");
-  root = (
-    await db.query('INSERT INTO app.menus(code,name) VALUES($1,$1) RETURNING id', [prefix])
-  ).rows[0].id;
+  root = (await db.query('INSERT INTO app.menus(code,name) VALUES($1,$1) RETURNING id', [prefix]))
+    .rows[0].id;
   resp = (
     await db.query(
       "INSERT INTO app.responsibilities(code,name,root_menu_id,authority_type) VALUES($1,$1,$2,'SYSTEM') RETURNING id",
@@ -56,10 +55,10 @@ before(async () => {
     const id = (await db.query('SELECT id FROM app.screens WHERE code=$1', [code])).rows[0].id;
     ids[code] = id;
     const map = (
-      await db.query(
-        'INSERT INTO app.menu_screens(menu_id,screen_id) VALUES($1,$2) RETURNING id',
-        [root, id],
-      )
+      await db.query('INSERT INTO app.menu_screens(menu_id,screen_id) VALUES($1,$2) RETURNING id', [
+        root,
+        id,
+      ])
     ).rows[0].id;
     for (const a of ['RESET', 'QUERY', 'SAVE', 'DELETE'])
       await db.query('INSERT INTO app.menu_screen_buttons VALUES($1,$2,true)', [map, a]);

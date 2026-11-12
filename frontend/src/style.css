@@ -56,6 +56,17 @@
   --color-danger: #c34343;
   --color-danger-bg: #fde9e9;
   --color-danger-strong: #b12e2e;
+  /* 고객 요청 상태: 글자색 / 바탕색. 상태는 항상 글자와 함께 표시해 색만으로 구분하지 않는다 */
+  --color-sr-open: #8a5a00;
+  --color-sr-open-bg: #fff4d6;
+  --color-sr-progress: #1d5fa8;
+  --color-sr-progress-bg: #e3effc;
+  --color-sr-resolved: #6b3fb0;
+  --color-sr-resolved-bg: #efe7fb;
+  --color-sr-closed: #167349;
+  --color-sr-closed-bg: #e5f5ed;
+  --color-sr-cancelled: #64758c;
+  --color-sr-cancelled-bg: #eef1f5;
   /* 그림자·모달 뒤 어둡게 덮는 막 */
   --shadow-card: 0 10px 50px #1c305310;
   --shadow-popover: 0 4px 18px #10284020;
@@ -777,4 +788,203 @@ input:focus-visible {
   padding: 2px 7px;
   line-height: 20px;
   flex: none;
+}
+
+/* 고객 요청·요청 작업함. 왼쪽 목록, 오른쪽 상세의 2열이며 좁은 화면에서는 세로로 쌓는다. */
+.sr-screen {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.4fr);
+  gap: 16px;
+  height: 100%;
+  min-height: 480px;
+}
+.sr-desk {
+  grid-template-columns: minmax(0, 1.5fr) minmax(360px, 1fr);
+}
+.sr-list,
+.sr-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+.sr-list select,
+.sr-detail select,
+.sr-detail textarea {
+  width: 100%;
+  padding: 8px;
+  margin: 4px 0 12px;
+  border: 1px solid var(--color-border-input);
+  border-radius: 5px;
+  font: inherit;
+  background: var(--color-surface);
+}
+.sr-detail textarea {
+  resize: vertical;
+}
+.sr-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+.sr-card.selected {
+  border-color: var(--color-primary);
+  background: var(--color-surface-selected);
+}
+.sr-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sr-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.sr-OPEN {
+  color: var(--color-sr-open);
+  background: var(--color-sr-open-bg);
+}
+.sr-IN_PROGRESS {
+  color: var(--color-sr-progress);
+  background: var(--color-sr-progress-bg);
+}
+.sr-RESOLVED {
+  color: var(--color-sr-resolved);
+  background: var(--color-sr-resolved-bg);
+}
+.sr-CLOSED {
+  color: var(--color-sr-closed);
+  background: var(--color-sr-closed-bg);
+}
+.sr-CANCELLED {
+  color: var(--color-sr-cancelled);
+  background: var(--color-sr-cancelled-bg);
+}
+.sr-overdue {
+  color: var(--color-danger-strong);
+  background: var(--color-danger-bg);
+}
+.sr-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+.sr-decide {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 12px;
+  margin: 8px 0;
+  border-radius: 8px;
+  background: var(--color-sr-resolved-bg);
+}
+.sr-decide span {
+  margin-right: auto;
+}
+.sr-timeline {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+  border-left: 2px solid var(--color-border);
+}
+.sr-timeline li {
+  padding: 6px 0 6px 14px;
+}
+.sr-timeline li.change {
+  color: var(--color-text-muted);
+}
+.sr-timeline li.comment > div {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.sr-timeline li.internal {
+  background: var(--color-surface-muted);
+}
+.sr-check {
+  display: flex;
+  align-items: center;
+}
+/* 강조 버튼: 화면에서 가장 중요한 동작 하나에만 쓴다 */
+button.primary {
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+  border-color: var(--color-primary);
+}
+button.primary:hover {
+  background: var(--color-primary-strong);
+}
+@media (max-width: 1000px) {
+  .sr-screen,
+  .sr-desk {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+  .sr-desk .registration-grid {
+    min-height: 320px;
+  }
+}
+
+/* 헤더 알림 종. 패널은 헤더 아래에 겹쳐 띄운다 */
+.bell {
+  position: relative;
+}
+.bell > button {
+  position: relative;
+  background: transparent;
+  border-color: transparent;
+  color: var(--color-text-inverse);
+}
+.bell > button:hover {
+  background: rgb(255 255 255 / 12%);
+}
+.bell-count {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 18px;
+  background: var(--color-danger);
+  color: var(--color-text-inverse);
+}
+.bell-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 50;
+  width: min(360px, calc(100vw - 32px));
+  max-height: 420px;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-popover);
+}
+.bell-panel ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.bell-panel li {
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+.bell-panel li.unread {
+  font-weight: 600;
 }

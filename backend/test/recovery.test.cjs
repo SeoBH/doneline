@@ -62,9 +62,8 @@ before(async () => {
   db = app.get(Db);
   // 테스트 준비 SQL은 HTTP 요청 밖에서 실행되므로 운영 워크스페이스를 기본 범위로 지정한다.
   db.useScriptWorkspace(await db.platformWorkspaceId());
-  const r = (
-    await db.query("SELECT id,root_menu_id FROM app.responsibilities WHERE code='ADMIN'")
-  ).rows[0];
+  const r = (await db.query("SELECT id,root_menu_id FROM app.responsibilities WHERE code='ADMIN'"))
+    .rows[0];
   resp = r.id;
   root = r.root_menu_id;
   customer = (
@@ -244,12 +243,10 @@ test('administrator prepares link using saved email/version, cannot bypass SAVE 
   }
   const g = await guest();
   await post(g, 'accounts/password-link', { userId: u.id, version: u.version }).expect(401);
-  await db.query(
-    "UPDATE app.users SET account_status='SUSPENDED',is_active=false WHERE id=$1",
-    [u.id],
-  );
-  const v = (await db.query('SELECT version FROM app.users WHERE id=$1', [u.id])).rows[0]
-    .version;
+  await db.query("UPDATE app.users SET account_status='SUSPENDED',is_active=false WHERE id=$1", [
+    u.id,
+  ]);
+  const v = (await db.query('SELECT version FROM app.users WHERE id=$1', [u.id])).rows[0].version;
   await post(admin, 'accounts/password-link', { userId: u.id, version: v }).expect(400);
   assert.equal(
     (await db.query('SELECT 1 FROM app.account_tokens WHERE user_id=$1', [u.id])).rowCount,

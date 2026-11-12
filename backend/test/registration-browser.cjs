@@ -37,8 +37,8 @@ const assert = require('node:assert/strict');
       [name, await argon2.hash(password), resp],
     );
     for (const code of ['SCREEN_REGISTER', 'MENU_REGISTER', 'RESP_REGISTER', 'AUDIT']) {
-      const screen = (await db.query('SELECT id FROM app.screens WHERE code=$1', [code]))
-        .rows[0].id;
+      const screen = (await db.query('SELECT id FROM app.screens WHERE code=$1', [code])).rows[0]
+        .id;
       const map = (
         await db.query(
           'INSERT INTO app.menu_screens(menu_id,screen_id) VALUES($1,$2) RETURNING id',
@@ -46,10 +46,7 @@ const assert = require('node:assert/strict');
         )
       ).rows[0].id;
       for (const action of ['RESET', 'QUERY', 'SAVE', 'DELETE'])
-        await db.query('INSERT INTO app.menu_screen_buttons VALUES($1,$2,true)', [
-          map,
-          action,
-        ]);
+        await db.query('INSERT INTO app.menu_screen_buttons VALUES($1,$2,true)', [map, action]);
     }
     await app.listen(3001, '127.0.0.1');
     browser = await chromium.launch({ channel: 'msedge', headless: true });
@@ -199,11 +196,8 @@ const assert = require('node:assert/strict');
       .click();
     await expect(active().locator('[aria-label="하위 구성"] .ag-row')).toHaveCount(1);
     assert.equal(
-      (
-        await db.query('SELECT count(*)::int n FROM app.menu_screens WHERE menu_id=$1', [
-          menu.id,
-        ])
-      ).rows[0].n,
+      (await db.query('SELECT count(*)::int n FROM app.menu_screens WHERE menu_id=$1', [menu.id]))
+        .rows[0].n,
       0,
     );
     await requestClick(
@@ -211,11 +205,8 @@ const assert = require('node:assert/strict');
       '/menus/' + menu.id + '/apply',
     );
     assert.equal(
-      (
-        await db.query('SELECT count(*)::int n FROM app.menu_screens WHERE menu_id=$1', [
-          menu.id,
-        ])
-      ).rows[0].n,
+      (await db.query('SELECT count(*)::int n FROM app.menu_screens WHERE menu_id=$1', [menu.id]))
+        .rows[0].n,
       1,
     );
     await check(
@@ -230,11 +221,8 @@ const assert = require('node:assert/strict');
     await page.waitForFunction(() => !document.querySelector('.toolbar button:disabled'));
     await expect(active().locator('[aria-label="하위 구성"] .ag-row')).toHaveCount(0);
     assert.equal(
-      (
-        await db.query('SELECT count(*)::int n FROM app.menu_screens WHERE menu_id=$1', [
-          menu.id,
-        ])
-      ).rows[0].n,
+      (await db.query('SELECT count(*)::int n FROM app.menu_screens WHERE menu_id=$1', [menu.id]))
+        .rows[0].n,
       1,
     );
     await page.screenshot({ path: path.resolve(__dirname, '../../runtime/menu-registration.png') });

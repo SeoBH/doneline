@@ -11,6 +11,9 @@ import { AccountsScreen } from './AccountsScreen';
 import { CustomersScreen } from './CustomersScreen';
 import { SignupScreen } from './SignupScreen';
 import { WorkspaceSignupScreen } from './WorkspaceSignupScreen';
+import { SrPortalScreen } from './SrPortalScreen';
+import { SrDeskScreen } from './SrDeskScreen';
+import { NotificationBell } from './NotificationBell';
 import { RecoveryScreen, RecoveryLink } from './RecoveryScreen';
 import { sourceModules, buttonLabel } from './sourceModules';
 import { actions, Nav, Screen, ScreenHandle, Tab, tabKey, User, ViewState } from './types';
@@ -431,6 +434,7 @@ function App() {
       <header>
         <strong>Doneline</strong>
         <span>{user.displayName}</span>
+        <NotificationBell />
         <button onClick={refreshNavigation}>메뉴 새로고침</button>
         <button onClick={logout}>로그아웃</button>
       </header>
@@ -518,6 +522,22 @@ function App() {
                     else handles.current.delete(tabKey(t));
                   }}
                 />
+              ) : t.component_key === 'sr-portal' || t.component_key === 'sr-desk' ? (
+                // 고객 요청·요청 작업함은 같은 props 계약을 쓰므로 구현 키로 컴포넌트만 고른다.
+                (() => {
+                  const Sr = t.component_key === 'sr-portal' ? SrPortalScreen : SrDeskScreen;
+                  return (
+                    <Sr
+                      screen={t}
+                      notify={notify}
+                      onState={(s) => markState(tabKey(t), s)}
+                      ref={(h) => {
+                        if (h) handles.current.set(tabKey(t), h);
+                        else handles.current.delete(tabKey(t));
+                      }}
+                    />
+                  );
+                })()
               ) : t.component_key === 'audit' ? (
                 <AuditScreen
                   screen={t}

@@ -101,15 +101,13 @@ test('login, CSRF, rotation, menu isolation, cache invalidation, audit, logout',
       (e) => e.action === 'LOGIN' && e.outcome === 'SUCCESS' && e.user_id === user,
     ),
   );
-  await db.query(
-    'UPDATE app.menu_screen_buttons SET is_allowed=false WHERE menu_screen_id=$1',
-    [mapping],
-  );
+  await db.query('UPDATE app.menu_screen_buttons SET is_allowed=false WHERE menu_screen_id=$1', [
+    mapping,
+  ]);
   await agent.get('/api/admin/audit-events').set('X-Menu-ID', root).expect(403);
-  await db.query(
-    'UPDATE app.menu_screen_buttons SET is_allowed=true WHERE menu_screen_id=$1',
-    [mapping],
-  );
+  await db.query('UPDATE app.menu_screen_buttons SET is_allowed=true WHERE menu_screen_id=$1', [
+    mapping,
+  ]);
   await agent.get('/api/admin/audit-events').set('X-Menu-ID', root).expect(200);
   await agent
     .post('/api/auth/logout')

@@ -55,9 +55,7 @@ export function useToasts() {
     // 새 ID를 받으므로 key가 바뀌어 Toast가 새로 만들어지고 타이머도 처음부터 다시 돈다.
     const notice = { id: ++nextId.current, message, kind };
     setNotices((previous) => [
-      ...previous
-        .filter((n) => n.kind !== kind || n.message !== message)
-        .slice(-(MAX_VISIBLE - 1)),
+      ...previous.filter((n) => n.kind !== kind || n.message !== message).slice(-(MAX_VISIBLE - 1)),
       notice,
     ]);
   }, []);

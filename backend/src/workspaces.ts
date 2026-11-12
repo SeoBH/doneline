@@ -4,7 +4,15 @@
  * 가입이 커밋된 뒤 Doneline 운영팀에 슬랙 알림을 보낸다(알림 실패는 가입에 영향 없음).
  * 관련 모듈: db.ts(워크스페이스 지정), recovery.ts(인증 메일), notifier.ts(운영 알림), 012/013 마이그레이션.
  */
-import { Body, ConflictException, Controller, HttpException, Injectable, Post, Req } from '@nestjs/common';
+import {
+  Body,
+  ConflictException,
+  Controller,
+  HttpException,
+  Injectable,
+  Post,
+  Req,
+} from '@nestjs/common';
 import { IsEmail, IsString, Length, Matches } from 'class-validator';
 import { createHash } from 'node:crypto';
 import * as argon2 from 'argon2';
@@ -35,7 +43,11 @@ export class Workspaces {
   ) {}
   async signup(req: AppRequest, body: WorkspaceSignupDto) {
     // 비싼 비밀번호 해시 계산과 업체 생성 전에 IP별 요청 수를 제한한다(15분 5회).
-    const bucket = 'workspace-signup:' + createHash('sha256').update(req.ip || '').digest('hex');
+    const bucket =
+      'workspace-signup:' +
+      createHash('sha256')
+        .update(req.ip || '')
+        .digest('hex');
     const limit = await this.db.query(
       `INSERT INTO app.login_limits VALUES($1,1,now()+interval '15 minutes') ON CONFLICT(bucket)
       DO UPDATE SET attempts=CASE WHEN app.login_limits.expires_at<=now() THEN 1 ELSE app.login_limits.attempts+1 END,
@@ -74,7 +86,12 @@ export class Workspaces {
           )
         ).rows[0];
         await this.audit.write(
-          { requestId: req.requestId, userId: user.id, action: 'WORKSPACE_SIGNUP', outcome: 'SUCCESS' },
+          {
+            requestId: req.requestId,
+            userId: user.id,
+            action: 'WORKSPACE_SIGNUP',
+            outcome: 'SUCCESS',
+          },
           c,
         );
         await this.recovery.issue(c, user, 'VERIFY');
@@ -97,7 +114,8 @@ export class Workspaces {
       `🆕 새 업체 가입: ${body.workspaceName.trim()} (${body.workspaceCode}) · 요금제 FREE`,
     );
     return {
-      message: '업체 가입을 완료했습니다. 아이디와 비밀번호로 로그인해주세요. 이메일 인증 메일은 발송 보류입니다.',
+      message:
+        '업체 가입을 완료했습니다. 아이디와 비밀번호로 로그인해주세요. 이메일 인증 메일은 발송 보류입니다.',
     };
   }
 }

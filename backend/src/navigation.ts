@@ -64,6 +64,7 @@ export class NavigationController {
             'RESP_REGISTER',
             'AUDIT',
             'CUSTOMER_REGISTER',
+            'SR_DESK',
           ].includes(s.code),
       );
     // 공통 구성 화면은 운영 워크스페이스만 사용할 수 있으므로(security.ts) 다른 업체 메뉴에서는 보이지 않게 한다.

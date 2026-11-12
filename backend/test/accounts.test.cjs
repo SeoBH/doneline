@@ -230,8 +230,8 @@ test('signup stores no RESP and rejects injected customer, scopes and RESP', asy
   assert.equal(u.account_status, 'PENDING');
   assert.equal(u.resp_id, null);
   assert.equal(
-    (await db.query('SELECT count(*)::int n FROM app.user_scopes WHERE user_id=$1', [u.id]))
-      .rows[0].n,
+    (await db.query('SELECT count(*)::int n FROM app.user_scopes WHERE user_id=$1', [u.id])).rows[0]
+      .n,
     0,
   );
   await login('applicant', 401);
@@ -347,8 +347,8 @@ test('direct creation, profile customer reassignment clears mapping, audit failu
     respId: userResp,
   }).expect(201);
   assert.equal(
-    (await db.query('SELECT mapping_ready FROM app.account_access WHERE id=$1', [u.id]))
-      .rows[0].mapping_ready,
+    (await db.query('SELECT mapping_ready FROM app.account_access WHERE id=$1', [u.id])).rows[0]
+      .mapping_ready,
     false,
   );
   const audit = app.get(Audit),
@@ -370,9 +370,8 @@ test('RESP defaults to CUSTOMER, assigned type change rejected, new SYSTEM is ex
     }).expect(201)
   ).body.items[0].item;
   assert.equal(saved.authority_type, 'SYSTEM');
-  const assigned = (
-    await db.query('SELECT * FROM app.responsibilities WHERE id=$1', [managerResp])
-  ).rows[0];
+  const assigned = (await db.query('SELECT * FROM app.responsibilities WHERE id=$1', [managerResp]))
+    .rows[0];
   await post(system, 'registration/responsibilities/save', {
     rows: [
       {
@@ -555,16 +554,12 @@ test('real deletion removes mappings and sessions, preserves audit, rejects own/
   await get(who, 'me').expect(401);
   for (const table of ['user_scopes', 'user_corporations', 'auth_sessions'])
     assert.equal(
-      (
-        await db.query('SELECT count(*)::int n FROM app.' + table + ' WHERE user_id=$1', [
-          u.id,
-        ])
-      ).rows[0].n,
+      (await db.query('SELECT count(*)::int n FROM app.' + table + ' WHERE user_id=$1', [u.id]))
+        .rows[0].n,
       0,
     );
   assert(
-    (await db.query('SELECT 1 FROM audit.event_summary WHERE user_id=$1', [u.id])).rowCount >
-      0,
+    (await db.query('SELECT 1 FROM audit.event_summary WHERE user_id=$1', [u.id])).rowCount > 0,
   );
   const foreignUser = await user('direct');
   await post(

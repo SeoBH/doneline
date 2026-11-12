@@ -13,7 +13,16 @@ const { Db } = require('../dist/db');
 const { settings } = require('../dist/config');
 const prefix = 'ws_' + crypto.randomBytes(4).toString('hex');
 const password = 'Workspace test password 123!';
-let app, db, platform, other, root, sharedResp, platformCustomer, otherCustomer, otherAdmin, platformAdmin;
+let app,
+  db,
+  platform,
+  other,
+  root,
+  sharedResp,
+  platformCustomer,
+  otherCustomer,
+  otherAdmin,
+  platformAdmin;
 
 const post = (who, url, data, menu = root) =>
   who.agent
@@ -42,8 +51,8 @@ before(async () => {
   ).rows[0].id;
   // ADMIN과 같은 메뉴(공통 구성 화면 포함)를 가진 공통 SYSTEM RESP. 업체 관리자에게 배정해도
   // 공통 구성 화면은 운영 워크스페이스 검사로 막혀야 한다.
-  root = (await db.query("SELECT root_menu_id FROM app.responsibilities WHERE code='ADMIN'")).rows[0]
-    .root_menu_id;
+  root = (await db.query("SELECT root_menu_id FROM app.responsibilities WHERE code='ADMIN'"))
+    .rows[0].root_menu_id;
   sharedResp = (
     await db.query(
       "INSERT INTO app.responsibilities(code,name,root_menu_id,authority_type) VALUES($1,$1,$2,'SYSTEM') RETURNING id",
@@ -60,7 +69,11 @@ before(async () => {
   );
   // 다른 업체의 행은 세 번째 인자로 그 워크스페이스를 지정해 만든다. 고객사 코드는 업체마다 따로 고유하다.
   otherCustomer = (
-    await db.query('INSERT INTO app.customers(code,name) VALUES($1,$1) RETURNING id', [prefix], other)
+    await db.query(
+      'INSERT INTO app.customers(code,name) VALUES($1,$1) RETURNING id',
+      [prefix],
+      other,
+    )
   ).rows[0].id;
   await db.query(
     'INSERT INTO app.users(login_id,password_hash,display_name,resp_id,must_change_password) VALUES($1,$2,$1,$3,false)',

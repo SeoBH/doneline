@@ -27,13 +27,7 @@ const fields: [keyof typeof empty, string, string, string?][] = [
   ['password', '비밀번호', 'password', '15~128자'],
 ];
 
-export function WorkspaceSignupScreen({
-  onBack,
-  notify,
-}: {
-  onBack: () => void;
-  notify: Notify;
-}) {
+export function WorkspaceSignupScreen({ onBack, notify }: { onBack: () => void; notify: Notify }) {
   const [draft, setDraft] = useState(empty),
     [busy, setBusy] = useState(false),
     [done, setDone] = useState(false);
