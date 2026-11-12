@@ -7,6 +7,16 @@ import { CodeLookup, LookupConfig, LookupItem } from './CodeLookup';
 import { AgGridReact } from 'ag-grid-react';
 import { AllCommunityModule, ModuleRegistry, themeQuartz, ColDef } from 'ag-grid-community';
 ModuleRegistry.registerModules([AllCommunityModule]);
+// 그리드 테마는 한 번만 만든다. 렌더마다 withParams를 호출하면 새 테마 객체로 인식될 수 있다.
+// 색은 style.css의 토큰을 var()로 참조해 화면 테마와 함께 바뀌게 한다.
+const gridTheme = themeQuartz.withParams({
+  headerBackgroundColor: 'var(--color-accent)',
+  headerTextColor: 'var(--color-text-inverse)',
+  rowHeight: 33,
+  headerHeight: 36,
+  fontSize: 12,
+  borderColor: 'var(--color-border-strong)',
+});
 export type GridRow = Record<string, any> & { _key: string; _checked?: boolean; _error?: string };
 // Record는 이름으로 값을 찾는 객체 타입, &는 타입 결합, 속성 뒤 ?는 생략 가능을 뜻한다.
 // 업무 컬럼은 화면마다 다르지만 모든 행에는 UI 식별자인 _key가 있어야 한다.
@@ -237,14 +247,7 @@ export const DataGrid = forwardRef<
           getRowId: 행 위치가 바뀌어도 같은 _key를 가진 행으로 인식하게 한다. */}
         <AgGridReact
           ref={grid}
-          theme={themeQuartz.withParams({
-            headerBackgroundColor: '#17627e',
-            headerTextColor: '#ffffff',
-            rowHeight: 33,
-            headerHeight: 36,
-            fontSize: 12,
-            borderColor: '#ccd7df',
-          })}
+          theme={gridTheme}
           rowData={rows}
           columnDefs={defs}
           getRowId={(p) => p.data._key}

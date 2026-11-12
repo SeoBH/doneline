@@ -2,6 +2,70 @@
  * 공통 UI 스타일. 로그인·업무 창틀·메뉴·탭·알림·등록 그리드의 배치와 표시를 정의한다.
  * 같은 선택자의 뒤쪽 선언이 앞쪽 선언을 덮어쓸 수 있으므로 선언 순서를 유지한다.
  */
+
+/*
+ * 디자인 토큰. `--이름: 값`은 CSS 변수 선언이고 각 규칙에서 `var(--이름)`으로 읽는다.
+ * 색을 "흰색" 같은 값이 아니라 "표면·본문·강조" 같은 용도 이름으로 부르게 해서,
+ * 나중에 다크모드·고객사별 테마를 넣을 때 이 블록의 값만 바꾸면 전체 화면이 따라 바뀌게 한다.
+ * 기존 화면 색을 그대로 옮겼으며, 눈으로 구분되지 않을 만큼 비슷한 값만 하나로 합쳤다.
+ * AG Grid 머리글 색도 같은 토큰을 쓴다(DataGrid.tsx).
+ */
+:root {
+  /* 배경·표면: 페이지 바탕, 카드·입력처럼 올라앉는 면, 선택·호버 상태 */
+  --color-bg-page: #f2f5f8;
+  --color-surface: #fff;
+  --color-surface-muted: #f0f3f6;
+  --color-surface-subtle: #eaf0f6;
+  --color-surface-hover: #edf3fa;
+  --color-surface-selected: #e9f1fa;
+  --color-chrome: #e3eaf2;
+  --color-header-bg: #18334c;
+  /* 테두리: 기본 < 부드러움 < 강함 순으로 진하다. input은 입력칸 전용 */
+  --color-border: #d8e0e9;
+  --color-border-subtle: #e0e6ef;
+  --color-border-soft: #dce3ec;
+  --color-border-strong: #ccd7df;
+  --color-border-input: #cad4e0;
+  --color-border-active: #c1d1e2;
+  /* 글자: inverse는 어두운 배경(헤더·강조 버튼) 위의 글자 */
+  --color-text: #223047;
+  --color-text-strong: #17354a;
+  --color-text-button: #253650;
+  --color-text-muted: #64758c;
+  --color-text-faint: #8290a2;
+  --color-text-inverse: #fff;
+  /* 강조: primary는 로그인 등 주 동작, accent는 그리드 머리글·고정 조건 버튼 */
+  --color-primary: #245d94;
+  --color-primary-strong: #185284;
+  --color-link: #185b9a;
+  --color-accent: #17627e;
+  --color-focus: #4488c5;
+  /* 그리드 행 상태와 크기 조절 손잡이 */
+  --color-row-current: #dcecf6;
+  --color-row-error: #ffebe9;
+  --color-splitter-hover: #8eabbf;
+  --color-resizer-hover: #c9dce9;
+  --color-resizer-handle: #b3c5d3;
+  /* 알림 상태: 기본색(왼쪽 띠), bg(아이콘 바탕), strong(아이콘 글자) */
+  --color-info: #3778b5;
+  --color-info-bg: #e8f1fb;
+  --color-info-strong: #246398;
+  --color-success: #20815c;
+  --color-success-bg: #e5f5ed;
+  --color-success-strong: #167349;
+  --color-danger: #c34343;
+  --color-danger-bg: #fde9e9;
+  --color-danger-strong: #b12e2e;
+  /* 그림자·모달 뒤 어둡게 덮는 막 */
+  --shadow-card: 0 10px 50px #1c305310;
+  --shadow-popover: 0 4px 18px #10284020;
+  --shadow-toast: 0 6px 24px #18334c26;
+  --color-backdrop: rgb(15 35 50 / 40%);
+  /* 글꼴 */
+  --font-sans: Arial, 'Malgun Gothic', sans-serif;
+  --font-size-base: 14px;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -21,8 +85,8 @@
   min-height: 0;
 }
 .account-card {
-  background: white;
-  border: 1px solid #ccd7df;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
   padding: 20px;
   overflow: auto;
 }
@@ -39,14 +103,14 @@
 .signup-page select {
   width: 100%;
   padding: 8px;
-  border: 1px solid #cad4e0;
+  border: 1px solid var(--color-border-input);
   border-radius: 5px;
   margin: 4px 0 12px;
   font: inherit;
-  background: white;
+  background: var(--color-surface);
 }
 .account-review {
-  background: white;
+  background: var(--color-surface);
   padding: 12px;
   margin-top: 12px;
 }
@@ -69,10 +133,10 @@
 }
 body {
   margin: 0;
-  color: #223047;
-  background: #f2f5f8;
-  font-family: Arial, 'Malgun Gothic', sans-serif;
-  font-size: 14px;
+  color: var(--color-text);
+  background: var(--color-bg-page);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base);
 }
 button,
 input {
@@ -80,14 +144,14 @@ input {
 }
 button {
   cursor: pointer;
-  border: 1px solid #d8e0e9;
-  background: #fff;
-  color: #253650;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-button);
   border-radius: 5px;
   padding: 9px 15px;
 }
 button:hover {
-  background: #edf3fa;
+  background: var(--color-surface-hover);
 }
 button:disabled {
   opacity: 0.6;
@@ -96,7 +160,7 @@ button:disabled {
 input {
   width: 100%;
   margin: 8px 0 20px;
-  border: 1px solid #cad4e0;
+  border: 1px solid var(--color-border-input);
   padding: 12px;
   border-radius: 5px;
 }
@@ -105,7 +169,7 @@ label {
 }
 small,
 .hint {
-  color: #64758c;
+  color: var(--color-text-muted);
 }
 .login {
   min-height: 100vh;
@@ -115,11 +179,11 @@ small,
 .login form {
   width: 400px;
   max-width: 90vw;
-  background: white;
-  border: 1px solid #e0e6ef;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-subtle);
   padding: 38px;
   border-radius: 12px;
-  box-shadow: 0 10px 50px #1c305310;
+  box-shadow: var(--shadow-card);
 }
 .login h1 {
   margin: 24px 0 12px;
@@ -131,8 +195,8 @@ small,
 .login form > button {
   width: 100%;
   margin-top: 14px;
-  background: #245d94;
-  color: white;
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
   border: 0;
 }
 .workspace {
@@ -147,8 +211,8 @@ header {
   align-items: center;
   gap: 20px;
   padding: 0 24px;
-  background: #18334c;
-  color: white;
+  background: var(--color-header-bg);
+  color: var(--color-text-inverse);
 }
 header strong {
   letter-spacing: 3px;
@@ -158,8 +222,8 @@ header span {
 }
 aside {
   padding: 24px 12px;
-  background: #fff;
-  border-right: 1px solid #d8e0e9;
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
   overflow: auto;
 }
 aside small {
@@ -173,8 +237,8 @@ aside button {
   margin: 4px 0;
 }
 .selected {
-  background: #e9f1fa;
-  color: #185284;
+  background: var(--color-surface-selected);
+  color: var(--color-primary-strong);
 }
 .work {
   min-height: 0;
@@ -184,12 +248,12 @@ aside button {
 }
 .toolbar {
   padding: 14px 24px;
-  background: white;
+  background: var(--color-surface);
   display: flex;
   align-items: center;
   justify-content: space-between;
   min-height: 64px;
-  border-bottom: 1px solid #e0e6ef;
+  border-bottom: 1px solid var(--color-border-subtle);
 }
 .content {
   flex: 1;
@@ -199,8 +263,8 @@ aside button {
 }
 .table-scroll {
   overflow: auto;
-  background: white;
-  border: 1px solid #dce3ec;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-soft);
 }
 table {
   border-collapse: collapse;
@@ -212,16 +276,16 @@ td,
 th {
   padding: 11px;
   text-align: left;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--color-border-subtle);
 }
 th {
-  background: #eaf0f6;
+  background: var(--color-surface-subtle);
 }
 .empty {
   height: 100%;
   display: grid;
   place-items: center;
-  color: #8290a2;
+  color: var(--color-text-faint);
 }
 footer {
   position: relative;
@@ -230,8 +294,8 @@ footer {
   gap: 4px;
   min-height: 46px;
   padding: 6px 8px;
-  background: #e3eaf2;
-  border-top: 1px solid #cbd7e4;
+  background: var(--color-chrome);
+  border-top: 1px solid var(--color-border-strong);
 }
 .tab {
   display: flex;
@@ -244,20 +308,20 @@ footer {
   padding: 7px 10px;
 }
 .tab.active {
-  background: white;
-  border-color: #c1d1e2;
+  background: var(--color-surface);
+  border-color: var(--color-border-active);
 }
 .tab.active button {
-  color: #174e88;
+  color: var(--color-primary-strong);
 }
 .context {
   position: fixed;
   z-index: 15;
   width: 160px;
-  background: #fff;
+  background: var(--color-surface);
   padding: 5px;
-  border: 1px solid #ccd7e3;
-  box-shadow: 0 4px 18px #10284020;
+  border: 1px solid var(--color-border-strong);
+  box-shadow: var(--shadow-popover);
 }
 .context button {
   display: block;
@@ -297,7 +361,7 @@ input[type='checkbox'] {
 }
 .tree-children {
   padding-left: 12px;
-  border-left: 1px solid #e1e7ee;
+  border-left: 1px solid var(--color-border-subtle);
 }
 .tree-branch .folder {
   font-weight: 600;
@@ -310,8 +374,8 @@ footer {
 }
 
 .change-detail {
-  background: white;
-  border: 1px solid #dbe3ed;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-soft);
   margin-top: 18px;
   padding: 18px;
 }
@@ -326,12 +390,12 @@ footer {
   border: 0;
   background: none;
   padding: 0;
-  color: #185b9a;
+  color: var(--color-link);
   text-align: left;
 }
 button:focus-visible,
 input:focus-visible {
-  outline: 2px solid #4488c5;
+  outline: 2px solid var(--color-focus);
   outline-offset: 2px;
 }
 @media (max-width: 1000px) {
@@ -369,12 +433,12 @@ input:focus-visible {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  background: #fff;
+  background: var(--color-surface);
 }
 .register-left,
 .register-right {
   padding: 10px;
-  border: 1px solid #ccd7df;
+  border: 1px solid var(--color-border-strong);
 }
 .registration-grid {
   flex: 1;
@@ -403,7 +467,7 @@ input:focus-visible {
   height: 30px;
 }
 .fixed-bar input {
-  background: #f0f3f6;
+  background: var(--color-surface-muted);
 }
 .query-bar button,
 .fixed-bar button,
@@ -420,10 +484,10 @@ input:focus-visible {
 .splitter {
   cursor: col-resize;
   touch-action: none;
-  background: #e1e7ed;
+  background: var(--color-border-subtle);
 }
 .splitter:hover {
-  background: #8eabbf;
+  background: var(--color-splitter-hover);
 }
 .layout-grid {
   height: 42%;
@@ -441,10 +505,10 @@ input:focus-visible {
   grid-template-columns: minmax(0, 1fr);
 }
 .grid-row-error {
-  background: #ffebe9 !important;
+  background: var(--color-row-error) !important;
 }
 .grid-row-current {
-  background: #dcecf6 !important;
+  background: var(--color-row-current) !important;
 }
 .registration-grid input:not([type='checkbox']) {
   margin: 0;
@@ -466,8 +530,8 @@ input:focus-visible {
   padding: 10px 16px;
 }
 .fixed-bar button {
-  background: #17627e;
-  color: white;
+  background: var(--color-accent);
+  color: var(--color-text-inverse);
 }
 .toast-stack {
   position: fixed;
@@ -488,20 +552,20 @@ input:focus-visible {
   align-items: flex-start;
   gap: 10px;
   padding: 14px;
-  background: #fff;
-  color: #223047;
-  border: 1px solid #d6e1ec;
-  border-left: 4px solid #3778b5;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-info);
   border-radius: 8px;
-  box-shadow: 0 6px 24px #18334c26;
+  box-shadow: var(--shadow-toast);
   pointer-events: auto;
   animation: toast-enter 0.16s ease-out;
 }
 .toast-success {
-  border-left-color: #20815c;
+  border-left-color: var(--color-success);
 }
 .toast-error {
-  border-left-color: #c34343;
+  border-left-color: var(--color-danger);
 }
 .toast-icon {
   display: grid;
@@ -509,17 +573,17 @@ input:focus-visible {
   flex: 0 0 21px;
   height: 21px;
   border-radius: 50%;
-  background: #e8f1fb;
-  color: #246398;
+  background: var(--color-info-bg);
+  color: var(--color-info-strong);
   font-weight: bold;
 }
 .toast-success .toast-icon {
-  background: #e5f5ed;
-  color: #167349;
+  background: var(--color-success-bg);
+  color: var(--color-success-strong);
 }
 .toast-error .toast-icon {
-  background: #fde9e9;
-  color: #b12e2e;
+  background: var(--color-danger-bg);
+  color: var(--color-danger-strong);
 }
 .toast-message {
   flex: 1;
@@ -534,13 +598,13 @@ input:focus-visible {
   flex: none;
   border: 0;
   background: transparent;
-  color: #64758c;
+  color: var(--color-text-muted);
   padding: 0 4px;
   font-size: 21px;
   line-height: 22px;
 }
 .toast-close:hover {
-  background: #edf3fa;
+  background: var(--color-surface-hover);
 }
 .sidebar-pane {
   position: relative;
@@ -552,7 +616,7 @@ input:focus-visible {
   min-width: 0;
 }
 .sidebar-pane.collapsed {
-  background: #e3eaf2;
+  background: var(--color-chrome);
 }
 .sidebar-resizer {
   position: absolute;
@@ -571,16 +635,16 @@ input:focus-visible {
 .sidebar-resizer:hover,
 .sidebar-resizer:focus-visible,
 .sidebar-dragging .sidebar-resizer {
-  background: #c9dce9;
+  background: var(--color-resizer-hover);
 }
 .sidebar-resizer:focus-visible {
-  outline: 2px solid #4488c5;
+  outline: 2px solid var(--color-focus);
 }
 .sidebar-resizer > span {
   width: 2px;
   height: 32px;
   border-radius: 2px;
-  background: #b3c5d3;
+  background: var(--color-resizer-handle);
 }
 .sidebar-dragging {
   cursor: col-resize;
@@ -640,8 +704,8 @@ input:focus-visible {
   gap: 8px;
 }
 .account-tabs [aria-selected='true'] {
-  background: #17627e;
-  color: white;
+  background: var(--color-accent);
+  color: var(--color-text-inverse);
 }
 .users-screen > .account-screen {
   flex: 1;
@@ -673,12 +737,12 @@ input:focus-visible {
   max-height: 90vh;
   overflow: auto;
   padding: 20px;
-  border: 1px solid #ccd7df;
+  border: 1px solid var(--color-border-strong);
   border-radius: 8px;
-  color: #17354a;
+  color: var(--color-text-strong);
 }
 .code-lookup::backdrop {
-  background: rgb(15 35 50 / 40%);
+  background: var(--color-backdrop);
 }
 .code-lookup .registration-grid {
   height: 340px;
