@@ -1012,3 +1012,27 @@ button.primary:hover {
   font-weight: 700;
   background: var(--color-surface-subtle);
 }
+
+/* 개선 요청 창과 수신함 */
+.feedback-dialog form > label {
+  display: block;
+  margin-top: 8px;
+}
+.feedback-dialog select,
+.feedback-dialog textarea,
+.feedback-inbox select {
+  width: 100%;
+  padding: 8px;
+  margin: 4px 0 8px;
+  border: 1px solid var(--color-border-input);
+  border-radius: 5px;
+  font: inherit;
+  background: var(--color-surface);
+}
+.feedback-dialog input {
+  margin: 4px 0 8px;
+}
+.feedback-title {
+  white-space: normal;
+  max-width: 420px;
+}

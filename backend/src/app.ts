@@ -28,6 +28,7 @@ import { Workspaces, WorkspacesController } from './workspaces';
 import { Requests, RequestsController } from './requests';
 import { Sla, SlaController } from './sla';
 import { Reports, ReportsController } from './reports';
+import { Feedback, FeedbackController } from './feedback';
 @Module({
   controllers: [
     AuthController,
@@ -39,6 +40,7 @@ import { Reports, ReportsController } from './reports';
     RequestsController,
     SlaController,
     ReportsController,
+    FeedbackController,
   ],
   providers: [
     Db,
@@ -49,6 +51,7 @@ import { Reports, ReportsController } from './reports';
     Requests,
     Sla,
     Reports,
+    Feedback,
     Accounts,
     Audit,
     RegistrationService,
@@ -69,6 +72,7 @@ export async function createApp() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: ['error', 'warn'],
   });
+  if (settings.trustProxy) app.set('trust proxy', true);
   app.use(
     helmet({
       contentSecurityPolicy: {

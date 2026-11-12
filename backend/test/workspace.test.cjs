@@ -204,3 +204,33 @@ test('self-service workspace signup creates an isolated workspace with a ready a
   assert.ok(!options.responsibilities.some((r) => r.code === 'ADMIN'));
   assert.ok(options.responsibilities.some((r) => r.code === 'WORKSPACE_ADMIN'));
 });
+
+test('feedback goes to the platform inbox only', async () => {
+  const title = prefix + ' 엑셀 양식 추가 요청';
+  await post(otherAdmin, 'feedback', { kind: 'WRONG', title, body: 'x' }).expect(400);
+  await post(otherAdmin, 'feedback', {
+    kind: 'IMPROVEMENT',
+    title,
+    body: '월간 리포트에 고객사 로고를 넣고 싶습니다.',
+    page: '월간 리포트',
+  }).expect(201);
+  // 운영 워크스페이스가 아니면 메뉴가 있어도 수신함을 볼 수 없고, DB에서도 보이지 않는다.
+  await get(otherAdmin, 'feedback').expect(403);
+  assert.equal(
+    (await db.query('SELECT count(*)::int n FROM app.feedback', [], other)).rows[0].n,
+    0,
+  );
+  const items = (await get(platformAdmin, 'feedback').expect(200)).body.items;
+  const item = items.find((i) => i.title === title);
+  assert.equal(item.workspace_name, prefix);
+  assert.equal(item.user_name, prefix + '_other');
+  assert.equal(item.status, 'NEW');
+  await post(platformAdmin, 'feedback/' + item.id + '/status', {
+    status: 'PLANNED',
+    version: item.version,
+  }).expect(201);
+  await post(platformAdmin, 'feedback/' + item.id + '/status', {
+    status: 'DONE',
+    version: item.version,
+  }).expect(409);
+});

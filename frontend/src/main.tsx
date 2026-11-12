@@ -16,6 +16,8 @@ import { SrDeskScreen } from './SrDeskScreen';
 import { NotificationBell } from './NotificationBell';
 import { SlaSettingsScreen } from './SlaSettingsScreen';
 import { SrReportScreen } from './SrReportScreen';
+import { FeedbackButton } from './FeedbackButton';
+import { FeedbackInboxScreen } from './FeedbackInboxScreen';
 import { RecoveryScreen, RecoveryLink } from './RecoveryScreen';
 import { sourceModules, buttonLabel } from './sourceModules';
 import { actions, Nav, Screen, ScreenHandle, Tab, tabKey, User, ViewState } from './types';
@@ -100,6 +102,7 @@ const workScreens: Record<string, typeof SrPortalScreen> = {
   'sr-desk': SrDeskScreen,
   'sla-settings': SlaSettingsScreen,
   'sr-report': SrReportScreen,
+  'feedback-inbox': FeedbackInboxScreen,
 };
 function App() {
   // 고객사 회원가입 링크의 가입 토큰. 고객사등록 화면이 만든 /?signup=<토큰> 주소에서 읽는다.
@@ -444,6 +447,7 @@ function App() {
         <strong>Doneline</strong>
         <span>{user.displayName}</span>
         <NotificationBell />
+        <FeedbackButton page={current?.name} notify={notify} />
         <button onClick={refreshNavigation}>메뉴 새로고침</button>
         <button onClick={logout}>로그아웃</button>
       </header>

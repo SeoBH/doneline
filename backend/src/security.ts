@@ -119,6 +119,7 @@ export class SecurityGuard implements CanActivate {
           'SR_DESK',
           'SLA_SETTINGS',
           'SR_REPORT',
+          'FEEDBACK_INBOX',
         ].includes(permission.screen)
       )
         throw new ForbiddenException('고객사 계정에서 사용할 수 없는 공통 관리 기능입니다.');
@@ -126,7 +127,9 @@ export class SecurityGuard implements CanActivate {
       // 해당 메뉴를 붙이더라도 운영 워크스페이스가 아니면 거절해 다른 업체에 영향을 주지 못하게 한다.
       if (
         !req.actor!.is_platform &&
-        ['SCREEN_REGISTER', 'MENU_REGISTER', 'RESP_REGISTER'].includes(permission.screen)
+        ['SCREEN_REGISTER', 'MENU_REGISTER', 'RESP_REGISTER', 'FEEDBACK_INBOX'].includes(
+          permission.screen,
+        )
       )
         throw new ForbiddenException(
           '운영 워크스페이스에서만 사용할 수 있는 공통 구성 기능입니다.',
