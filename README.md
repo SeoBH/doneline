@@ -168,22 +168,28 @@ node backend/mail-preview.cjs <메일ID>
 
 직접 체험할 샘플은 `npm.cmd run dev --prefix frontend -- --port 5173 --strictPort` 실행 후 `http://127.0.0.1:5173/test/lookup.html?sample=1`에서 확인합니다. 법인·부서 검색과 행추가를 가상 데이터로 체험하며 로그인과 DB 저장은 없습니다. 해당 법인을 선택해야 부서 검색을 사용할 수 있습니다.
 
-## 외부 데모(Cloudflare Pages + 터널)
+## 외부 데모(Tailscale Funnel)
 
-화면은 Cloudflare Pages(`https://doneline.pages.dev`)가 제공하고, `/api/*` 요청은 `deploy/pages/functions/api/[[path]].js`가 PC에서 실행 중인 백엔드로 전달합니다. 백엔드는 Cloudflare Quick Tunnel(`*.trycloudflare.com`)로 외부와 연결합니다. 비용은 없으며 PC가 켜져 있어야 접속됩니다. 터널 주소는 실행할 때마다 바뀌므로 Pages 환경변수 `BACKEND_ORIGIN`을 갱신하고 다시 배포합니다.
-
-데모 백엔드는 다음 환경으로 실행합니다(`.env` 값보다 우선). `TRUST_PROXY=1`은 서버가 127.0.0.1에만 열려 있을 때만 허용됩니다.
+이 PC의 서버를 Tailscale Funnel로 공개합니다. 서버가 화면 파일도 제공하므로 주소 하나(`https://castanets.tail12e316.ts.net`, 고정)로 전부 동작하며 비용과 추가 설치가 없습니다. PC가 켜져 있고 스크립트가 실행 중일 때만 접속됩니다.
 
 ```powershell
-$env:NODE_ENV='production'; $env:APP_ORIGIN='https://doneline.pages.dev'; $env:TRUST_PROXY='1'; node backend/dist/main.js
+npm.cmd run build
 ```
 
 ```powershell
-cloudflared tunnel --url http://127.0.0.1:3100
+powershell -ExecutionPolicy Bypass -File scripts/demo.ps1
 ```
+
+처음 실행하면 Tailscale이 Funnel 사용 승인 링크를 보여줄 수 있습니다. 링크를 열어 이 PC(`castanets`)의 Funnel을 허용하면 됩니다. 스크립트는 `NODE_ENV=production`(HTTPS 출처·보안 쿠키), `APP_ORIGIN`(Funnel 주소), `TRUST_PROXY=1`(앞단 프록시 1개)로 서버를 실행합니다. 공개를 완전히 끄려면 아래 명령을 실행합니다.
 
 ```powershell
-npm.cmd run build --prefix frontend; cd deploy/pages; npx wrangler pages deploy ../../frontend/dist --project-name doneline
+& 'C:\Program Files\Tailscale	ailscale.exe' funnel reset
 ```
 
-데모는 개인 PC의 서버를 인터넷에 공개하므로 회사 PC·회사망에서는 실행하지 않습니다. 데모 중 운영 슬랙 알림을 원하지 않으면 `SLACK_WEBHOOK_URL`을 빈 값으로 실행합니다.
+데모는 개발 DB(`doneline_dev`)를 사용하며 방문자는 **업체 무료 가입**으로 자기 업체를 만들어 체험합니다. 업체 가입·개선 요청은 운영 슬랙으로 알립니다. 회사 PC·회사망에서는 실행하지 않습니다.
+
+`deploy/pages/functions/api/[[path]].js`는 나중에 화면을 Cloudflare Pages(`doneline.pages.dev`)에 두고 API만 이 서버로 보내고 싶을 때 쓰는 선택 구성입니다(Pages 환경변수 `BACKEND_ORIGIN`=서버 주소, `TRUST_PROXY`는 경유 프록시 수에 맞춤).
+
+## 실제 배포(Docker)
+
+`Dockerfile`은 서버와 화면을 한 이미지로 만듭니다(실행 사용자 node, 포트 3100). DB는 관리형 PostgreSQL을 쓰고, 배포 전에 관리 계정으로 `database/001~` 미적용 번호를 순서대로 적용한 뒤 `grant-app.sql`을 실행합니다. 컨테이너 환경변수는 `PGHOST`·`PGPORT`·`PGDATABASE`·`PGUSER`·`PGPASSWORD`·`SESSION_SECRET`(32자 이상)·`APP_ORIGIN`(https)이 필수이고, 로드밸런서 뒤라면 `TRUST_PROXY`(프록시 수)와 `PROXY_ONLY_INGRESS=1`(로드밸런서 경유로만 접속 가능할 때)을 함께 둡니다. 최초 관리자는 `node backend/dist/seed.js`로 만듭니다. 이 PC에는 Docker가 없어 이미지 빌드는 아직 검증하지 않았습니다.

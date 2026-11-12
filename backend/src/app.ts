@@ -72,7 +72,8 @@ export async function createApp() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: ['error', 'warn'],
   });
-  if (settings.trustProxy) app.set('trust proxy', true);
+  // 숫자 n: 오른쪽부터 n개의 프록시만 신뢰한다(그보다 앞의 X-Forwarded-For 값은 꾸며낼 수 있으므로 무시).
+  if (settings.trustProxy) app.set('trust proxy', settings.trustProxy);
   app.use(
     helmet({
       contentSecurityPolicy: {
