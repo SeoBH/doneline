@@ -138,6 +138,16 @@ export const DataGrid = forwardRef<
   }
   // 부모가 저장 직전에 편집 중인 셀을 확정할 수 있도록 stop만 공개한다.
   useImperativeHandle(ref, () => ({ stop: () => grid.current?.api?.stopEditing() }));
+  // 행추가로 생긴 저장 전 행(id 없음)이 목록 아래쪽 화면 밖에 붙으면 사용자는 추가된 줄 모른다.
+  // 처음 보는 신규 행을 기억해 두었다가, 그리드가 새 데이터를 반영한 직후(onRowDataUpdated) 그 행으로 스크롤한다.
+  // 자식인 AgGridReact가 부모 effect보다 먼저 데이터를 반영할 수 있어 effect가 아닌 렌더 단계(useMemo)에서 계산한다.
+  const knownKeys = useRef(new Set<string>()),
+    scrollTo = useRef<string | null>(null);
+  useMemo(() => {
+    const fresh = rows.filter((r) => !r.id && !knownKeys.current.has(r._key)).at(-1);
+    knownKeys.current = new Set(rows.map((r) => r._key));
+    if (fresh) scrollTo.current = fresh._key;
+  }, [rows]);
   // useMemo는 아래 의존성 배열의 값이 바뀔 때 열 정의를 다시 계산한다.
   // 열마다 편집 가능 여부·체크박스·표시 형식을 구성하며, 데이터 변경이 없어도 렌더마다 재생성하지 않는다.
   const defs = useMemo<ColDef<GridRow>[]>(() => {
@@ -255,6 +265,13 @@ export const DataGrid = forwardRef<
           stopEditingWhenCellsLoseFocus
           singleClickEdit={false}
           onCellEditRequest={(e) => update(e.data._key, String(e.colDef.field), e.newValue)}
+          onRowDataUpdated={(e) => {
+            const key = scrollTo.current;
+            scrollTo.current = null;
+            const node = key ? e.api.getRowNode(key) : undefined;
+            // 'bottom': 새 행이 화면 아래쪽 끝에 보이도록 필요한 만큼만 스크롤한다.
+            if (node) e.api.ensureNodeVisible(node, 'bottom');
+          }}
           onRowClicked={(e) => {
             if (!busy && e.data) {
               setLocalActive(e.data._key);

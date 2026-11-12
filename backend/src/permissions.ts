@@ -11,13 +11,12 @@ export class Permissions {
   constructor(private readonly db: Db) {}
   async allows(resp: string, menu: string, screen: string, action: string) {
     const version = (
-      await this.db.pool.query('SELECT version FROM app.authorization_state WHERE id=1')
+      await this.db.query('SELECT version FROM app.authorization_state WHERE id=1')
     ).rows[0].version;
     let cached = this.cache.get(resp);
     if (!cached || cached.version !== version) {
       // 버전과 권한 목록을 같은 스냅샷에서 읽어 다른 시점의 데이터를 캐시하지 않는다.
-      cached = await this.db.tx(async (c) => {
-        await c.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      cached = await this.db.snapshot(async (c) => {
         const v = (await c.query('SELECT version FROM app.authorization_state WHERE id=1')).rows[0]
           .version;
         const { rows } = await c.query(

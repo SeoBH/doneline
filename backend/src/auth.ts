@@ -59,10 +59,18 @@ export class AuthService {
       return denied;
     });
     if (blocked) throw new HttpException('로그인 시도가 많습니다. 잠시 후 다시 시도해주세요.', 429);
-    const { rows } = await this.db.pool.query(
-      'SELECT u.*,a.account_enabled AS resp_active FROM app.users u JOIN app.account_access a ON a.id=u.id WHERE login_id=$1 AND a.account_enabled AND a.mapping_ready',
-      [body.loginId],
-    );
+    // 로그인 전에는 워크스페이스를 모른다. 로그인 ID로 워크스페이스 ID만 찾은 뒤(DB 함수, RLS 밖)
+    // 계정 정보는 그 워크스페이스 범위 안에서 RLS를 적용해 다시 읽는다. 없는 ID면 빈 결과가 된다.
+    const workspaceId: string | null = (
+      await this.db.query('SELECT app.login_workspace($1) AS id', [body.loginId])
+    ).rows[0].id;
+    const { rows } = workspaceId
+      ? await this.db.query(
+          'SELECT u.*,a.account_enabled AS resp_active FROM app.users u JOIN app.account_access a ON a.id=u.id WHERE login_id=$1 AND a.account_enabled AND a.mapping_ready',
+          [body.loginId],
+          workspaceId,
+        )
+      : { rows: [] };
     const user = rows[0];
     const valid = await argon2.verify(user?.password_hash || (await this.dummy), body.password);
     if (!user || !user.password_hash || !valid || !user.is_active || !user.resp_active) {
@@ -74,6 +82,7 @@ export class AuthService {
       req.session.regenerate((e) => (e ? reject(e) : resolve())),
     );
     req.session.userId = user.id;
+    req.session.workspaceId = String(user.workspace_id);
     req.session.csrf = randomBytes(32).toString('hex');
     req.session.issuedAt = Date.now();
     req.session.loginRequestId = req.requestId;
@@ -85,7 +94,7 @@ export class AuthService {
       await new Promise<void>((resolve) => req.session.destroy(() => resolve()));
       throw e;
     }
-    await this.db.pool.query('DELETE FROM app.login_limits WHERE bucket=$1', [buckets[0][0]]);
+    await this.db.query('DELETE FROM app.login_limits WHERE bucket=$1', [buckets[0][0]]);
     return {
       user: {
         id: user.id,

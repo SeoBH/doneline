@@ -10,8 +10,7 @@ import { AppRequest, Permission } from './security';
 export class NavigationService {
   constructor(private readonly db: Db) {}
   async tree(respId: string) {
-    return this.db.tx(async (c) => {
-      await c.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    return this.db.snapshot(async (c) => {
       const root = (
         await c.query('SELECT root_menu_id FROM app.responsibilities WHERE id=$1', [respId])
       ).rows[0].root_menu_id;
@@ -78,7 +77,7 @@ export class NavigationController {
   @Get('admin/audit-events/:id/changes')
   @Permission('AUDIT', 'QUERY')
   async changes(@Req() req: AppRequest, @Param('id', new ParseUUIDPipe()) id: string) {
-    const result = await this.db.pool.query(
+    const result = await this.db.query(
       'SELECT * FROM audit.config_changes WHERE event_id=$1 ORDER BY id',
       [id],
     );
@@ -95,7 +94,7 @@ export class NavigationController {
   @Permission('AUDIT', 'QUERY')
   async events(@Req() req: AppRequest, @Query('page') page = '1') {
     const index = /^\d{1,5}$/.test(page) ? Math.max(1, Number(page)) : 1;
-    const result = await this.db.pool.query(
+    const result = await this.db.query(
       'SELECT * FROM audit.event_summary ORDER BY occurred_at DESC,event_id DESC LIMIT 50 OFFSET $1',
       [(index - 1) * 50],
     );

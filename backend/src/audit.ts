@@ -17,26 +17,31 @@ export type AuditEvent = {
   action: string;
   outcome: 'SUCCESS' | 'FAILURE' | 'ERROR' | 'CANCELLED';
   code?: string;
+  // 요청 컨텍스트와 다른 워크스페이스로 기록해야 할 때만 지정한다(예: 만료 세션 정리).
+  workspaceId?: string;
 };
 @Injectable()
 export class Audit {
   constructor(private readonly db: Db) {}
   async write(e: AuditEvent, c?: PoolClient) {
     const id = randomUUID();
-    await (c || this.db.pool).query(
-      "INSERT INTO audit.audit_events(event_id,operation_id,request_id,source,user_id,resp_id,menu_id,screen_id,action,phase,outcome,error_code) VALUES($1,$1,$2,'SERVER',$3,$4,$5,$6,$7,'END',$8,$9)",
-      [
-        id,
-        e.requestId || null,
-        e.userId || null,
-        e.respId || null,
-        e.menuId || null,
-        e.screenId || null,
-        e.action,
-        e.outcome,
-        e.code || null,
-      ],
-    );
+    // workspace_id는 DB 기본값으로 현재 트랜잭션의 워크스페이스가 들어간다(모르면 NULL).
+    const sql =
+      "INSERT INTO audit.audit_events(event_id,operation_id,request_id,source,user_id,resp_id,menu_id,screen_id,action,phase,outcome,error_code) VALUES($1,$1,$2,'SERVER',$3,$4,$5,$6,$7,'END',$8,$9)";
+    const values = [
+      id,
+      e.requestId || null,
+      e.userId || null,
+      e.respId || null,
+      e.menuId || null,
+      e.screenId || null,
+      e.action,
+      e.outcome,
+      e.code || null,
+    ];
+    // 연결을 받으면 호출자의 트랜잭션에 참여하고, 없으면 짧은 별도 트랜잭션으로 기록한다.
+    if (c) await c.query(sql, values);
+    else await this.db.query(sql, values, e.workspaceId);
     return id;
   }
   async failure(e: AuditEvent) {

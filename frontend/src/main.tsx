@@ -89,7 +89,8 @@ function Branch({
   ) : null;
 }
 function App() {
-  const customerCode = new URLSearchParams(window.location.search).get('customer') || '';
+  // 고객사 회원가입 링크의 가입 토큰. 고객사등록 화면이 만든 /?signup=<토큰> 주소에서 읽는다.
+  const signupToken = new URLSearchParams(window.location.search).get('signup') || '';
   const [signup, setSignup] = useState(false);
   // 링크의 비밀값은 주소창에서 즉시 제거하고 이 화면의 메모리에만 유지한다.
   const [recoveryLink, setRecoveryLink] = useState<RecoveryLink | null>(() => {
@@ -307,7 +308,7 @@ function App() {
       <>
         {toasts}
         <RecoveryScreen
-          code={customerCode}
+          code={signupToken}
           link={recoveryLink}
           notify={notify}
           onBack={() => {
@@ -323,7 +324,7 @@ function App() {
     return (
       <>
         {toasts}
-        <SignupScreen code={customerCode} onBack={() => setSignup(false)} notify={notify} />
+        <SignupScreen code={signupToken} onBack={() => setSignup(false)} notify={notify} />
       </>
     );
   if (!user || user.mustChangePassword)
@@ -393,7 +394,7 @@ function App() {
                 type="button"
                 disabled={busy}
                 onClick={() =>
-                  customerCode
+                  signupToken
                     ? setSignup(true)
                     : notify('고객사에서 안내받은 가입 링크로 접속해주세요.')
                 }

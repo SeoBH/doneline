@@ -20,7 +20,7 @@ import {
 import { PoolClient } from 'pg';
 import { createHash } from 'node:crypto';
 import * as argon2 from 'argon2';
-import { Db } from './db';
+import { Db, useWorkspace } from './db';
 import { Recovery, emailAddress } from './recovery';
 import { Audit } from './audit';
 import { AppRequest, Permission, Public } from './security';
@@ -289,19 +289,26 @@ export class Accounts {
       ).rows,
     };
   }
-  async publicOptions(code: string) {
-    return this.db.tx(async (c) => {
-      const t = (
-        await c.query('SELECT id,code,name FROM app.customers WHERE code=$1 AND is_active', [code])
-      ).rows[0];
-      if (!t) throw new NotFoundException('유효한 고객사 가입 링크가 아닙니다.');
-      return { ok: true };
-    });
+  /**
+   * 가입 링크 토큰으로 워크스페이스·고객사를 찾고, 이 공개 요청의 DB 범위를 그 워크스페이스로 지정한다.
+   * 토큰은 추측할 수 없는 무작위 값이며 고객사 코드는 링크에 쓰지 않는다. 비활성 고객사·정지 업체는 거절한다.
+   */
+  private async signupTarget(token: string) {
+    const t = /^[a-f0-9]{64}$/.test(token)
+      ? (await this.db.query('SELECT * FROM app.signup_target($1)', [token])).rows[0]
+      : undefined;
+    if (!t) throw new NotFoundException('유효한 고객사 가입 링크가 아닙니다.');
+    useWorkspace(t.workspace_id);
+    return String(t.customer_id);
   }
-  async create(req: AppRequest, body: any, customerCode?: string) {
+  async publicOptions(token: string) {
+    await this.signupTarget(token);
+    return { ok: true };
+  }
+  async create(req: AppRequest, body: any, signupToken?: string) {
     fields(
       body,
-      customerCode
+      signupToken
         ? ['loginId', 'name', 'address', 'mobile', 'email', 'password']
         : ['customerId', 'loginId', 'name', 'address', 'mobile', 'email', 'respId'],
     );
@@ -313,20 +320,20 @@ export class Accounts {
     if (
       !/^[A-Za-z0-9_.-]+$/.test(loginId) ||
       !/^[+0-9() -]{7,30}$/.test(mobile) ||
-      (customerCode &&
+      (signupToken &&
         (typeof body.password !== 'string' ||
           body.password.length < 15 ||
           body.password.length > 128))
     )
       throw new BadRequestException('아이디·휴대전화·비밀번호(15~128자)를 확인해주세요.');
-    if (customerCode) {
+    if (signupToken) {
       // 공개 가입의 비싼 비밀번호 해시 계산 전에 IP별 요청 수를 제한한다.
       const bucket =
         'signup:' +
         createHash('sha256')
           .update(req.ip || '')
           .digest('hex');
-      const limit = await this.db.pool.query(
+      const limit = await this.db.query(
         `INSERT INTO app.login_limits VALUES($1,1,now()+interval '15 minutes') ON CONFLICT(bucket)
         DO UPDATE SET attempts=CASE WHEN app.login_limits.expires_at<=now() THEN 1 ELSE app.login_limits.attempts+1 END,
         expires_at=CASE WHEN app.login_limits.expires_at<=now() THEN now()+interval '15 minutes' ELSE app.login_limits.expires_at END RETURNING attempts`,
@@ -335,14 +342,16 @@ export class Accounts {
       if (limit.rows[0].attempts > 10)
         throw new HttpException('가입 요청이 많습니다. 잠시 후 다시 시도해주세요.', 429);
     }
-    const hash = customerCode ? await argon2.hash(body.password) : null;
+    const signupCustomer = signupToken ? await this.signupTarget(signupToken) : null;
+    const hash = signupToken ? await argon2.hash(body.password) : null;
     return this.change(async (c) => {
       let actor: any = null,
         customerId: string | null;
-      if (customerCode) {
+      if (signupToken) {
         await c.query('SELECT pg_advisory_xact_lock(720260910)');
+        // 잠금 후 다시 확인해 링크 확인과 가입 사이에 고객사가 비활성화된 경우를 거절한다.
         const t = (
-          await c.query('SELECT id FROM app.customers WHERE code=$1 AND is_active', [customerCode])
+          await c.query('SELECT id FROM app.customers WHERE id=$1 AND is_active', [signupCustomer])
         ).rows[0];
         if (!t) throw new NotFoundException('유효한 고객사 가입 링크가 아닙니다.');
         customerId = t.id;

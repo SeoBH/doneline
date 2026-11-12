@@ -17,6 +17,7 @@
 
 - 고객사·법인·부서등록과 사용자 관리는 `backend/src/accounts.ts`, `frontend/src/CustomersScreen.tsx`, `frontend/src/AccountsScreen.tsx`에서 처리한다.
 - 운영 범위 판단은 RESP의 `authority_type` (`SYSTEM`/`CUSTOMER`)으로 통일한다. 고객사 운영자의 관리 화면은 자기 고객사 전체, 일반 업무 데이터는 본인 법인·부서 매핑으로 제한한다. 별도 운영자 플래그를 재도입하지 않는다.
+- 계약 업체 분리는 워크스페이스와 PostgreSQL 행 수준 보안으로 한다. SQL은 `Db.tx`·`Db.query`·`Db.snapshot`으로만 실행하고, 로그인 전 조회가 필요하면 ID만 돌려주는 SECURITY DEFINER 함수를 추가한다. 새 업무 테이블에는 `workspace_id`와 RLS 정책을 함께 만든다.
 - CUSTOMER 로그인은 승인·활성 상태와 법인 1개 이상 및 각 법인별 실제 부서 1개 이상이 필요하다. 미지정 법인·부서도 실제 코드이며 전체 접근 의미로 사용하지 않는다.
 
 - 등록 화면의 저장·삭제·연결 적용 성공 후 현재 조회 조건과 상위 선택으로 재조회한다. 체크하지 않은 신규 행과 미저장 수정은 모두 폐기하고 DB 값만 표시한다. 변경 요청 실패 시에는 입력과 체크를 유지한다.

@@ -258,12 +258,9 @@ export const CustomersScreen = forwardRef<
       {customer && kind === 'customers' && (
         <p>
           회원가입 링크:{' '}
-          <a
-            href={'/?customer=' + encodeURIComponent(customer.code)}
-            target="_blank"
-            rel="noreferrer"
-          >
-            {window.location.origin + '/?customer=' + customer.code}
+          {/* 링크에는 추측하기 쉬운 고객사 코드 대신 서버가 만든 무작위 가입 토큰을 쓴다. */}
+          <a href={'/?signup=' + customer.signup_token} target="_blank" rel="noreferrer">
+            {window.location.origin + '/?signup=' + customer.signup_token}
           </a>
         </p>
       )}

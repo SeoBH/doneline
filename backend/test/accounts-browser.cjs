@@ -17,8 +17,10 @@ const path = require('node:path');
   try {
     app = await createApp();
     const db = app.get(Db);
-    await db.pool.query('DELETE FROM app.login_limits');
-    await db.pool.query(
+    // 테스트 준비 SQL은 HTTP 요청 밖에서 실행되므로 운영 워크스페이스를 기본 범위로 지정한다.
+    db.useScriptWorkspace(await db.platformWorkspaceId());
+    await db.query('DELETE FROM app.login_limits');
+    await db.query(
       "INSERT INTO app.users(login_id,password_hash,display_name,resp_id,must_change_password) SELECT $1,$2,$1,id,false FROM app.responsibilities WHERE code='ADMIN'",
       [code, await argon2.hash(password)],
     );
@@ -85,7 +87,10 @@ const path = require('node:path');
     await catalog('departments', '부서', 'D001', '개발');
     signup = await browser.newPage();
     signup.on('pageerror', (e) => errors.push(e.message));
-    await signup.goto('http://127.0.0.1:3002/?customer=' + code);
+    const token = (
+      await db.query('SELECT signup_token FROM app.customers WHERE code=$1', [code])
+    ).rows[0].signup_token;
+    await signup.goto('http://127.0.0.1:3002/?signup=' + token);
     await signup.getByRole('button', { name: '회원가입', exact: true }).click();
     await expect(signup.getByText(code + ' · 브라우저 고객사', { exact: true })).toHaveCount(0);
     await signup.getByLabel('아이디', { exact: true }).fill(code + '_applicant');
@@ -183,7 +188,7 @@ const path = require('node:path');
     await expect(panel.getByLabel('아이디', { exact: true })).toHaveValue('');
     await expect(panel.getByText(code + '_direct', { exact: true })).toBeVisible();
     const u = (
-      await db.pool.query(
+      await db.query(
         'SELECT id,account_status,password_hash FROM app.users WHERE login_id=$1',
         [code + '_direct'],
       )
@@ -191,7 +196,7 @@ const path = require('node:path');
     expect(u.account_status).toBe('ACTIVE');
     expect(u.password_hash).toBeNull();
     const payload = (
-      await db.pool.query(
+      await db.query(
         "SELECT payload FROM app.mail_outbox WHERE user_id=$1 AND status='HELD' ORDER BY id DESC LIMIT 1",
         [u.id],
       )
@@ -226,7 +231,7 @@ const path = require('node:path');
     expect(deleted.status()).toBe(201);
     await expect(panel.getByText('수정된 사용자', { exact: true })).toHaveCount(0);
     expect(
-      (await db.pool.query('SELECT id FROM app.users WHERE login_id=$1', [code + '_direct']))
+      (await db.query('SELECT id FROM app.users WHERE login_id=$1', [code + '_direct']))
         .rowCount,
     ).toBe(0);
     expect(errors).toEqual([]);

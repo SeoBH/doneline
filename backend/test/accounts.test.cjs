@@ -11,6 +11,7 @@ const { settings } = require('../dist/config');
 const { openMail } = require('../dist/mail');
 let app,
   db,
+  signupPath,
   system,
   manager,
   root,
@@ -59,11 +60,11 @@ const signup = (name) => {
   return { ...body, password };
 };
 const user = async (name) =>
-  (await db.pool.query('SELECT * FROM app.users WHERE login_id=$1', [prefix + '_' + name])).rows[0];
+  (await db.query('SELECT * FROM app.users WHERE login_id=$1', [prefix + '_' + name])).rows[0];
 async function setupPassword(name) {
   const u = await user(name);
   const mail = (
-    await db.pool.query(
+    await db.query(
       "SELECT payload FROM app.mail_outbox WHERE user_id=$1 AND status='HELD' ORDER BY id DESC LIMIT 1",
       [u.id],
     )
@@ -120,9 +121,11 @@ before(async () => {
   if (!process.env.PGDATABASE?.endsWith('_test')) throw Error('Isolated DB required');
   app = await createApp();
   db = app.get(Db);
-  await db.pool.query('DELETE FROM app.login_limits');
+  // 테스트 준비 SQL은 HTTP 요청 밖에서 실행되므로 운영 워크스페이스를 기본 범위로 지정한다.
+  db.useScriptWorkspace(await db.platformWorkspaceId());
+  await db.query('DELETE FROM app.login_limits');
   const res = (
-    await db.pool.query(
+    await db.query(
       "SELECT id,code,root_menu_id FROM app.responsibilities WHERE code IN('ADMIN','CUSTOMER_MANAGER','CUSTOMER_USER')",
     )
   ).rows;
@@ -133,12 +136,17 @@ before(async () => {
   managerRoot = mgr.root_menu_id;
   managerResp = mgr.id;
   userResp = res.find((r) => r.code === 'CUSTOMER_USER').id;
-  await db.pool.query(
+  await db.query(
     'INSERT INTO app.users(login_id,password_hash,display_name,resp_id,must_change_password) VALUES($1,$2,$1,$3,false)',
     [prefix + '_system', await argon2.hash(password), systemResp],
   );
   system = await login('system');
   customer = await catalog('customers', prefix);
+  // 가입 링크는 고객사 코드가 아니라 고객사마다 발급된 무작위 토큰을 쓴다.
+  signupPath =
+    'signup/' +
+    (await db.query('SELECT signup_token FROM app.customers WHERE id=$1', [customer.id])).rows[0]
+      .signup_token;
   foreign = await catalog('customers', prefix + '_foreign');
   corp = await catalog('corporations', 'A001', customer.id);
   dept = await catalog('departments', 'D001', customer.id, corp.id);
@@ -150,7 +158,7 @@ before(async () => {
   }).expect(201);
   await setupPassword('manager');
   await map('manager').then((r) => assert.equal(r.status, 201));
-  await db.pool.query('UPDATE app.users SET must_change_password=false WHERE login_id=$1', [
+  await db.query('UPDATE app.users SET must_change_password=false WHERE login_id=$1', [
     prefix + '_manager',
   ]);
   manager = await login('manager');
@@ -188,7 +196,7 @@ test('selected catalog rows commit together, stale versions and immutable codes 
     ],
   }).expect(409);
   assert.equal(
-    (await db.pool.query('SELECT name FROM app.corporations WHERE id=$1', [v.id])).rows[0].name,
+    (await db.query('SELECT name FROM app.corporations WHERE id=$1', [v.id])).rows[0].name,
     'EDIT',
   );
   const saved = (
@@ -211,18 +219,18 @@ test('selected catalog rows commit together, stale versions and immutable codes 
   }).expect(201);
 });
 test('signup stores no RESP and rejects injected customer, scopes and RESP', async () => {
-  const data = (await get(system, 'signup/' + prefix).expect(200)).body;
+  const data = (await get(system, signupPath).expect(200)).body;
   assert.deepEqual(data, { ok: true });
   const g = await guest();
-  await post(g, 'signup/' + prefix, { ...account('bad'), customerId: foreign.id }).expect(400);
-  await post(g, 'signup/' + prefix, { ...account('bad'), scopes: [] }).expect(400);
-  await post(g, 'signup/' + prefix, account('bad', systemResp)).expect(400);
-  await post(g, 'signup/' + prefix, signup('applicant')).expect(201);
+  await post(g, signupPath, { ...account('bad'), customerId: foreign.id }).expect(400);
+  await post(g, signupPath, { ...account('bad'), scopes: [] }).expect(400);
+  await post(g, signupPath, account('bad', systemResp)).expect(400);
+  await post(g, signupPath, signup('applicant')).expect(201);
   const u = await user('applicant');
   assert.equal(u.account_status, 'PENDING');
   assert.equal(u.resp_id, null);
   assert.equal(
-    (await db.pool.query('SELECT count(*)::int n FROM app.user_scopes WHERE user_id=$1', [u.id]))
+    (await db.query('SELECT count(*)::int n FROM app.user_scopes WHERE user_id=$1', [u.id]))
       .rows[0].n,
     0,
   );
@@ -288,14 +296,14 @@ test('mapping permission is independent from SAVE, cross-customer and stale requ
   ).expect(409);
   const foreignCorp = await catalog('corporations', 'F001', foreign.id);
   assert.equal((await map('applicant', [foreignCorp.id], [], manager, managerRoot)).status, 400);
-  await db.pool.query(
+  await db.query(
     "UPDATE app.menu_screen_buttons mb SET is_allowed=false FROM app.menu_screens ms JOIN app.screens s ON s.id=ms.screen_id WHERE mb.menu_screen_id=ms.id AND ms.menu_id=$1 AND s.code='USER_REGISTER' AND mb.action_code='ETC4'",
     [managerRoot],
   );
   try {
     assert.equal((await map('applicant', [corp.id], [dept.id], manager, managerRoot)).status, 403);
   } finally {
-    await db.pool.query(
+    await db.query(
       "UPDATE app.menu_screen_buttons mb SET is_allowed=true FROM app.menu_screens ms JOIN app.screens s ON s.id=ms.screen_id WHERE mb.menu_screen_id=ms.id AND ms.menu_id=$1 AND s.code='USER_REGISTER' AND mb.action_code='ETC4'",
       [managerRoot],
     );
@@ -339,7 +347,7 @@ test('direct creation, profile customer reassignment clears mapping, audit failu
     respId: userResp,
   }).expect(201);
   assert.equal(
-    (await db.pool.query('SELECT mapping_ready FROM app.account_access WHERE id=$1', [u.id]))
+    (await db.query('SELECT mapping_ready FROM app.account_access WHERE id=$1', [u.id]))
       .rows[0].mapping_ready,
     false,
   );
@@ -363,7 +371,7 @@ test('RESP defaults to CUSTOMER, assigned type change rejected, new SYSTEM is ex
   ).body.items[0].item;
   assert.equal(saved.authority_type, 'SYSTEM');
   const assigned = (
-    await db.pool.query('SELECT * FROM app.responsibilities WHERE id=$1', [managerResp])
+    await db.query('SELECT * FROM app.responsibilities WHERE id=$1', [managerResp])
   ).rows[0];
   await post(system, 'registration/responsibilities/save', {
     rows: [
@@ -401,8 +409,8 @@ test('RESP levels allow zero and peers, reject invalid values, and preserve auth
 // 상태 처리는 선택 행 전체가 원자적이며 정지하면 이미 로그인한 세션도 무효다.
 test('review batch rollback, rejection and suspension preserve state rules', async () => {
   const g = await guest();
-  await post(g, 'signup/' + prefix, signup('reject')).expect(201);
-  await post(g, 'signup/' + prefix, signup('approve')).expect(201);
+  await post(g, signupPath, signup('reject')).expect(201);
+  await post(g, signupPath, signup('approve')).expect(201);
   const rejected = await assign('reject'),
     approved = await assign('approve');
   await post(
@@ -486,7 +494,7 @@ test('reapproval requires reason and RESP, retains mapping, and refuses duplicat
     { customerId: customer.id, note: '중복', rows: [{ id: u.id, version: u.version }] },
     managerRoot,
   ).expect(409);
-  await db.pool.query('UPDATE app.users SET resp_id=NULL WHERE login_id=$1', [prefix + '_reject']);
+  await db.query('UPDATE app.users SET resp_id=NULL WHERE login_id=$1', [prefix + '_reject']);
   u = await user('reject');
   await post(
     manager,
@@ -511,7 +519,7 @@ test('real deletion removes mappings and sessions, preserves audit, rejects own/
   await post(system, 'accounts', { ...account('delete'), customerId: customer.id }).expect(201);
   await setupPassword('delete');
   await map('delete');
-  await db.pool.query('UPDATE app.users SET must_change_password=false WHERE login_id=$1', [
+  await db.query('UPDATE app.users SET must_change_password=false WHERE login_id=$1', [
     prefix + '_delete',
   ]);
   const who = await login('delete'),
@@ -548,14 +556,14 @@ test('real deletion removes mappings and sessions, preserves audit, rejects own/
   for (const table of ['user_scopes', 'user_corporations', 'auth_sessions'])
     assert.equal(
       (
-        await db.pool.query('SELECT count(*)::int n FROM app.' + table + ' WHERE user_id=$1', [
+        await db.query('SELECT count(*)::int n FROM app.' + table + ' WHERE user_id=$1', [
           u.id,
         ])
       ).rows[0].n,
       0,
     );
   assert(
-    (await db.pool.query('SELECT 1 FROM audit.event_summary WHERE user_id=$1', [u.id])).rowCount >
+    (await db.query('SELECT 1 FROM audit.event_summary WHERE user_id=$1', [u.id])).rowCount >
       0,
   );
   const foreignUser = await user('direct');

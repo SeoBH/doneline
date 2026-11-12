@@ -12,7 +12,7 @@ import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { settings } from './config';
 import { Permissions } from './permissions';
-import { Db } from './db';
+import { Db, dbContext } from './db';
 import { RegistrationController, RegistrationService } from './registration';
 import { Audit } from './audit';
 import { PgSessionStore } from './session-store';
@@ -66,7 +66,9 @@ export async function createApp() {
     req.requestId = randomUUID();
     res.setHeader('X-Request-ID', req.requestId);
     res.setHeader('Cache-Control', 'no-store');
-    next();
+    // 요청마다 빈 DB 컨텍스트를 만든다. 로그인 확인 뒤 워크스페이스가 채워지며(security.ts),
+    // 그 전의 DB 작업은 워크스페이스 없이 실행되어 업체별 데이터에 접근하지 못한다.
+    dbContext.run({}, next);
   });
   // 쿠키는 세션 식별자를 보관하고 본문·만료·폐기는 PgSessionStore가 DB에서 관리한다.
   const sessionMiddleware = session({

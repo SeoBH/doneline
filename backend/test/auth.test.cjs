@@ -19,8 +19,10 @@ before(async () => {
     throw new Error('Tests require an isolated *_test database');
   app = await createApp();
   db = app.get(Db);
+  // 테스트 준비 SQL은 HTTP 요청 밖에서 실행되므로 운영 워크스페이스를 기본 범위로 지정한다.
+  db.useScriptWorkspace(await db.platformWorkspaceId());
   server = app.getHttpServer();
-  await db.pool.query("DELETE FROM app.login_limits WHERE bucket LIKE 'ip:%'");
+  await db.query("DELETE FROM app.login_limits WHERE bucket LIKE 'ip:%'");
   const hash = await argon2.hash(password);
   await db.tx(async (c) => {
     root = (await c.query('INSERT INTO app.menus(code,name) VALUES($1,$1) RETURNING id', [loginId]))
@@ -99,12 +101,12 @@ test('login, CSRF, rotation, menu isolation, cache invalidation, audit, logout',
       (e) => e.action === 'LOGIN' && e.outcome === 'SUCCESS' && e.user_id === user,
     ),
   );
-  await db.pool.query(
+  await db.query(
     'UPDATE app.menu_screen_buttons SET is_allowed=false WHERE menu_screen_id=$1',
     [mapping],
   );
   await agent.get('/api/admin/audit-events').set('X-Menu-ID', root).expect(403);
-  await db.pool.query(
+  await db.query(
     'UPDATE app.menu_screen_buttons SET is_allowed=true WHERE menu_screen_id=$1',
     [mapping],
   );
@@ -126,7 +128,7 @@ test('expired and revoked sessions cannot access authenticated APIs', async () =
     .set('X-CSRF-Token', token)
     .send({ loginId, password })
     .expect(201);
-  await db.pool.query(
+  await db.query(
     "UPDATE app.auth_sessions SET idle_expires_at=now()-interval '1 second' WHERE user_id=$1",
     [user],
   );
@@ -138,9 +140,9 @@ test('expired and revoked sessions cannot access authenticated APIs', async () =
     .set('X-CSRF-Token', token)
     .send({ loginId, password })
     .expect(201);
-  await db.pool.query('UPDATE app.users SET is_active=false WHERE id=$1', [user]);
+  await db.query('UPDATE app.users SET is_active=false WHERE id=$1', [user]);
   await a.get('/api/me').expect(401);
-  await db.pool.query('UPDATE app.users SET is_active=true WHERE id=$1', [user]);
+  await db.query('UPDATE app.users SET is_active=true WHERE id=$1', [user]);
 });
 test('unknown login throttles and never logs password values', async () => {
   const a = request.agent(server);
@@ -152,7 +154,7 @@ test('unknown login throttles and never logs password values', async () => {
       .set('X-CSRF-Token', token)
       .send({ loginId: loginId + '_missing', password })
       .expect(i < 5 ? 401 : 429);
-  const logs = await db.pool.query('SELECT * FROM audit.event_summary');
+  const logs = await db.query('SELECT * FROM audit.event_summary');
   assert.ok(!JSON.stringify(logs.rows).includes(password));
 });
 
@@ -161,7 +163,7 @@ test('login audit failure rolls back authenticated session creation', async () =
   const audit = app.get(Audit);
   const original = audit.write.bind(audit);
   const beforeCount = (
-    await db.pool.query(
+    await db.query(
       'SELECT count(*) FROM app.auth_sessions WHERE user_id=$1 AND revoked_at IS NULL',
       [user],
     )
@@ -181,7 +183,7 @@ test('login audit failure rolls back authenticated session creation', async () =
       .expect(500);
     await a.get('/api/me').expect(401);
     const afterCount = (
-      await db.pool.query(
+      await db.query(
         'SELECT count(*) FROM app.auth_sessions WHERE user_id=$1 AND revoked_at IS NULL',
         [user],
       )
@@ -194,7 +196,7 @@ test('login audit failure rolls back authenticated session creation', async () =
 test('first password change blocks business access and revokes existing sessions', async () => {
   const a = request.agent(server);
   let token = (await a.get('/api/auth/csrf')).body.csrfToken;
-  await db.pool.query('UPDATE app.users SET must_change_password=true WHERE id=$1', [user]);
+  await db.query('UPDATE app.users SET must_change_password=true WHERE id=$1', [user]);
   const login = await a
     .post('/api/auth/login')
     .set('Origin', settings.origin)
@@ -216,7 +218,7 @@ test('first password change blocks business access and revokes existing sessions
     .send({ currentPassword: password, newPassword: 'Changed test password 123456!' })
     .expect(201);
   await a.get('/api/me').expect(401);
-  const u = (await db.pool.query('SELECT must_change_password FROM app.users WHERE id=$1', [user]))
+  const u = (await db.query('SELECT must_change_password FROM app.users WHERE id=$1', [user]))
     .rows[0];
   assert.equal(u.must_change_password, false);
 });

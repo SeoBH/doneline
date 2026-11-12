@@ -18,31 +18,33 @@ const assert = require('node:assert/strict');
     const db = app.get(Db),
       name = 'ui_reg_' + randomBytes(4).toString('hex'),
       password = randomBytes(24).toString('hex');
-    await db.pool.query("DELETE FROM app.login_limits WHERE bucket LIKE 'ip:%'");
+    // 테스트 준비 SQL은 HTTP 요청 밖에서 실행되므로 운영 워크스페이스를 기본 범위로 지정한다.
+    db.useScriptWorkspace(await db.platformWorkspaceId());
+    await db.query("DELETE FROM app.login_limits WHERE bucket LIKE 'ip:%'");
     const root = (
-      await db.pool.query('INSERT INTO app.menus(code,name) VALUES($1,$1) RETURNING id', [name])
+      await db.query('INSERT INTO app.menus(code,name) VALUES($1,$1) RETURNING id', [name])
     ).rows[0].id;
     const resp = (
-      await db.pool.query(
+      await db.query(
         "INSERT INTO app.responsibilities(code,name,root_menu_id,authority_type) VALUES($1,$1,$2,'SYSTEM') RETURNING id",
         [name, root],
       )
     ).rows[0].id;
-    await db.pool.query(
+    await db.query(
       'INSERT INTO app.users(login_id,password_hash,display_name,resp_id,must_change_password) VALUES($1,$2,$1,$3,false)',
       [name, await argon2.hash(password), resp],
     );
     for (const code of ['SCREEN_REGISTER', 'MENU_REGISTER', 'RESP_REGISTER', 'AUDIT']) {
-      const screen = (await db.pool.query('SELECT id FROM app.screens WHERE code=$1', [code]))
+      const screen = (await db.query('SELECT id FROM app.screens WHERE code=$1', [code]))
         .rows[0].id;
       const map = (
-        await db.pool.query(
+        await db.query(
           'INSERT INTO app.menu_screens(menu_id,screen_id) VALUES($1,$2) RETURNING id',
           [root, screen],
         )
       ).rows[0].id;
       for (const action of ['RESET', 'QUERY', 'SAVE', 'DELETE'])
-        await db.pool.query('INSERT INTO app.menu_screen_buttons VALUES($1,$2,true)', [
+        await db.query('INSERT INTO app.menu_screen_buttons VALUES($1,$2,true)', [
           map,
           action,
         ]);
@@ -142,11 +144,11 @@ const assert = require('node:assert/strict');
     await expect(successToast).toHaveCount(0, { timeout: 6000 });
     await tool.getByRole('button', { name: '조회', exact: true }).click();
     await expect(successToast).toHaveCount(1);
+    // 같은 종류·문구의 알림은 쌓지 않고 하나로 갱신한다(입력칸 가림 방지).
     await tool.getByRole('button', { name: '조회', exact: true }).click();
-    await expect(successToast).toHaveCount(2);
-    await successToast.first().getByRole('button', { name: '알림 닫기' }).click();
     await expect(successToast).toHaveCount(1);
     await successToast.first().getByRole('button', { name: '알림 닫기' }).click();
+    await expect(successToast).toHaveCount(0);
     await tool.getByRole('button', { name: '초기화', exact: true }).click();
     await active()
       .locator('.register-left .query-bar')
@@ -196,7 +198,7 @@ const assert = require('node:assert/strict');
     await expect(active().locator('[aria-label="하위 구성"] .ag-row')).toHaveCount(1);
     assert.equal(
       (
-        await db.pool.query('SELECT count(*)::int n FROM app.menu_screens WHERE menu_id=$1', [
+        await db.query('SELECT count(*)::int n FROM app.menu_screens WHERE menu_id=$1', [
           menu.id,
         ])
       ).rows[0].n,
@@ -208,7 +210,7 @@ const assert = require('node:assert/strict');
     );
     assert.equal(
       (
-        await db.pool.query('SELECT count(*)::int n FROM app.menu_screens WHERE menu_id=$1', [
+        await db.query('SELECT count(*)::int n FROM app.menu_screens WHERE menu_id=$1', [
           menu.id,
         ])
       ).rows[0].n,
@@ -227,7 +229,7 @@ const assert = require('node:assert/strict');
     await expect(active().locator('[aria-label="하위 구성"] .ag-row')).toHaveCount(0);
     assert.equal(
       (
-        await db.pool.query('SELECT count(*)::int n FROM app.menu_screens WHERE menu_id=$1', [
+        await db.query('SELECT count(*)::int n FROM app.menu_screens WHERE menu_id=$1', [
           menu.id,
         ])
       ).rows[0].n,
@@ -280,7 +282,7 @@ const assert = require('node:assert/strict');
     await expect(sg.locator('.grid-row-error')).toHaveCount(1);
     await expect(sg.locator('.ag-row')).toHaveCount(2);
     assert.equal(
-      (await db.pool.query('SELECT name FROM app.screens WHERE id=$1', [screenSaved.items[0].id]))
+      (await db.query('SELECT name FROM app.screens WHERE id=$1', [screenSaved.items[0].id]))
         .rows[0].name,
       '브라우저 화면',
     );

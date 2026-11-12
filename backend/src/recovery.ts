@@ -12,7 +12,7 @@ import { IsEmail, IsIn, IsString, Length, Matches } from 'class-validator';
 import { createHash, randomBytes } from 'node:crypto';
 import * as argon2 from 'argon2';
 import { PoolClient } from 'pg';
-import { Db } from './db';
+import { Db, useWorkspace } from './db';
 import { Audit } from './audit';
 import { Mail } from './mail';
 import { settings } from './config';
@@ -24,7 +24,8 @@ export function emailAddress(value: unknown): string {
 }
 class RequestDto {
   @IsIn(['ID', 'PASSWORD', 'VERIFY']) kind!: 'ID' | 'PASSWORD' | 'VERIFY';
-  @IsString() @Length(0, 40) customerCode!: string;
+  // 고객사 가입 링크로 접속했으면 그 링크의 가입 토큰, 아니면 빈 값(SYSTEM 계정 복구).
+  @IsString() @Matches(/^([a-f0-9]{64})?$/) signupToken!: string;
   @IsString() @Length(0, 80) loginId!: string;
   @IsEmail() @Length(3, 254) email!: string;
 }
@@ -86,15 +87,29 @@ export class Recovery {
   async request(req: AppRequest, body: RequestDto) {
     const email = emailAddress(body.email);
     await this.limit(req, email);
+    // 같은 이메일이 여러 업체(워크스페이스)에 등록될 수 있다. 등록된 워크스페이스만 DB 함수로 찾고
+    // 워크스페이스마다 RLS 범위를 지정해 그 안의 계정만 처리한다.
+    const workspaces = (
+      await this.db.query('SELECT app.recovery_workspaces($1) AS id', [email])
+    ).rows.map((r) => String(r.id));
+    for (const workspaceId of workspaces) await this.requestIn(workspaceId, email, body);
+    // 외부 발송 미연결 상태를 숨기지 않는다. 계정 일치 여부와 무관하게 같은 메시지를 반환한다.
+    return {
+      message:
+        '정보가 일치하면 안내 메일을 발송 보류로 준비합니다. 현재 실제 발송은 연결되지 않았으므로 관리자에게 문의해주세요.',
+    };
+  }
+  /** 한 워크스페이스 안에서 조건에 맞는 계정에 아이디 안내 또는 일회용 링크를 준비한다. */
+  private async requestIn(workspaceId: string, email: string, body: RequestDto) {
     await this.db.tx(async (c) => {
       await c.query('SELECT pg_advisory_xact_lock(720260910)');
       const users = (
         await c.query(
           `SELECT u.* FROM app.users u LEFT JOIN app.customers t ON t.id=u.customer_id
-        WHERE lower(u.email)=$1 AND (($2='' AND u.customer_id IS NULL) OR (t.code=$2 AND t.is_active))
+        WHERE lower(u.email)=$1 AND (($2='' AND u.customer_id IS NULL) OR (t.signup_token=$2 AND t.is_active))
         AND ($3='ID' OR u.login_id=$4) AND u.account_status NOT IN ('REJECTED','SUSPENDED')
         AND ($3='VERIFY' OR u.email_verified_at IS NOT NULL) ORDER BY u.id LIMIT 20 FOR UPDATE OF u`,
-          [email, body.customerCode, body.kind, body.loginId],
+          [email, body.signupToken, body.kind, body.loginId],
         )
       ).rows;
       for (const u of users) {
@@ -106,12 +121,7 @@ export class Recovery {
           });
         else if (body.kind !== 'VERIFY' || !u.email_verified_at) await this.issue(c, u, body.kind);
       }
-    });
-    // 외부 발송 미연결 상태를 숨기지 않는다. 계정 일치 여부와 무관하게 같은 메시지를 반환한다.
-    return {
-      message:
-        '정보가 일치하면 안내 메일을 발송 보류로 준비합니다. 현재 실제 발송은 연결되지 않았으므로 관리자에게 문의해주세요.',
-    };
+    }, workspaceId);
   }
   /** 한 트랜잭션 안에서 만료·용도·현재 이메일을 검사하고 소비한다. 동시 요청 중 하나만 성공한다. */
   async redeem(req: AppRequest, body: RedeemDto) {
@@ -119,6 +129,13 @@ export class Recovery {
     if (body.purpose === 'PASSWORD' && body.password.length < 15)
       throw new BadRequestException('비밀번호는 15~128자로 입력해주세요.');
     const hash = body.purpose === 'PASSWORD' ? await argon2.hash(body.password) : null;
+    // 토큰 해시로 워크스페이스만 찾고, 이 공개 요청의 이후 DB 작업(감사 기록 포함)을 그 범위로 지정한다.
+    const workspaceId: string | null = (
+      await this.db.query('SELECT app.token_workspace($1) AS id', [digest(body.token)])
+    ).rows[0].id;
+    if (!workspaceId)
+      throw new BadRequestException('사용할 수 없거나 만료된 링크입니다. 다시 요청해주세요.');
+    useWorkspace(workspaceId);
     await this.db.tx(async (c) => {
       await c.query('SELECT pg_advisory_xact_lock(720260910)');
       const u = (

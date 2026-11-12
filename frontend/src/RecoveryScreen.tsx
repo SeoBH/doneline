@@ -32,7 +32,7 @@ export function RecoveryScreen({
         ? { ...link, password }
         : {
             kind,
-            customerCode: code,
+            signupToken: code,
             loginId: String(data.get('loginId') || ''),
             email: String(data.get('email') || ''),
           };

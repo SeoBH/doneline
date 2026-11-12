@@ -36,31 +36,33 @@ before(async () => {
   if (!process.env.PGDATABASE?.endsWith('_test')) throw Error('Isolated test DB required');
   app = await createApp();
   db = app.get(Db);
-  await db.pool.query("DELETE FROM app.login_limits WHERE bucket LIKE 'ip:%'");
+  // 테스트 준비 SQL은 HTTP 요청 밖에서 실행되므로 운영 워크스페이스를 기본 범위로 지정한다.
+  db.useScriptWorkspace(await db.platformWorkspaceId());
+  await db.query("DELETE FROM app.login_limits WHERE bucket LIKE 'ip:%'");
   root = (
-    await db.pool.query('INSERT INTO app.menus(code,name) VALUES($1,$1) RETURNING id', [prefix])
+    await db.query('INSERT INTO app.menus(code,name) VALUES($1,$1) RETURNING id', [prefix])
   ).rows[0].id;
   resp = (
-    await db.pool.query(
+    await db.query(
       "INSERT INTO app.responsibilities(code,name,root_menu_id,authority_type) VALUES($1,$1,$2,'SYSTEM') RETURNING id",
       [prefix, root],
     )
   ).rows[0].id;
-  await db.pool.query(
+  await db.query(
     'INSERT INTO app.users(login_id,password_hash,display_name,resp_id,must_change_password) VALUES($1,$2,$1,$3,false)',
     [prefix, await argon2.hash(password), resp],
   );
   for (const code of ['SCREEN_REGISTER', 'MENU_REGISTER', 'RESP_REGISTER']) {
-    const id = (await db.pool.query('SELECT id FROM app.screens WHERE code=$1', [code])).rows[0].id;
+    const id = (await db.query('SELECT id FROM app.screens WHERE code=$1', [code])).rows[0].id;
     ids[code] = id;
     const map = (
-      await db.pool.query(
+      await db.query(
         'INSERT INTO app.menu_screens(menu_id,screen_id) VALUES($1,$2) RETURNING id',
         [root, id],
       )
     ).rows[0].id;
     for (const a of ['RESET', 'QUERY', 'SAVE', 'DELETE'])
-      await db.pool.query('INSERT INTO app.menu_screen_buttons VALUES($1,$2,true)', [map, a]);
+      await db.query('INSERT INTO app.menu_screen_buttons VALUES($1,$2,true)', [map, a]);
   }
   agent = request.agent(app.getHttpServer());
   csrf = (await agent.get('/api/auth/csrf')).body.csrfToken;
@@ -225,7 +227,7 @@ test('menu context permission is enforced on server; action grants are independe
   await get('screens', ids.b.id).expect(403);
   await agent.get('/api/admin/config').set('X-Menu-ID', root).expect(404);
   const log = (
-    await db.pool.query('SELECT * FROM audit.config_changes WHERE entity_key=$1 ORDER BY id DESC', [
+    await db.query('SELECT * FROM audit.config_changes WHERE entity_key=$1 ORDER BY id DESC', [
       ids.a.id,
     ])
   ).rows;

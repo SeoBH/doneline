@@ -135,8 +135,7 @@ export class RegistrationService {
   // 2001행을 읽어 2000행 초과를 감지하고 조회 조건을 좁히도록 안내한다.
   async list(k: string, code = '', name = '') {
     kind(k);
-    return this.db.tx(async (c) => {
-      await c.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    return this.db.snapshot(async (c) => {
       const rows = (
         await c.query(
           'SELECT t.*, ' +
@@ -345,8 +344,7 @@ export class RegistrationService {
   async menuDetail(id: string) {
     ident(id);
     const [menus, screens] = await Promise.all([this.list('menus'), this.list('screens')]);
-    return this.db.tx(async (c) => {
-      await c.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    return this.db.snapshot(async (c) => {
       const parent = await this.row(c, 'menus', id);
       if (!parent) throw new NotFoundException('메뉴가 없습니다.');
       return { parent, rows: await this.layout(c, id), menus: menus.items, screens: screens.items };
@@ -459,7 +457,7 @@ export class RegistrationService {
   // RESP의 현재 시작 메뉴와 연결 후보 목록을 조회한다.
   async respDetail(id: string) {
     const rows = (
-      await this.db.pool.query(
+      await this.db.query(
         'SELECT r.*,m.code AS menu_code,m.name AS menu_name FROM app.responsibilities r LEFT JOIN app.menus m ON m.id=r.root_menu_id WHERE r.id=$1',
         [ident(id)],
       )

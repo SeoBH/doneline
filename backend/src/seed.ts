@@ -12,13 +12,16 @@ async function seed() {
   try {
     const password = randomBytes(24).toString('base64url'),
       hash = await argon2.hash(password);
+    // 최초 관리자와 ADMIN RESP는 운영 워크스페이스 소속이다. 요청 밖 스크립트이므로 기본 범위를 직접 지정한다.
+    db.useScriptWorkspace(await db.platformWorkspaceId());
     const created = await db.tx(async (c) => {
       await c.query(
         "INSERT INTO app.menus(code,name) VALUES('ROOT','관리') ON CONFLICT(code) DO NOTHING",
       );
       const menu = (await c.query("SELECT id FROM app.menus WHERE code='ROOT'")).rows[0].id;
       await c.query(
-        "INSERT INTO app.responsibilities(code,name,root_menu_id,authority_type,level) VALUES('ADMIN','시스템 관리자',$1,'SYSTEM',0) ON CONFLICT(code) DO NOTHING",
+        // ADMIN은 화면·메뉴 구성 권한을 포함하므로 공통(NULL)이 아닌 운영 워크스페이스 전용 RESP로 만든다.
+        "INSERT INTO app.responsibilities(code,name,root_menu_id,authority_type,level,workspace_id) VALUES('ADMIN','시스템 관리자',$1,'SYSTEM',0,app.current_workspace_id()) ON CONFLICT(code) DO NOTHING",
         [menu],
       );
       const resp = (await c.query("SELECT id FROM app.responsibilities WHERE code='ADMIN'")).rows[0]
