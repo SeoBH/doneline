@@ -332,7 +332,7 @@ function App() {
         {toasts}
         <main className="login">
           <form onSubmit={submit}>
-            <small>CPJT · WORKSPACE</small>
+            <small>Doneline · WORKSPACE</small>
             <h1>{user ? '비밀번호 변경' : '로그인'}</h1>
             <p>
               {user
@@ -413,7 +413,7 @@ function App() {
     >
       {toasts}
       <header>
-        <strong>CPJT</strong>
+        <strong>Doneline</strong>
         <span>{user.displayName}</span>
         <button onClick={refreshNavigation}>메뉴 새로고침</button>
         <button onClick={logout}>로그아웃</button>

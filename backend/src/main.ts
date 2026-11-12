@@ -5,7 +5,7 @@ import { createApp } from './app';
 import { settings } from './config';
 createApp()
   .then((app) => app.listen(settings.port, settings.host))
-  .then(() => console.log('CPJT: ' + settings.origin))
+  .then(() => console.log('Doneline: ' + settings.origin))
   .catch(() => {
     console.error('Backend startup failed. Check database and environment settings.');
     process.exitCode = 1;

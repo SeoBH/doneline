@@ -174,7 +174,7 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     return this.auth.changePassword(req, body).then((result) => {
-      res.clearCookie('cpjt.sid', { path: '/' });
+      res.clearCookie('doneline.sid', { path: '/' });
       return result;
     });
   }
@@ -199,7 +199,7 @@ export class AuthController {
     await new Promise<void>((resolve, reject) =>
       req.session.destroy((e) => (e ? reject(e) : resolve())),
     );
-    res.clearCookie('cpjt.sid', { path: '/' });
+    res.clearCookie('doneline.sid', { path: '/' });
     return { ok: true };
   }
 }

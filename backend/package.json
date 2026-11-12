@@ -1,5 +1,5 @@
 {
-    "name":  "cpjt-backend",
+    "name":  "doneline-backend",
     "private":  true,
     "scripts":  {
                     "build":  "tsc -p tsconfig.json",

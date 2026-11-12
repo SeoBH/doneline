@@ -1,6 +1,6 @@
-# CPJT
+# Doneline
 
-NestJS + React + TypeScript + PostgreSQL 기반 업무 시스템입니다. 등록 그리드는 AG Grid Community를 사용합니다.
+SI·MSP·유지보수 업체가 고객 요청(SR)을 접수·처리·보고하는 B2B SaaS입니다. NestJS + React + TypeScript + PostgreSQL 기반이며 등록 그리드는 AG Grid Community를 사용합니다.
 
 - 실행·운영·검증: 이 문서
 - 대표 동작과 보안 흐름을 따라 배우는 입문 자료: [코드읽기.md](코드읽기.md)
@@ -9,7 +9,7 @@ NestJS + React + TypeScript + PostgreSQL 기반 업무 시스템입니다. 등�
 
 ## 실행
 
-프로젝트 루트 `D:/Cpjt`에서 실행합니다.
+프로젝트 루트 `D:/doneline`에서 실행합니다.
 
 ```powershell
 npm.cmd ci --prefix backend

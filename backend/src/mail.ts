@@ -7,7 +7,7 @@ export type MailContent = { to: string; subject: string; text: string };
 // 용도 문자열을 섞어 세션 서명 키를 암호화 키로 직접 재사용하지 않는다. 키 교체 시 보류 메일도 재발급한다.
 const key = () =>
   createHash('sha256')
-    .update('cpjt-mail-outbox:' + settings.secret)
+    .update('doneline-mail-outbox:' + settings.secret)
     .digest();
 export function openMail(payload: string): MailContent {
   const [iv, tag, content] = payload.split('.').map((v) => Buffer.from(v, 'base64'));

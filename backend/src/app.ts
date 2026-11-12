@@ -70,7 +70,7 @@ export async function createApp() {
   });
   // 쿠키는 세션 식별자를 보관하고 본문·만료·폐기는 PgSessionStore가 DB에서 관리한다.
   const sessionMiddleware = session({
-    name: 'cpjt.sid',
+    name: 'doneline.sid',
     secret: settings.secret,
     store: app.get(PgSessionStore),
     resave: false,
