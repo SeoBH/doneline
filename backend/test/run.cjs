@@ -14,6 +14,6 @@ const result = spawnSync(
     path.join(__dirname, 'accounts.test.cjs'),
     path.join(__dirname, 'recovery.test.cjs'),
   ],
-  { stdio: 'inherit', env: { ...process.env, PGDATABASE: 'cpjt_backend_test' } },
+  { stdio: 'inherit', env: { ...process.env, PGDATABASE: 'doneline_test' } },
 );
 process.exitCode = result.status ?? 1;

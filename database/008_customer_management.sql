@@ -112,9 +112,9 @@ UPDATE app.menu_screen_buttons mb SET is_allowed=true FROM app.menu_screens ms J
  WHERE mb.menu_screen_id=ms.id AND
  ((s.code='CUSTOMER_REGISTER' AND mb.action_code='DELETE') OR
  (s.code='USER_REGISTER' AND mb.action_code='ETC4' AND ms.menu_id IN(SELECT root_menu_id FROM app.responsibilities WHERE code IN('ADMIN','CUSTOMER_MANAGER'))));
-GRANT SELECT ON app.account_access TO cpjt_app;
-GRANT SELECT,INSERT,UPDATE,DELETE ON app.user_corporations TO cpjt_app;
-GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA app TO cpjt_app;
+GRANT SELECT ON app.account_access TO doneline_app;
+GRANT SELECT,INSERT,UPDATE,DELETE ON app.user_corporations TO doneline_app;
+GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA app TO doneline_app;
 CREATE OR REPLACE VIEW audit.config_changes AS
  SELECT id,event_id,entity_type,entity_key,change_type,before_values,after_values FROM audit.audit_changes
  WHERE entity_type IN('menus','responsibilities','screens','menu_edges','menu_screens','users','user_scopes','customers','corporations','departments');

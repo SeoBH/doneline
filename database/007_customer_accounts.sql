@@ -96,8 +96,8 @@ INSERT INTO app.menu_screens(menu_id,screen_id)
 INSERT INTO app.menu_screen_buttons(menu_screen_id,action_code,is_allowed)
  SELECT ms.id,b.action_code,b.is_used FROM app.menu_screens ms JOIN app.menus m ON m.id=ms.menu_id
  JOIN app.screen_buttons b ON b.screen_id=ms.screen_id WHERE m.code='CUSTOMER_ADMIN_ROOT';
-GRANT SELECT,INSERT,UPDATE,DELETE ON app.customers,app.corporations,app.departments,app.user_scopes,app.customer_responsibilities TO cpjt_app;
-GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA app TO cpjt_app;
+GRANT SELECT,INSERT,UPDATE,DELETE ON app.customers,app.corporations,app.departments,app.user_scopes,app.customer_responsibilities TO doneline_app;
+GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA app TO doneline_app;
 
 -- 운영자 감사 상세에서 사용자 상태 전환도 확인한다. 고객사 계정은 이 전역 감사 API에 접근하지 못한다.
 CREATE OR REPLACE VIEW audit.config_changes AS

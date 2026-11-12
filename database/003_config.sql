@@ -27,9 +27,9 @@ BEGIN
  INSERT INTO app.menu_edges(parent_menu_id,child_menu_id,sort_order) VALUES(p_parent,p_child,p_sort) ON CONFLICT(parent_menu_id,child_menu_id) DO UPDATE SET sort_order=EXCLUDED.sort_order;
  END IF;
 END $$;
-GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA app TO cpjt_app;
+GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA app TO doneline_app;
 CREATE OR REPLACE VIEW audit.config_changes AS SELECT id,event_id,entity_type,entity_key,change_type,before_values,after_values FROM audit.audit_changes WHERE entity_type IN ('menus','responsibilities','screens','menu_edges','menu_screens');
-GRANT SELECT ON audit.config_changes TO cpjt_app;
+GRANT SELECT ON audit.config_changes TO doneline_app;
 INSERT INTO app.screens(code,name,purpose,component_key) VALUES('CONFIG','권한·메뉴 설정','RESP, 메뉴, 화면과 버튼 권한 관리','config') ON CONFLICT(code) DO NOTHING;
 INSERT INTO app.screen_buttons(screen_id,action_code,label,is_used)
  SELECT s.id,a.code,a.label,true FROM app.screens s CROSS JOIN (VALUES('RESET','초기화'),('QUERY','조회'),('SAVE','저장'),('DELETE','삭제')) a(code,label)

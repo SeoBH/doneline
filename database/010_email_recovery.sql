@@ -52,7 +52,7 @@ COMMENT ON COLUMN app.mail_outbox.payload IS '수신 주소·제목·본문의 A
 COMMENT ON COLUMN app.mail_outbox.status IS 'HELD 발송 보류(기본값), CANCELLED 링크 폐기. 실제 발송 완료를 뜻하는 상태는 아직 없음.';
 COMMENT ON COLUMN app.mail_outbox.expires_at IS '메일 내용 확인 가능 기한. 만료 메일은 발송·미리보기 대상에서 제외.';
 COMMENT ON COLUMN app.mail_outbox.created_at IS '작성 시각. 기본값 현재 시각.';
-GRANT SELECT,INSERT,UPDATE,DELETE ON app.account_tokens,app.mail_outbox TO cpjt_app;
-GRANT USAGE,SELECT ON SEQUENCE app.mail_outbox_id_seq TO cpjt_app;
+GRANT SELECT,INSERT,UPDATE,DELETE ON app.account_tokens,app.mail_outbox TO doneline_app;
+GRANT USAGE,SELECT ON SEQUENCE app.mail_outbox_id_seq TO doneline_app;
 INSERT INTO public.schema_migrations(version) VALUES('010_email_recovery');
 COMMIT;

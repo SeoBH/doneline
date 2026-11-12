@@ -25,7 +25,7 @@ BEGIN
  IF NOT p_remove THEN UPDATE app.menu_edges SET hidden=p_hidden WHERE parent_menu_id=p_parent AND child_menu_id=p_child; END IF;
 END $$;
 REVOKE ALL ON FUNCTION app.set_menu_edge(bigint,bigint,integer,boolean,boolean) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION app.set_menu_edge(bigint,bigint,integer,boolean,boolean) TO cpjt_app;
+GRANT EXECUTE ON FUNCTION app.set_menu_edge(bigint,bigint,integer,boolean,boolean) TO doneline_app;
 -- Preserve existing definitions and connections; retire only the combined configuration screen.
 INSERT INTO app.screens(code,name,component_key) VALUES
  ('SCREEN_REGISTER','화면등록','screen-register'),('MENU_REGISTER','메뉴등록','menu-register'),('RESP_REGISTER','RESP등록','resp-register')

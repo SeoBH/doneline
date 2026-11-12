@@ -1,5 +1,5 @@
 /** 고객사 코드 등록 → 공개 가입 → 관리자 승인 → 직접 등록을 실제 화면으로 검증한다. 테스트 DB와 3002 포트를 사용한다. */
-process.env.PGDATABASE = 'cpjt_backend_test';
+process.env.PGDATABASE = 'doneline_test';
 process.env.APP_ORIGIN = 'http://127.0.0.1:3002';
 const { chromium } = require('playwright');
 const { expect } = require('playwright/test');
