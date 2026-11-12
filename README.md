@@ -183,7 +183,7 @@ powershell -ExecutionPolicy Bypass -File scripts/demo.ps1
 처음 실행하면 Tailscale이 Funnel 사용 승인 링크를 보여줄 수 있습니다. 링크를 열어 이 PC(`castanets`)의 Funnel을 허용하면 됩니다. 스크립트는 `NODE_ENV=production`(HTTPS 출처·보안 쿠키), `APP_ORIGIN`(Funnel 주소), `TRUST_PROXY=1`(앞단 프록시 1개)로 서버를 실행합니다. 공개를 완전히 끄려면 아래 명령을 실행합니다.
 
 ```powershell
-& 'C:\Program Files\Tailscale	ailscale.exe' funnel reset
+& 'C:\Program Files\Tailscale\tailscale.exe' funnel reset
 ```
 
 데모는 개발 DB(`doneline_dev`)를 사용하며 방문자는 **업체 무료 가입**으로 자기 업체를 만들어 체험합니다. 업체 가입·개선 요청은 운영 슬랙으로 알립니다. 회사 PC·회사망에서는 실행하지 않습니다.
