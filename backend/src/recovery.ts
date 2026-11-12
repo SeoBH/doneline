@@ -1,0 +1,180 @@
+/** 이메일 소유 확인과 계정 복구. 공개 응답은 계정 존재 여부를 숨기며 링크 원문은 메일에만 담는다. */
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  HttpException,
+  Injectable,
+  Post,
+  Req,
+} from '@nestjs/common';
+import { IsEmail, IsIn, IsString, Length, Matches } from 'class-validator';
+import { createHash, randomBytes } from 'node:crypto';
+import * as argon2 from 'argon2';
+import { PoolClient } from 'pg';
+import { Db } from './db';
+import { Audit } from './audit';
+import { Mail } from './mail';
+import { settings } from './config';
+import { AppRequest, Public } from './security';
+export function emailAddress(value: unknown): string {
+  if (typeof value !== 'string' || value.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value))
+    throw new BadRequestException('이메일 주소를 확인해주세요.');
+  return value.trim().toLowerCase();
+}
+class RequestDto {
+  @IsIn(['ID', 'PASSWORD', 'VERIFY']) kind!: 'ID' | 'PASSWORD' | 'VERIFY';
+  @IsString() @Length(0, 40) customerCode!: string;
+  @IsString() @Length(0, 80) loginId!: string;
+  @IsEmail() @Length(3, 254) email!: string;
+}
+class RedeemDto {
+  @IsString() @Matches(/^[a-f0-9]{64}$/) token!: string;
+  @IsIn(['VERIFY', 'PASSWORD']) purpose!: 'VERIFY' | 'PASSWORD';
+  @IsString() @Length(0, 128) password!: string;
+}
+const digest = (s: string) => createHash('sha256').update(s).digest('hex');
+@Injectable()
+export class Recovery {
+  constructor(
+    private readonly db: Db,
+    private readonly mail: Mail,
+    private readonly audit: Audit,
+  ) {}
+  /** IP와 입력 주소별 제한은 실제 계정 조회 전에 갱신한다. 존재하지 않는 계정도 같은 제한을 받는다. */
+  async limit(req: AppRequest, email: string) {
+    const buckets: [string, number][] = [
+      ['recovery-ip:' + digest(req.ip || ''), 30],
+      ['recovery-email:' + digest(email), 5],
+    ];
+    const denied = await this.db.tx(async (c) => {
+      let blocked = false;
+      for (const [bucket, max] of buckets.sort((a, b) => a[0].localeCompare(b[0]))) {
+        const r = await c.query(
+          `INSERT INTO app.login_limits VALUES($1,1,now()+interval '15 minutes') ON CONFLICT(bucket)
+          DO UPDATE SET attempts=CASE WHEN app.login_limits.expires_at<=now() THEN 1 ELSE app.login_limits.attempts+1 END,
+          expires_at=CASE WHEN app.login_limits.expires_at<=now() THEN now()+interval '15 minutes' ELSE app.login_limits.expires_at END RETURNING attempts`,
+          [bucket],
+        );
+        blocked ||= r.rows[0].attempts > max;
+      }
+      return blocked;
+    });
+    if (denied) throw new HttpException('요청이 많습니다. 잠시 후 다시 시도해주세요.', 429);
+  }
+  /** 호출자는 사용자 행을 잠근다. 최신 링크 하나만 유효하며 발급 자체로 기존 비밀번호는 바뀌지 않는다. */
+  async issue(c: PoolClient, user: any, purpose: 'VERIFY' | 'PASSWORD') {
+    if (!user.email) throw new BadRequestException('사용자정보에 이메일을 먼저 저장해주세요.');
+    await c.query('DELETE FROM app.account_tokens WHERE user_id=$1', [user.id]);
+    await c.query(
+      "UPDATE app.mail_outbox SET status='CANCELLED',payload='' WHERE user_id=$1 AND status='HELD'",
+      [user.id],
+    );
+    const token = randomBytes(32).toString('hex');
+    await c.query(
+      `INSERT INTO app.account_tokens(token_hash,user_id,purpose,email,expires_at) VALUES($1,$2,$3,$4,now()+interval '30 minutes')`,
+      [digest(token), user.id, purpose, user.email],
+    );
+    // URL fragment는 HTTP 요청·Referer에 포함되지 않는다. 화면이 읽은 뒤 주소창에서도 제거한다.
+    const link = settings.origin + '/#account=' + purpose + ':' + token;
+    await this.mail.hold(c, user.id, {
+      to: user.email,
+      subject: purpose === 'VERIFY' ? '이메일 인증 안내' : '비밀번호 설정 안내',
+      text: `${user.display_name}님, 아래 링크에서 ${purpose === 'VERIFY' ? '이메일을 인증' : '비밀번호를 설정'}해주세요. 링크는 30분 동안 한 번만 사용할 수 있습니다.\n${link}`,
+    });
+  }
+  async request(req: AppRequest, body: RequestDto) {
+    const email = emailAddress(body.email);
+    await this.limit(req, email);
+    await this.db.tx(async (c) => {
+      await c.query('SELECT pg_advisory_xact_lock(720260910)');
+      const users = (
+        await c.query(
+          `SELECT u.* FROM app.users u LEFT JOIN app.customers t ON t.id=u.customer_id
+        WHERE lower(u.email)=$1 AND (($2='' AND u.customer_id IS NULL) OR (t.code=$2 AND t.is_active))
+        AND ($3='ID' OR u.login_id=$4) AND u.account_status NOT IN ('REJECTED','SUSPENDED')
+        AND ($3='VERIFY' OR u.email_verified_at IS NOT NULL) ORDER BY u.id LIMIT 20 FOR UPDATE OF u`,
+          [email, body.customerCode, body.kind, body.loginId],
+        )
+      ).rows;
+      for (const u of users) {
+        if (body.kind === 'ID')
+          await this.mail.hold(c, u.id, {
+            to: email,
+            subject: '아이디 안내',
+            text: `등록된 아이디는 ${u.login_id}입니다.`,
+          });
+        else if (body.kind !== 'VERIFY' || !u.email_verified_at) await this.issue(c, u, body.kind);
+      }
+    });
+    // 외부 발송 미연결 상태를 숨기지 않는다. 계정 일치 여부와 무관하게 같은 메시지를 반환한다.
+    return {
+      message:
+        '정보가 일치하면 안내 메일을 발송 보류로 준비합니다. 현재 실제 발송은 연결되지 않았으므로 관리자에게 문의해주세요.',
+    };
+  }
+  /** 한 트랜잭션 안에서 만료·용도·현재 이메일을 검사하고 소비한다. 동시 요청 중 하나만 성공한다. */
+  async redeem(req: AppRequest, body: RedeemDto) {
+    await this.limit(req, 'token:' + digest(body.token));
+    if (body.purpose === 'PASSWORD' && body.password.length < 15)
+      throw new BadRequestException('비밀번호는 15~128자로 입력해주세요.');
+    const hash = body.purpose === 'PASSWORD' ? await argon2.hash(body.password) : null;
+    await this.db.tx(async (c) => {
+      await c.query('SELECT pg_advisory_xact_lock(720260910)');
+      const u = (
+        await c.query(
+          `SELECT u.* FROM app.account_tokens t JOIN app.users u ON u.id=t.user_id
+        LEFT JOIN app.customers co ON co.id=u.customer_id
+        WHERE t.token_hash=$1 AND t.purpose=$2 AND t.expires_at>now() AND t.email=u.email
+        AND (u.customer_id IS NULL OR co.is_active) AND u.account_status NOT IN ('REJECTED','SUSPENDED') FOR UPDATE OF u`,
+          [digest(body.token), body.purpose],
+        )
+      ).rows[0];
+      if (!u)
+        throw new BadRequestException('사용할 수 없거나 만료된 링크입니다. 다시 요청해주세요.');
+      await c.query('DELETE FROM app.account_tokens WHERE user_id=$1', [u.id]);
+      await c.query(
+        "UPDATE app.mail_outbox SET status='CANCELLED',payload='' WHERE user_id=$1 AND status='HELD'",
+        [u.id],
+      );
+      if (hash) {
+        await c.query(
+          'UPDATE app.users SET password_hash=$2,must_change_password=false,email_verified_at=now(),updated_at=now() WHERE id=$1',
+          [u.id, hash],
+        );
+        await c.query(
+          'UPDATE app.auth_sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL',
+          [u.id],
+        );
+      } else
+        await c.query('UPDATE app.users SET email_verified_at=now(),updated_at=now() WHERE id=$1', [
+          u.id,
+        ]);
+      await this.audit.write(
+        {
+          requestId: req.requestId,
+          userId: u.id,
+          action: hash ? 'PASSWORD_RESET' : 'EMAIL_VERIFY',
+          outcome: 'SUCCESS',
+        },
+        c,
+      );
+    });
+    return {
+      message:
+        body.purpose === 'PASSWORD'
+          ? '비밀번호를 설정했습니다. 로그인해주세요. 승인·매핑 조건은 그대로 적용됩니다.'
+          : '이메일 인증을 완료했습니다.',
+    };
+  }
+}
+@Controller('api/recovery')
+export class RecoveryController {
+  constructor(private readonly recovery: Recovery) {}
+  @Post('request') @Public() request(@Req() req: AppRequest, @Body() body: RequestDto) {
+    return this.recovery.request(req, body);
+  }
+  @Post('redeem') @Public() redeem(@Req() req: AppRequest, @Body() body: RedeemDto) {
+    return this.recovery.redeem(req, body);
+  }
+}

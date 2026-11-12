@@ -1,0 +1,27 @@
+/* 샘플/테스트 페이지 전용 배치. 업무 화면 스타일에는 포함하지 않는다. */
+.lookup-sample {
+  max-width: 1160px;
+  margin: 32px auto;
+  padding: 24px;
+  background: white;
+  border: 1px solid #ccd7df;
+  border-radius: 8px;
+}
+.lookup-sample > p {
+  line-height: 1.7;
+}
+.sample-notice {
+  background: #edf4fa;
+  padding: 12px;
+  border-radius: 6px;
+}
+.sample-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 20px 0 12px;
+  flex-wrap: wrap;
+}
+.lookup-sample output {
+  overflow-wrap: anywhere;
+}

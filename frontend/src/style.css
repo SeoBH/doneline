@@ -1,0 +1,716 @@
+/**
+ * 공통 UI 스타일. 로그인·업무 창틀·메뉴·탭·알림·등록 그리드의 배치와 표시를 정의한다.
+ * 같은 선택자의 뒤쪽 선언이 앞쪽 선언을 덮어쓸 수 있으므로 선언 순서를 유지한다.
+ */
+* {
+  box-sizing: border-box;
+}
+
+/* 등록·가입은 기존 그리드와 입력 색상을 공유한다. 좁은 화면에서는 입력 폼을 아래로 배치한다. */
+.account-screen {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(340px, 1fr);
+  gap: 16px;
+  height: 100%;
+  min-height: 500px;
+}
+.account-list {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.account-card {
+  background: white;
+  border: 1px solid #ccd7df;
+  padding: 20px;
+  overflow: auto;
+}
+.account-fields {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.account-wide {
+  grid-column: 1 / -1;
+}
+.account-screen select,
+.signup-page select {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #cad4e0;
+  border-radius: 5px;
+  margin: 4px 0 12px;
+  font: inherit;
+  background: white;
+}
+.account-review {
+  background: white;
+  padding: 12px;
+  margin-top: 12px;
+}
+.signup-page {
+  max-width: 850px;
+  margin: 30px auto;
+  padding: 16px;
+}
+.signup-page button {
+  margin: 12px 8px 0 0;
+}
+@media (max-width: 1000px) {
+  .account-screen {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+  .account-list {
+    min-height: 480px;
+  }
+}
+body {
+  margin: 0;
+  color: #223047;
+  background: #f2f5f8;
+  font-family: Arial, 'Malgun Gothic', sans-serif;
+  font-size: 14px;
+}
+button,
+input {
+  font: inherit;
+}
+button {
+  cursor: pointer;
+  border: 1px solid #d8e0e9;
+  background: #fff;
+  color: #253650;
+  border-radius: 5px;
+  padding: 9px 15px;
+}
+button:hover {
+  background: #edf3fa;
+}
+button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+input {
+  width: 100%;
+  margin: 8px 0 20px;
+  border: 1px solid #cad4e0;
+  padding: 12px;
+  border-radius: 5px;
+}
+label {
+  display: block;
+}
+small,
+.hint {
+  color: #64758c;
+}
+.login {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+}
+.login form {
+  width: 400px;
+  max-width: 90vw;
+  background: white;
+  border: 1px solid #e0e6ef;
+  padding: 38px;
+  border-radius: 12px;
+  box-shadow: 0 10px 50px #1c305310;
+}
+.login h1 {
+  margin: 24px 0 12px;
+}
+.login p {
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.login form > button {
+  width: 100%;
+  margin-top: 14px;
+  background: #245d94;
+  color: white;
+  border: 0;
+}
+.workspace {
+  height: 100vh;
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  grid-template-rows: 60px 1fr;
+}
+header {
+  grid-column: 1/-1;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 0 24px;
+  background: #18334c;
+  color: white;
+}
+header strong {
+  letter-spacing: 3px;
+}
+header span {
+  margin-left: auto;
+}
+aside {
+  padding: 24px 12px;
+  background: #fff;
+  border-right: 1px solid #d8e0e9;
+  overflow: auto;
+}
+aside small {
+  padding: 12px;
+}
+
+aside button {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  margin: 4px 0;
+}
+.selected {
+  background: #e9f1fa;
+  color: #185284;
+}
+.work {
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.toolbar {
+  padding: 14px 24px;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 64px;
+  border-bottom: 1px solid #e0e6ef;
+}
+.content {
+  flex: 1;
+  min-height: 0;
+  padding: 20px;
+  overflow: auto;
+}
+.table-scroll {
+  overflow: auto;
+  background: white;
+  border: 1px solid #dce3ec;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  white-space: nowrap;
+  font-size: 12px;
+}
+td,
+th {
+  padding: 11px;
+  text-align: left;
+  border-bottom: 1px solid #e2e8f0;
+}
+th {
+  background: #eaf0f6;
+}
+.empty {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: #8290a2;
+}
+footer {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 46px;
+  padding: 6px 8px;
+  background: #e3eaf2;
+  border-top: 1px solid #cbd7e4;
+}
+.tab {
+  display: flex;
+  border: 1px solid transparent;
+  border-radius: 4px;
+}
+.tab button {
+  background: transparent;
+  border: 0;
+  padding: 7px 10px;
+}
+.tab.active {
+  background: white;
+  border-color: #c1d1e2;
+}
+.tab.active button {
+  color: #174e88;
+}
+.context {
+  position: fixed;
+  z-index: 15;
+  width: 160px;
+  background: #fff;
+  padding: 5px;
+  border: 1px solid #ccd7e3;
+  box-shadow: 0 4px 18px #10284020;
+}
+.context button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  min-width: 140px;
+}
+@media (max-width: 700px) {
+  .workspace {
+    grid-template-columns: 150px 1fr;
+  }
+  .content {
+    padding: 10px;
+  }
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  vertical-align: middle;
+  margin: 0 8px 0 0;
+}
+
+.toolbar-actions {
+  display: flex;
+  gap: 6px;
+}
+.tree-branch {
+  margin-top: 5px;
+}
+.tree-children {
+  padding-left: 12px;
+  border-left: 1px solid #e1e7ee;
+}
+.tree-branch .folder {
+  font-weight: 600;
+}
+.tree-children > button {
+  white-space: normal;
+}
+footer {
+  flex-wrap: wrap;
+}
+
+.change-detail {
+  background: white;
+  border: 1px solid #dbe3ed;
+  margin-top: 18px;
+  padding: 18px;
+}
+.change-detail pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  max-height: 350px;
+  overflow: auto;
+}
+.link-button {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: #185b9a;
+  text-align: left;
+}
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid #4488c5;
+  outline-offset: 2px;
+}
+@media (max-width: 1000px) {
+  .field-grid {
+    grid-template-columns: 1fr;
+  }
+  .toolbar {
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+}
+
+.content > div:not([hidden]) {
+  height: 100%;
+}
+.register-screen {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 420px;
+}
+.registration-split {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  gap: 0;
+}
+.single-register .registration-split {
+  grid-template-columns: minmax(0, 1fr);
+}
+.register-left,
+.register-right,
+.candidate-panels > section {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: #fff;
+}
+.register-left,
+.register-right {
+  padding: 10px;
+  border: 1px solid #ccd7df;
+}
+.registration-grid {
+  flex: 1;
+  min-height: 100px;
+  width: 100%;
+  height: 100%;
+}
+.query-bar,
+.fixed-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.query-bar label,
+.fixed-bar label {
+  font-size: 12px;
+  flex: 1;
+  min-width: 80px;
+}
+.query-bar input,
+.fixed-bar input {
+  padding: 6px;
+  margin: 4px 0 0;
+  height: 30px;
+}
+.fixed-bar input {
+  background: #f0f3f6;
+}
+.query-bar button,
+.fixed-bar button,
+.grid-tools button {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.grid-tools {
+  display: flex;
+  gap: 5px;
+  justify-content: flex-end;
+  margin-bottom: 6px;
+}
+.splitter {
+  cursor: col-resize;
+  touch-action: none;
+  background: #e1e7ed;
+}
+.splitter:hover {
+  background: #8eabbf;
+}
+.layout-grid {
+  height: 42%;
+  min-height: 140px;
+  margin-bottom: 12px;
+}
+.candidate-panels {
+  flex: 1;
+  min-height: 150px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+.resp-candidates {
+  grid-template-columns: minmax(0, 1fr);
+}
+.grid-row-error {
+  background: #ffebe9 !important;
+}
+.grid-row-current {
+  background: #dcecf6 !important;
+}
+.registration-grid input:not([type='checkbox']) {
+  margin: 0;
+  padding: 4px;
+  height: 100%;
+}
+.registration-grid input[type='checkbox'] {
+  margin: 0;
+  vertical-align: middle;
+}
+.registration-grid .ag-cell {
+  display: flex;
+  align-items: center;
+}
+.content {
+  padding: 12px;
+}
+.toolbar {
+  padding: 10px 16px;
+}
+.fixed-bar button {
+  background: #17627e;
+  color: white;
+}
+.toast-stack {
+  position: fixed;
+  bottom: 64px;
+  right: 20px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(420px, calc(100vw - 32px));
+  max-height: calc(100dvh - 92px);
+  overflow-y: auto;
+  pointer-events: none;
+  padding: 3px;
+}
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px;
+  background: #fff;
+  color: #223047;
+  border: 1px solid #d6e1ec;
+  border-left: 4px solid #3778b5;
+  border-radius: 8px;
+  box-shadow: 0 6px 24px #18334c26;
+  pointer-events: auto;
+  animation: toast-enter 0.16s ease-out;
+}
+.toast-success {
+  border-left-color: #20815c;
+}
+.toast-error {
+  border-left-color: #c34343;
+}
+.toast-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 21px;
+  height: 21px;
+  border-radius: 50%;
+  background: #e8f1fb;
+  color: #246398;
+  font-weight: bold;
+}
+.toast-success .toast-icon {
+  background: #e5f5ed;
+  color: #167349;
+}
+.toast-error .toast-icon {
+  background: #fde9e9;
+  color: #b12e2e;
+}
+.toast-message {
+  flex: 1;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.55;
+  max-height: 45vh;
+  overflow: auto;
+}
+.toast-close {
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: #64758c;
+  padding: 0 4px;
+  font-size: 21px;
+  line-height: 22px;
+}
+.toast-close:hover {
+  background: #edf3fa;
+}
+.sidebar-pane {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+.sidebar-pane > aside {
+  height: 100%;
+  min-width: 0;
+}
+.sidebar-pane.collapsed {
+  background: #e3eaf2;
+}
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 8px;
+  z-index: 10;
+  cursor: col-resize;
+  touch-action: none;
+  outline-offset: -2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sidebar-resizer:hover,
+.sidebar-resizer:focus-visible,
+.sidebar-dragging .sidebar-resizer {
+  background: #c9dce9;
+}
+.sidebar-resizer:focus-visible {
+  outline: 2px solid #4488c5;
+}
+.sidebar-resizer > span {
+  width: 2px;
+  height: 32px;
+  border-radius: 2px;
+  background: #b3c5d3;
+}
+.sidebar-dragging {
+  cursor: col-resize;
+  user-select: none;
+}
+@keyframes toast-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+  }
+}
+
+/* 부모 그리드 선택과 자식 편집을 같은 높이에서 비교한다. 좁은 화면에서는 세로로 배치한다. */
+.catalog-screen,
+.users-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  height: 100%;
+}
+.catalog-columns {
+  display: grid;
+  gap: 12px;
+  flex: 1;
+  min-height: 380px;
+}
+.catalog-columns > section {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 8px;
+}
+.catalog-columns .registration-grid {
+  flex: 1;
+}
+.grid-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.grid-tools h2 {
+  margin-right: auto;
+}
+.account-tabs {
+  display: flex;
+  gap: 8px;
+}
+.account-tabs [aria-selected='true'] {
+  background: #17627e;
+  color: white;
+}
+.users-screen > .account-screen {
+  flex: 1;
+  min-height: 0;
+}
+.mapping-panels {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  min-height: 450px;
+}
+.mapping-panels .registration-grid {
+  min-height: 170px;
+  flex: 1;
+}
+@media (max-width: 1000px) {
+  .catalog-columns {
+    grid-template-columns: 1fr !important;
+  }
+  .catalog-columns > section {
+    min-height: 250px;
+  }
+}
+
+/* 단건 코드검색은 네이티브 모달로 배경 편집을 막고 좁은 창에서도 결과를 스크롤한다. */
+.code-lookup {
+  width: min(760px, 94vw);
+  max-height: 90vh;
+  overflow: auto;
+  padding: 20px;
+  border: 1px solid #ccd7df;
+  border-radius: 8px;
+  color: #17354a;
+}
+.code-lookup::backdrop {
+  background: rgb(15 35 50 / 40%);
+}
+.code-lookup .registration-grid {
+  height: 340px;
+  min-height: 180px;
+}
+.code-lookup .query-bar {
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
+.lookup-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+.lookup-actions > span {
+  margin-right: auto;
+}
+.lookup-cell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  height: 100%;
+}
+.lookup-cell > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lookup-cell button {
+  padding: 2px 7px;
+  line-height: 20px;
+  flex: none;
+}
