@@ -66,6 +66,11 @@ export class NavigationController {
             'CUSTOMER_REGISTER',
           ].includes(s.code),
       );
+    // 공통 구성 화면은 운영 워크스페이스만 사용할 수 있으므로(security.ts) 다른 업체 메뉴에서는 보이지 않게 한다.
+    else if (!req.actor!.is_platform)
+      result.screens = result.screens.filter(
+        (s) => !['SCREEN_REGISTER', 'MENU_REGISTER', 'RESP_REGISTER'].includes(s.code),
+      );
     await this.audit.write({
       requestId: req.requestId,
       userId: req.actor!.id,

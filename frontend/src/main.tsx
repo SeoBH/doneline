@@ -10,6 +10,7 @@ import { RegistrationScreen } from './RegistrationScreen';
 import { AccountsScreen } from './AccountsScreen';
 import { CustomersScreen } from './CustomersScreen';
 import { SignupScreen } from './SignupScreen';
+import { WorkspaceSignupScreen } from './WorkspaceSignupScreen';
 import { RecoveryScreen, RecoveryLink } from './RecoveryScreen';
 import { sourceModules, buttonLabel } from './sourceModules';
 import { actions, Nav, Screen, ScreenHandle, Tab, tabKey, User, ViewState } from './types';
@@ -92,6 +93,8 @@ function App() {
   // 고객사 회원가입 링크의 가입 토큰. 고객사등록 화면이 만든 /?signup=<토큰> 주소에서 읽는다.
   const signupToken = new URLSearchParams(window.location.search).get('signup') || '';
   const [signup, setSignup] = useState(false);
+  // 업체(워크스페이스) 무료 가입 화면 표시 여부. 링크 없이 로그인 화면에서 바로 연다.
+  const [workspaceSignup, setWorkspaceSignup] = useState(false);
   // 링크의 비밀값은 주소창에서 즉시 제거하고 이 화면의 메모리에만 유지한다.
   const [recoveryLink, setRecoveryLink] = useState<RecoveryLink | null>(() => {
     const match = /^#account=(VERIFY|PASSWORD):([a-f0-9]{64})$/.exec(window.location.hash);
@@ -320,6 +323,13 @@ function App() {
         />
       </>
     );
+  if (!user && workspaceSignup)
+    return (
+      <>
+        {toasts}
+        <WorkspaceSignupScreen onBack={() => setWorkspaceSignup(false)} notify={notify} />
+      </>
+    );
   if (!user && signup)
     return (
       <>
@@ -400,6 +410,11 @@ function App() {
                 }
               >
                 회원가입
+              </button>
+            )}
+            {!user && (
+              <button type="button" disabled={busy} onClick={() => setWorkspaceSignup(true)}>
+                업체 무료 가입
               </button>
             )}
           </form>

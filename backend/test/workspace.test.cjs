@@ -158,3 +158,36 @@ test('login id resolves its own workspace and sessions stay scoped', async () =>
   ).rows[0];
   assert.equal(String(session.workspace_id), String(other));
 });
+
+test('self-service workspace signup creates an isolated workspace with a ready admin', async () => {
+  const code = prefix.replace('_', '-') + '-self';
+  const body = {
+    workspaceCode: code,
+    workspaceName: '셀프 가입 업체',
+    loginId: prefix + '_self',
+    name: '업체 관리자',
+    email: prefix + '_self@example.com',
+    mobile: '010-1234-5678',
+    password,
+  };
+  const agent = request.agent(app.getHttpServer());
+  const guest = { agent, csrf: (await agent.get('/api/auth/csrf').expect(200)).body.csrfToken };
+  await post(guest, 'workspaces/signup', { ...body, workspaceCode: 'Bad Code' }).expect(400);
+  await post(guest, 'workspaces/signup', body).expect(201);
+  // 같은 업체 코드, 같은 아이디는 각각 409로 거절한다.
+  await post(guest, 'workspaces/signup', { ...body, loginId: prefix + '_self2' }).expect(409);
+  await post(guest, 'workspaces/signup', { ...body, workspaceCode: code + '2' }).expect(409);
+  const admin = await login(prefix + '_self');
+  const nav = (await admin.agent.get('/api/navigation').expect(200)).body;
+  const codes = nav.screens.map((s) => s.code);
+  assert.ok(codes.includes('CUSTOMER_REGISTER') && codes.includes('USER_REGISTER'));
+  assert.ok(!codes.includes('SCREEN_REGISTER') && !codes.includes('RESP_REGISTER'));
+  const menu = nav.screens.find((s) => s.code === 'CUSTOMER_REGISTER').menu_id;
+  const { customers } = (await get(admin, 'catalogs/customers', menu).expect(200)).body;
+  assert.deepEqual(customers, []);
+  // 새 업체 관리자는 운영 전용 ADMIN을 볼 수 없고 공통 업체 관리자 RESP만 배정할 수 있다.
+  const userMenu = nav.screens.find((s) => s.code === 'USER_REGISTER').menu_id;
+  const options = (await get(admin, 'accounts/options', userMenu).expect(200)).body;
+  assert.ok(!options.responsibilities.some((r) => r.code === 'ADMIN'));
+  assert.ok(options.responsibilities.some((r) => r.code === 'WORKSPACE_ADMIN'));
+});

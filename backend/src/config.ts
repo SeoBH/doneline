@@ -17,6 +17,11 @@ export const settings = {
   production: process.env.NODE_ENV === 'production',
   idleMs: 30 * 60 * 1000,
   absoluteMs: 8 * 60 * 60 * 1000,
+  // 운영 알림용 슬랙 Incoming Webhook 주소. 비어 있으면 알림을 보내지 않는다(테스트는 빈 값으로 실행).
+  slackWebhookUrl: process.env.SLACK_WEBHOOK_URL || '',
 };
 if (settings.production && !settings.origin.startsWith('https://'))
   throw new Error('Production requires HTTPS origin');
+// 오타나 다른 주소로 내부 정보를 보내지 않도록 슬랙 Webhook 주소 형식만 허용한다.
+if (settings.slackWebhookUrl && !settings.slackWebhookUrl.startsWith('https://hooks.slack.com/'))
+  throw new Error('SLACK_WEBHOOK_URL must start with https://hooks.slack.com/');

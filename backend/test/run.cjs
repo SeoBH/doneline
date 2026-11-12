@@ -15,6 +15,7 @@ const result = spawnSync(
     path.join(__dirname, 'recovery.test.cjs'),
     path.join(__dirname, 'workspace.test.cjs'),
   ],
-  { stdio: 'inherit', env: { ...process.env, PGDATABASE: 'doneline_test' } },
+  // SLACK_WEBHOOK_URL을 빈 값으로 고정해 테스트 중 실제 슬랙 알림이 나가지 않게 한다(.env보다 우선).
+  { stdio: 'inherit', env: { ...process.env, PGDATABASE: 'doneline_test', SLACK_WEBHOOK_URL: '' } },
 );
 process.exitCode = result.status ?? 1;

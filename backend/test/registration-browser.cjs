@@ -2,6 +2,8 @@
  * 독립 화면·메뉴·RESP 등록의 브라우저 검증. 테스트 계정과 별도 서버로 실제 입력·저장·연결·탭 조작을 수행하고 DB 결과를 비교한다.
  */
 process.env.PGDATABASE = 'doneline_test';
+// 테스트 중 실제 슬랙 알림이 나가지 않도록 빈 값으로 고정한다(.env보다 우선).
+process.env.SLACK_WEBHOOK_URL = '';
 process.env.APP_ORIGIN = 'http://127.0.0.1:3001';
 const { chromium } = require('playwright');
 const { expect } = require('playwright/test');

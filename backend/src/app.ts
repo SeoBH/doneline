@@ -23,6 +23,8 @@ import { NavigationController, NavigationService } from './navigation';
 import { Accounts, AccountsController } from './accounts';
 import { Recovery, RecoveryController } from './recovery';
 import { Mail } from './mail';
+import { Notifier } from './notifier';
+import { Workspaces, WorkspacesController } from './workspaces';
 @Module({
   controllers: [
     AuthController,
@@ -30,11 +32,14 @@ import { Mail } from './mail';
     RegistrationController,
     AccountsController,
     RecoveryController,
+    WorkspacesController,
   ],
   providers: [
     Db,
     Recovery,
     Mail,
+    Notifier,
+    Workspaces,
     Accounts,
     Audit,
     RegistrationService,
