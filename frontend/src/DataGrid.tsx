@@ -3,6 +3,7 @@
  * _key는 UI 식별자, _checked는 처리 대상 선택, _error는 서버 오류 표시이며 DB 컬럼이 아니다.
  */
 import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from 'react';
+import type { ReactNode } from 'react';
 import { CodeLookup, LookupConfig, LookupItem } from './CodeLookup';
 import { AgGridReact } from 'ag-grid-react';
 import { AllCommunityModule, ModuleRegistry, themeQuartz, ColDef } from 'ag-grid-community';
@@ -33,6 +34,8 @@ export type Column = {
   lookup?: LookupConfig;
   disabled?: (row: GridRow) => boolean;
   format?: (value: any) => string;
+  // 읽기 전용 칸을 글자 대신 배지 등으로 그릴 때 쓴다(예: 요청 상태 색 배지). 편집 칸에는 쓰지 않는다.
+  render?: (row: GridRow) => ReactNode;
 };
 export const DataGrid = forwardRef<
   GridHandle,
@@ -174,6 +177,7 @@ export const DataGrid = forwardRef<
       ...(col.choices
         ? { cellEditor: 'agSelectCellEditor', cellEditorParams: { values: col.choices } }
         : {}),
+      ...(col.render ? { cellRenderer: (p: any) => (p.data ? col.render!(p.data) : null) } : {}),
       ...(col.lookup
         ? {
             cellRenderer: (p: any) => (

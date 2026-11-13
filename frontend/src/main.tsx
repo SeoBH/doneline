@@ -415,8 +415,34 @@ function App() {
       <>
         {toasts}
         <main className="login">
+          {/* 왼쪽 소개 패널: 처음 온 사람이 무엇을 하는 서비스인지 알 수 있게 한다. 휴대폰에서는 위쪽 띠로 줄어든다. */}
+          <section className="login-brand">
+            <div className="brand">
+              <span className="brand-mark" aria-hidden="true" />
+              Doneline
+            </div>
+            <h2>
+              고객 요청을
+              <br />
+              접수부터 완료 확인까지
+              <br />
+              <em>한 줄로.</em>
+            </h2>
+            <p>유지보수·IT 서비스 업체를 위한 고객 요청 포털</p>
+            {/* 장식용 미리보기 카드(실제 데이터 아님) */}
+            <ul className="login-preview" aria-hidden="true">
+              <li>
+                <span className="sr-badge sr-OPEN">접수</span>회의실 프로젝터 화면이 안 나옵니다
+              </li>
+              <li>
+                <span className="sr-badge sr-IN_PROGRESS">처리 중</span>신규 입사자 메일 계정 생성
+              </li>
+              <li>
+                <span className="sr-badge sr-CLOSED">완료</span>그룹웨어 결재선 변경 문의
+              </li>
+            </ul>
+          </section>
           <form onSubmit={submit}>
-            <small className="brand-line">Doneline</small>
             {/* 고객사 가입 링크로 들어온 경우: 어느 업체·고객사의 포털인지 먼저 보여 주고 회원가입으로 안내한다. */}
             {!user && signupInfo && (
               <div className="signup-banner">
@@ -537,7 +563,10 @@ function App() {
         >
           <Icon name="menu" />
         </button>
-        <strong>Doneline</strong>
+        <strong className="brand">
+          <span className="brand-mark" aria-hidden="true" />
+          Doneline
+        </strong>
         {user.workspaceName && <em className="workspace-name">{user.workspaceName}</em>}
         {/* 오른쪽 영역: 전역 기능(알림·개선 요청)과 내 계정(이름·로그아웃)만 둔다.
             메뉴 새로고침은 화면·메뉴 등록 저장 시 자동으로 실행되므로 헤더에서 뺐다. */}
@@ -585,14 +614,17 @@ function App() {
       </div>
       <main className="work">
         <div className="toolbar">
-          <strong>
-            {current
-              ? [
-                  ...current.path.map((id) => nav.menus.find((m) => m.id === id)?.name || ''),
-                  current.name,
-                ].join(' > ')
-              : '화면 선택'}
-          </strong>
+          {/* 위치 표시: 메뉴 경로는 작은 글씨로, 지금 보는 화면 이름은 크게 보여 위치를 바로 알게 한다. */}
+          <div className="toolbar-title">
+            {current && current.path.length > 0 && (
+              <small>
+                {current.path
+                  .map((id) => nav.menus.find((m) => m.id === id)?.name || '')
+                  .join(' / ')}
+              </small>
+            )}
+            <strong>{current ? current.name : '시작하기'}</strong>
+          </div>
           <div className="toolbar-actions">
             {actions
               .filter(

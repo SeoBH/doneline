@@ -126,6 +126,17 @@ export const SrDeskScreen = forwardRef<
     notify(r.message, 'success');
     return true;
   }
+  // 상세 아래 [저장] 버튼용: 툴바 저장과 같은 save()를 부르고, 처리 중 표시·오류 안내를 직접 맡는다.
+  async function saveHere() {
+    setBusy(true);
+    try {
+      await save();
+    } catch (e) {
+      notify((e as Error).message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
   useEffect(() => {
     if (focus) void pick(focus.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -201,8 +212,21 @@ export const SrDeskScreen = forwardRef<
             { field: 'no', header: '번호', width: 80 },
             { field: 'title', header: '제목', width: 240 },
             { field: 'customer_name', header: '고객사', width: 130 },
-            { field: 'statusText', header: '상태', width: 90 },
-            { field: 'priorityText', header: '우선순위', width: 90 },
+            {
+              field: 'statusText',
+              header: '상태',
+              width: 100,
+              render: (r) => <span className={'sr-badge sr-' + r.status}>{r.statusText}</span>,
+            },
+            {
+              field: 'priorityText',
+              header: '우선순위',
+              width: 100,
+              // 점 색으로 긴급도를 먼저 보이게 하고 글자도 함께 둔다(색만으로 구분하지 않기 위해).
+              render: (r) => (
+                <span className={'priority-dot priority-' + r.priority}>{r.priorityText}</span>
+              ),
+            },
             { field: 'assignee_name', header: '담당자', width: 110 },
             { field: 'due', header: '기한', width: 150 },
           ]}
@@ -287,6 +311,18 @@ export const SrDeskScreen = forwardRef<
                 내부 메모(고객에게 보이지 않음)
               </label>
             </fieldset>
+            {/* 처리 칸을 채운 뒤 화면 맨 위 툴바까지 가지 않도록 바로 아래에도 저장 버튼을 둔다(툴바 [저장]과 같은 동작). */}
+            {!closed && screen.buttons.SAVE?.allowed && (
+              <div className="form-actions">
+                <button
+                  className="primary"
+                  disabled={busy || !dirty}
+                  onClick={() => void saveHere()}
+                >
+                  저장
+                </button>
+              </div>
+            )}
             <ol className="sr-timeline">
               {detail.events.map((e: any) => (
                 <li
