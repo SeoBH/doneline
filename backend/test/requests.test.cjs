@@ -158,13 +158,17 @@ test('staff are notified and see the request; other workspaces do not', async ()
 test('engineer assigns, answers, keeps internal memo private, and versions guard edits', async () => {
   const d = (await get(engineer, 'requests/desk/' + srId).expect(200)).body;
   version = d.item.version;
-  const me = await user('engineer');
+  // 접수 요청에서는 처리 완료로 바로 건너뛸 수 없다(단계별 진행).
+  await post(engineer, 'requests/desk/' + srId, { version, action: 'RESOLVE' }).expect(400);
+  // 내가 맡아 처리 시작: 담당자 지정과 처리 중 전환이 함께 일어난다.
   await post(engineer, 'requests/desk/' + srId, {
     version,
-    status: 'IN_PROGRESS',
-    assigneeId: String(me),
+    action: 'START',
     comment: '확인 중입니다.',
   }).expect(201);
+  const started = (await get(engineer, 'requests/desk/' + srId).expect(200)).body.item;
+  assert.equal(started.status, 'IN_PROGRESS');
+  assert.equal(String(started.assignee_id), String(await user('engineer')));
   // 같은 version으로 다시 저장하면 충돌로 거절된다.
   await post(engineer, 'requests/desk/' + srId, { version, comment: '중복' }).expect(409);
   version = (await get(engineer, 'requests/desk/' + srId).expect(200)).body.item.version;
@@ -230,19 +234,45 @@ test('starting work on an unassigned request assigns the person who started it',
     version: v,
     assigneeId: String(await user('engineer')),
   }).expect(403);
-  await post(engineer2, 'requests/desk/' + created.id, {
-    version: v,
-    status: 'IN_PROGRESS',
-  }).expect(201);
-  const item = (await get(engineer2, 'requests/desk/' + created.id).expect(200)).body.item;
+  await post(engineer2, 'requests/desk/' + created.id, { version: v, action: 'START' }).expect(201);
+  let item = (await get(engineer2, 'requests/desk/' + created.id).expect(200)).body.item;
+  assert.equal(item.status, 'IN_PROGRESS');
   assert.equal(String(item.assignee_id), String(await user('engineer2')));
+  // 되돌리기: 담당자가 아닌 엔지니어는 못 하고, 담당자는 사유와 함께 접수·미배정으로 돌린다.
+  await post(engineer, 'requests/desk/' + created.id, {
+    version: item.version,
+    action: 'REVERT',
+    comment: '제가 할게요',
+  }).expect(403);
+  await post(engineer2, 'requests/desk/' + created.id, {
+    version: item.version,
+    action: 'REVERT',
+  }).expect(400);
+  await post(engineer2, 'requests/desk/' + created.id, {
+    version: item.version,
+    action: 'REVERT',
+    comment: '현장 출장으로 다른 분께 넘깁니다',
+  }).expect(201);
+  const back = (await get(engineer, 'requests/desk/' + created.id).expect(200)).body;
+  assert.equal(back.item.status, 'OPEN');
+  assert.equal(back.item.assignee_id, null);
+  assert.ok(back.events.some((e) => e.internal && e.body.startsWith('되돌림 사유:')));
+  // 요청 취소: 담당자가 없는 접수 요청은 업체 직원이 사유와 함께 취소할 수 있고, 사유는 고객에게 보인다.
+  await post(engineer, 'requests/desk/' + created.id, {
+    version: back.item.version,
+    action: 'CANCEL',
+    comment: '고객이 전화로 취소 요청',
+  }).expect(201);
+  item = (await get(u1, 'requests/portal/' + created.id).expect(200)).body;
+  assert.equal(item.item.status, 'CANCELLED');
+  assert.ok(item.events.some((e) => e.body === '취소 사유: 고객이 전화로 취소 요청'));
 });
 
 test('customer confirms a resolved request and closed requests reject changes', async () => {
   version = (await get(engineer, 'requests/desk/' + srId).expect(200)).body.item.version;
   // 처리 완료 전에는 고객이 확인할 수 없다.
   await post(u1, 'requests/portal/' + srId + '/confirm', { version }).expect(409);
-  await post(engineer, 'requests/desk/' + srId, { version, status: 'RESOLVED' }).expect(201);
+  await post(engineer, 'requests/desk/' + srId, { version, action: 'RESOLVE' }).expect(201);
   let item = (await get(u1, 'requests/portal/' + srId).expect(200)).body.item;
   assert.equal(item.status, 'RESOLVED');
   // 재처리 요청 → 담당자 재처리 → 다시 완료 → 고객 확인 순서.
@@ -255,7 +285,7 @@ test('customer confirms a resolved request and closed requests reject changes', 
   const reopened = (await get(engineer, 'requests/desk/' + srId).expect(200)).body;
   assert.ok(reopened.events.some((e) => e.body === '재처리 요청 사유: 아직 인쇄가 안 됩니다.'));
   version = (await get(engineer, 'requests/desk/' + srId).expect(200)).body.item.version;
-  await post(engineer, 'requests/desk/' + srId, { version, status: 'RESOLVED' }).expect(201);
+  await post(engineer, 'requests/desk/' + srId, { version, action: 'RESOLVE' }).expect(201);
   item = (await get(u1, 'requests/portal/' + srId).expect(200)).body.item;
   await post(u1, 'requests/portal/' + srId + '/confirm', { version: item.version }).expect(201);
   item = (await get(u1, 'requests/portal/' + srId).expect(200)).body.item;
@@ -335,12 +365,12 @@ test('monthly report summarizes the current month and exports Excel', async () =
   await get(u1, 'reports/monthly?month=' + month).expect(403);
   const report = (await get(admin, 'reports/monthly?month=' + month).expect(200)).body;
   const row = report.rows.find((x) => x.customer_name === prefix);
-  // 등록 3건: 확인까지 끝난 1건, 미처리 1건, 담당 규칙 테스트에서 처리 중으로 둔 1건
+  // 등록 3건: 확인까지 끝난 1건, 미처리 1건, 담당 규칙 테스트에서 되돌린 뒤 취소한 1건(진행 중에서 빠짐)
   assert.equal(row.created, 3);
   assert.equal(row.resolved, 1);
   assert.equal(row.closed, 1);
   assert.equal(row.resolveRate, 100);
-  assert.equal(row.open_now, 2);
+  assert.equal(row.open_now, 1);
   assert.equal(report.total.created, row.created);
   // 다른 업체의 고객사는 리포트에 나오지 않는다.
   const platformReport = (await get(platformAdmin, 'reports/monthly?month=' + month).expect(200))

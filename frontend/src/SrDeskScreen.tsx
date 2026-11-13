@@ -9,18 +9,10 @@ import { api } from './api';
 import { DataGrid } from './DataGrid';
 import { Screen, ScreenHandle, ViewState } from './types';
 import { Notify } from './Toasts';
-import {
-  categoryLabel,
-  dateTime,
-  deskTransitions,
-  eventText,
-  priorityLabel,
-  statusLabel,
-  deskStatusLabel,
-} from './srLabels';
+import { categoryLabel, dateTime, eventText, priorityLabel, statusLabel } from './srLabels';
 
-// 처리 폼의 초기값. status·assigneeId·priority는 선택한 요청의 현재 값으로 채운다.
-const emptyForm = { status: '', assigneeId: '', priority: '', comment: '', internal: false };
+// 처리 폼의 초기값. priority는 선택한 요청의 현재 값, assigneeId는 맡길 사람(관리자의 배정·재배정 선택)이다.
+const emptyForm = { assigneeId: '', priority: '', comment: '', internal: false };
 
 export const SrDeskScreen = forwardRef<
   ScreenHandle,
@@ -47,21 +39,9 @@ export const SrDeskScreen = forwardRef<
       headers: { 'X-Menu-ID': screen.menu_id },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-  // 현재 요청 값과 폼을 비교해 바뀐 것이 있으면 미저장 상태로 표시한다.
-  const original = detail
-    ? {
-        status: detail.item.status,
-        assigneeId: detail.item.assignee_id ? String(detail.item.assignee_id) : '',
-        priority: detail.item.priority,
-      }
-    : null;
-  const dirty = Boolean(
-    original &&
-      (form.status !== original.status ||
-        form.assigneeId !== original.assigneeId ||
-        form.priority !== original.priority ||
-        form.comment.trim()),
-  );
+  // 우선순위를 바꾸었거나 답변을 적었으면 미저장 상태로 표시한다(진행 동작은 버튼을 누르는 즉시 저장된다).
+  const original = detail ? { priority: detail.item.priority } : null;
+  const dirty = Boolean(original && (form.priority !== original.priority || form.comment.trim()));
   useEffect(() => onState({ busy, dirty }), [busy, dirty, onState]);
   // 담당자 ID → 이름. 이력의 "담당자 변경"을 이름으로 보여줄 때 쓴다.
   const names = useMemo(
@@ -72,7 +52,6 @@ export const SrDeskScreen = forwardRef<
     setDetail(d);
     setForm({
       ...emptyForm,
-      status: d.item.status,
       assigneeId: d.item.assignee_id ? String(d.item.assignee_id) : '',
       priority: d.item.priority,
     });
@@ -121,8 +100,6 @@ export const SrDeskScreen = forwardRef<
     // 바뀐 항목만 보낸다. 서버는 보낸 항목마다 이력을 남기고 요청자에게 알린다.
     const r = await call('/' + selected, {
       version: detail.item.version,
-      ...(form.status !== original.status ? { status: form.status } : {}),
-      ...(form.assigneeId !== original.assigneeId ? { assigneeId: form.assigneeId } : {}),
       ...(form.priority !== original.priority ? { priority: form.priority } : {}),
       ...(form.comment.trim() ? { comment: form.comment, internal: form.internal } : {}),
     });
@@ -130,16 +107,61 @@ export const SrDeskScreen = forwardRef<
     notify(r.message, 'success');
     return true;
   }
-  // 상세 아래 [저장] 버튼용: 툴바 저장과 같은 save()를 부르고, 처리 중 표시·오류 안내를 직접 맡는다.
-  async function saveHere() {
+  // 상세 안 버튼용: 처리 중 표시와 오류 안내를 맡는다(실패하면 입력은 그대로 남는다).
+  async function run(task: () => Promise<unknown>) {
     setBusy(true);
     try {
-      await save();
+      await task();
     } catch (e) {
       notify((e as Error).message, 'error');
     } finally {
       setBusy(false);
     }
+  }
+  // 진행 동작: 처리 시작(START)·처리 완료(RESOLVE)·되돌리기(REVERT)·요청 취소(CANCEL).
+  // 되돌리기·취소는 답변/메모 칸의 내용을 사유로 보낸다. 우선순위 변경은 함께 보내지 않고 [저장]으로 따로 한다.
+  async function act(action: 'START' | 'RESOLVE' | 'REVERT' | 'CANCEL') {
+    if (!detail) return;
+    const reason = form.comment.trim();
+    if ((action === 'REVERT' || action === 'CANCEL') && !reason) {
+      notify(
+        (action === 'REVERT' ? '되돌리는' : '취소하는') +
+          ' 사유를 답변/메모 칸에 적은 뒤 다시 눌러주세요.',
+        'error',
+      );
+      return;
+    }
+    const ask = {
+      START: '이 요청을 맡아 처리를 시작할까요?',
+      RESOLVE: '처리 완료로 바꿀까요? 고객에게 결과 확인 요청이 갑니다.',
+      REVERT: '접수 상태로 되돌리고 담당을 해제할까요? 다른 직원이 다시 맡을 수 있게 됩니다.',
+      CANCEL: '이 요청을 취소할까요? 취소 사유가 고객에게 보입니다.',
+    }[action];
+    if (!window.confirm(ask)) return;
+    await run(async () => {
+      const r = await call('/' + selected, {
+        version: detail.item.version,
+        action,
+        ...(action === 'START' && form.assigneeId && me.manager
+          ? { assigneeId: form.assigneeId }
+          : {}),
+        ...(reason && action !== 'START' && action !== 'RESOLVE' ? { comment: reason } : {}),
+      });
+      await load(selected);
+      notify(r.message, 'success');
+    });
+  }
+  // 관리자: 처리 중 요청의 담당자만 바꾼다(상태는 그대로).
+  async function reassign() {
+    if (!detail || !window.confirm('담당자를 바꿀까요? 새 담당자에게 알림이 갑니다.')) return;
+    await run(async () => {
+      const r = await call('/' + selected, {
+        version: detail.item.version,
+        assigneeId: form.assigneeId,
+      });
+      await load(selected);
+      notify(r.message, 'success');
+    });
   }
   useEffect(() => {
     if (focus) void pick(focus.id);
@@ -170,8 +192,17 @@ export const SrDeskScreen = forwardRef<
   // 담당 규칙(서버 requests.ts deskUpdate와 같음): 남의 담당 요청은 관리자가 아니면 상태·담당·우선순위를 바꿀 수 없다.
   const owner = detail?.item.assignee_id ? String(detail.item.assignee_id) : '';
   const locked = Boolean(detail && owner && owner !== me.id && !me.manager);
-  // 엔지니어는 미배정 요청을 자기에게만 가져올 수 있으므로 담당자 선택지를 '미배정·나'로 줄인다.
-  const assigneeChoices = me.manager ? assignees : assignees.filter((a) => String(a.id) === me.id);
+  const canSave = Boolean(screen.buttons.SAVE?.allowed);
+  // 지금 단계에서 다음에 할 일을 한 줄로 알려 준다.
+  const stepHint = !detail
+    ? ''
+    : {
+        OPEN: '접수됨 · 담당자가 맡으면 처리 중이 됩니다.',
+        IN_PROGRESS: '처리 중 · 끝나면 [처리 완료]를 누르세요.',
+        RESOLVED: '처리 완료 · 고객이 결과를 확인하면 완료됩니다.',
+        CLOSED: '완료된 요청입니다.',
+        CANCELLED: '취소된 요청입니다.',
+      }[detail.item.status as string] || '';
   return (
     <div className="sr-screen sr-desk">
       <section className="sr-list">
@@ -261,54 +292,103 @@ export const SrDeskScreen = forwardRef<
               {dateTime(detail.item.due_at)}
             </p>
             <p className="sr-body">{detail.item.body}</p>
-            {locked && (
-              <p className="sr-notice">
-                {detail.item.assignee_name}님이 담당하는 요청입니다. 상태·담당자는 담당자나 업체
-                관리자만 바꿀 수 있고, 아래에 댓글·내부 메모는 남길 수 있습니다.
-              </p>
-            )}
+            {/* 진행 상자: 현재 상태와 담당자, 그리고 지금 할 수 있는 '다음 동작'만 버튼으로 보여 준다.
+                상태를 직접 고르게 하면 단계를 건너뛰거나 거꾸로 갈 수 있어 SR 이력이 흐려지기 때문이다. */}
+            <div className="sr-progress">
+              <div className="sr-progress-now">
+                <span>
+                  담당자 <b>{detail.item.assignee_name || '미배정'}</b>
+                  {owner && owner === me.id ? ' (나)' : ''}
+                </span>
+                <small>{stepHint}</small>
+              </div>
+              {locked ? (
+                <p className="sr-notice">
+                  {detail.item.assignee_name}님이 담당하는 요청입니다. 진행은 담당자나 업체 관리자만
+                  할 수 있고, 아래에 댓글·내부 메모는 남길 수 있습니다.
+                </p>
+              ) : (
+                canSave &&
+                !closed && (
+                  <div className="sr-progress-actions">
+                    {detail.item.status === 'OPEN' && me.manager && (
+                      <select
+                        aria-label="맡길 담당자"
+                        value={form.assigneeId}
+                        disabled={busy}
+                        onChange={(e) => setForm({ ...form, assigneeId: e.target.value })}
+                      >
+                        <option value="">나에게</option>
+                        {assignees
+                          .filter((a) => String(a.id) !== me.id)
+                          .map((a) => (
+                            <option key={a.id} value={String(a.id)}>
+                              {a.display_name}에게
+                            </option>
+                          ))}
+                      </select>
+                    )}
+                    {detail.item.status === 'OPEN' && (
+                      <button className="primary" disabled={busy} onClick={() => void act('START')}>
+                        {me.manager && form.assigneeId ? '맡기고 처리 시작' : '내가 맡아 처리 시작'}
+                      </button>
+                    )}
+                    {detail.item.status === 'IN_PROGRESS' && (
+                      <>
+                        <button
+                          className="primary"
+                          disabled={busy}
+                          onClick={() => void act('RESOLVE')}
+                        >
+                          처리 완료
+                        </button>
+                        <button disabled={busy} onClick={() => void act('REVERT')}>
+                          되돌리기
+                        </button>
+                      </>
+                    )}
+                    {['OPEN', 'IN_PROGRESS'].includes(detail.item.status) && (
+                      <button
+                        className="danger-outline"
+                        disabled={busy}
+                        onClick={() => void act('CANCEL')}
+                      >
+                        요청 취소
+                      </button>
+                    )}
+                  </div>
+                )
+              )}
+              {/* 관리자: 처리 중 요청의 담당자만 바꾸는 재배정(상태는 처리 중 그대로) */}
+              {me.manager && canSave && detail.item.status === 'IN_PROGRESS' && (
+                <div className="sr-progress-actions">
+                  <select
+                    aria-label="담당자 변경"
+                    value={form.assigneeId}
+                    disabled={busy}
+                    onChange={(e) => setForm({ ...form, assigneeId: e.target.value })}
+                  >
+                    {assignees.map((a) => (
+                      <option key={a.id} value={String(a.id)}>
+                        {a.display_name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    disabled={busy || !form.assigneeId || form.assigneeId === owner}
+                    onClick={() => void reassign()}
+                  >
+                    담당자 변경
+                  </button>
+                </div>
+              )}
+            </div>
             <fieldset className="account-fields field-grid" disabled={busy || closed}>
-              <label>
-                상태
-                <select
-                  value={form.status}
-                  disabled={locked}
-                  onChange={(e) => setForm({ ...form, status: e.target.value })}
-                >
-                  {[detail.item.status, ...deskTransitions[detail.item.status]].map((s) => (
-                    <option key={s} value={s}>
-                      {deskStatusLabel[s] || statusLabel[s]}
-                    </option>
-                  ))}
-                </select>
-                <small className="field-hint">
-                  완료는 고객이 결과를 확인하면 자동으로 바뀝니다.
-                </small>
-              </label>
-              <label>
-                담당자
-                <select
-                  value={form.assigneeId}
-                  disabled={locked}
-                  onChange={(e) => setForm({ ...form, assigneeId: e.target.value })}
-                >
-                  <option value="">미배정</option>
-                  {/* 현재 담당자는 선택지가 줄어도 이름이 보이도록 남겨 둔다 */}
-                  {owner && !assigneeChoices.some((a) => String(a.id) === owner) && (
-                    <option value={owner}>{detail.item.assignee_name}</option>
-                  )}
-                  {assigneeChoices.map((a) => (
-                    <option key={a.id} value={String(a.id)}>
-                      {a.display_name}
-                    </option>
-                  ))}
-                </select>
-              </label>
               <label>
                 우선순위
                 <select
                   value={form.priority}
-                  disabled={locked}
+                  disabled={locked || detail.item.status === 'RESOLVED'}
                   onChange={(e) => setForm({ ...form, priority: e.target.value })}
                 >
                   {Object.entries(priorityLabel).map(([k, v]) => (
@@ -324,6 +404,7 @@ export const SrDeskScreen = forwardRef<
                   rows={3}
                   value={form.comment}
                   maxLength={10000}
+                  placeholder="되돌리기·요청 취소 때는 이 칸에 사유를 적어주세요."
                   onChange={(e) => setForm({ ...form, comment: e.target.value })}
                 />
               </label>
@@ -336,13 +417,13 @@ export const SrDeskScreen = forwardRef<
                 내부 메모(고객에게 보이지 않음)
               </label>
             </fieldset>
-            {/* 처리 칸을 채운 뒤 화면 맨 위 툴바까지 가지 않도록 바로 아래에도 저장 버튼을 둔다(툴바 [저장]과 같은 동작). */}
-            {!closed && screen.buttons.SAVE?.allowed && (
+            {/* 답변·우선순위 저장. 처리 칸을 채운 뒤 화면 맨 위 툴바까지 가지 않도록 바로 아래에 둔다(툴바 [저장]과 같은 동작). */}
+            {!closed && canSave && (
               <div className="form-actions">
                 <button
                   className="primary"
                   disabled={busy || !dirty}
-                  onClick={() => void saveHere()}
+                  onClick={() => void run(save)}
                 >
                   저장
                 </button>

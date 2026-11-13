@@ -39,13 +39,13 @@ import { slaFor } from './sla';
 const CATEGORIES = ['INCIDENT', 'REQUEST', 'QUESTION'] as const;
 const PRIORITIES = ['LOW', 'NORMAL', 'HIGH', 'URGENT'] as const;
 const STATUSES = ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED', 'CANCELLED'] as const;
-// 담당자가 바꿀 수 있는 상태 전이. RESOLVED→CLOSED는 고객 확인(portal)만 가능하다.
-const DESK_TRANSITIONS: Record<string, string[]> = {
-  OPEN: ['IN_PROGRESS', 'CANCELLED'],
-  IN_PROGRESS: ['OPEN', 'RESOLVED', 'CANCELLED'],
-  RESOLVED: ['IN_PROGRESS'],
-  CLOSED: [],
-  CANCELLED: [],
+// 진행 동작별로 허용되는 현재 상태와 바뀌는 상태. RESOLVED→CLOSED(완료)는 고객 확인(portal)만 가능하고,
+// RESOLVED→IN_PROGRESS는 고객의 재처리 요청으로만 일어난다(담당자가 스스로 완료를 취소하지 않는다).
+const DESK_FLOW: Record<string, { from: string[]; to: string }> = {
+  START: { from: ['OPEN'], to: 'IN_PROGRESS' },
+  RESOLVE: { from: ['IN_PROGRESS'], to: 'RESOLVED' },
+  REVERT: { from: ['IN_PROGRESS'], to: 'OPEN' },
+  CANCEL: { from: ['OPEN', 'IN_PROGRESS'], to: 'CANCELLED' },
 };
 const ID = /^\d{1,18}$/;
 // 알림 문구에 쓰는 상태 이름. 고객에게 영문 코드를 보이지 않는다.
@@ -73,11 +73,15 @@ class VersionDto {
   // 재처리 요청 사유. 완료 확인에는 쓰지 않고, 재처리 요청에는 필수다(엔지니어가 무엇을 다시 해야 하는지 알 수 있게).
   @IsOptional() @IsString() @Length(1, 2000) reason?: string;
 }
+// 담당자 화면의 진행 동작. 상태를 직접 고르지 않고 '다음 동작'만 보내 단계를 건너뛰거나 거꾸로 가지 않게 한다.
+// START: 담당 지정과 동시에 처리 시작(접수→처리 중) / RESOLVE: 처리 완료(처리 중→고객 확인 대기)
+// REVERT: 되돌리기(처리 중→접수, 담당 해제, 사유 필수) / CANCEL: 요청 취소(접수·처리 중→취소, 사유 필수)
+const DESK_ACTIONS = ['START', 'RESOLVE', 'REVERT', 'CANCEL'] as const;
 class DeskUpdateDto {
   @IsInt() @Min(1) version!: number;
-  @IsOptional() @IsIn(STATUSES) status?: string;
-  // 빈 문자열은 담당자 해제를 뜻한다.
-  @IsOptional() @IsString() @Matches(/^(\d{1,18})?$/) assigneeId?: string;
+  @IsOptional() @IsIn(DESK_ACTIONS) action?: string;
+  // START에서는 맡길 사람(없으면 나), 동작 없이 보내면 처리 중 요청의 재배정(관리자만)이다.
+  @IsOptional() @IsString() @Matches(/^\d{1,18}$/) assigneeId?: string;
   @IsOptional() @IsIn(PRIORITIES) priority?: string;
   @IsOptional() @IsString() @Length(1, 10000) comment?: string;
   @IsOptional() @IsBoolean() internal?: boolean;
@@ -401,7 +405,12 @@ export class Requests {
     this.staffActor(req);
     return this.db.tx((c) => this.detail(c, id, 'true', [], true));
   }
-  /** 담당자 저장. 바뀐 항목마다 이력을 남기고, 고객에게 보이는 변경은 요청자에게 알린다. */
+  /**
+   * 담당자 처리 저장. 진행 동작(action)과 우선순위·답변을 받아 바뀐 항목마다 이력을 남기고 관련자에게 알린다.
+   * 상태와 담당자는 한 묶음이다: 접수(OPEN)는 항상 담당자 없음, 처리 중·처리 완료는 항상 담당자 있음.
+   * 권한: 담당자가 있는 요청은 담당자 본인과 업체 관리자만 진행·우선순위를 바꾼다(다른 직원은 댓글·내부 메모만).
+   *       접수 요청은 엔지니어가 자기에게 맡기거나(START) 취소할 수 있고, 다른 사람에게 맡기는 것은 관리자만 한다.
+   */
   async deskUpdate(req: AppRequest, id: string, body: DeskUpdateDto) {
     const a = this.staffActor(req);
     return this.db.tx(async (c) => {
@@ -410,16 +419,54 @@ export class Requests {
       if (!r) throw new NotFoundException('요청을 찾을 수 없습니다.');
       if (r.version !== body.version)
         throw new ConflictException('다른 사용자가 먼저 변경했습니다. 다시 조회해주세요.');
-      const status = body.status && body.status !== r.status ? body.status : null;
-      if (status && !DESK_TRANSITIONS[r.status].includes(status))
-        throw new BadRequestException(
-          `현재 상태(${r.status})에서 ${status}(으)로 바꿀 수 없습니다.`,
+      if (['CLOSED', 'CANCELLED'].includes(r.status))
+        throw new ConflictException('종료된 요청입니다.');
+      const manager = await this.isManager(c, a.resp_id);
+      const me = String(a.id);
+      const owner = r.assignee_id ? String(r.assignee_id) : null;
+      // 이 요청의 진행을 바꿀 수 있는 사람: 관리자, 담당자 본인, 또는 담당자가 아직 없을 때의 업체 직원
+      const canDrive = manager || !owner || owner === me;
+      const action = body.action || null;
+      const comment = body.comment?.trim() || '';
+      const priority = body.priority && body.priority !== r.priority ? body.priority : null;
+      // 동작 없이 담당자만 보내면 처리 중 요청의 재배정이다.
+      const reassign =
+        !action && body.assigneeId && body.assigneeId !== owner ? body.assigneeId : null;
+      if (!action && !reassign && !priority && !comment)
+        throw new BadRequestException('변경된 내용이 없습니다.');
+      if ((action || priority) && !canDrive)
+        throw new ForbiddenException(
+          '담당자 또는 업체 관리자만 진행 상태·우선순위를 바꿀 수 있습니다. 댓글과 내부 메모는 남길 수 있습니다.',
         );
-      const assignee =
-        body.assigneeId !== undefined &&
-        (body.assigneeId || null) !== (r.assignee_id ? String(r.assignee_id) : null)
-          ? body.assigneeId || null
-          : undefined;
+      if (priority && !['OPEN', 'IN_PROGRESS'].includes(r.status))
+        throw new BadRequestException('처리 완료된 요청의 우선순위는 바꿀 수 없습니다.');
+      let status: string | null = null;
+      // undefined: 담당자 변경 없음, null: 담당 해제
+      let assignee: string | null | undefined = undefined;
+      if (action) {
+        const flow = DESK_FLOW[action];
+        if (!flow.from.includes(r.status))
+          throw new BadRequestException(
+            `현재 상태(${STATUS_LABEL[r.status]})에서는 할 수 없는 동작입니다. 다시 조회해주세요.`,
+          );
+        if (['REVERT', 'CANCEL'].includes(action) && !comment)
+          throw new BadRequestException(
+            `${action === 'REVERT' ? '되돌리는' : '취소하는'} 사유를 답변/메모 칸에 적어주세요.`,
+          );
+        status = flow.to;
+        if (action === 'START') {
+          assignee = body.assigneeId || me;
+          if (assignee !== me && !manager)
+            throw new ForbiddenException('다른 사람에게 맡기는 것은 업체 관리자만 할 수 있습니다.');
+        }
+        if (action === 'REVERT') assignee = null;
+      }
+      if (reassign) {
+        if (!manager) throw new ForbiddenException('담당자 변경은 업체 관리자만 할 수 있습니다.');
+        if (r.status !== 'IN_PROGRESS')
+          throw new BadRequestException('처리 중인 요청만 담당자를 바꿀 수 있습니다.');
+        assignee = reassign;
+      }
       if (assignee) {
         // 담당자는 같은 워크스페이스의 활성 SYSTEM 계정이어야 한다(RLS로 다른 업체 계정은 보이지 않음).
         const ok = await c.query(
@@ -428,80 +475,63 @@ export class Requests {
         );
         if (!ok.rowCount) throw new BadRequestException('담당자로 지정할 수 없는 계정입니다.');
       }
-      let finalAssignee = assignee;
-      const priority = body.priority && body.priority !== r.priority ? body.priority : null;
-      const comment = body.comment?.trim();
-      if (!status && assignee === undefined && !priority && !comment)
-        throw new BadRequestException('변경된 내용이 없습니다.');
-      if (['CLOSED', 'CANCELLED'].includes(r.status))
-        throw new ConflictException('종료된 요청입니다.');
-      // 담당 규칙: 여러 엔지니어가 같은 요청의 상태·담당을 서로 바꾸지 않도록 변경 권한을 담당자에게 모은다.
-      // - 담당자가 있으면: 담당자 본인과 업체 관리자만 상태·담당자·우선순위를 바꾼다(다른 직원은 댓글·내부 메모만).
-      // - 담당자가 없으면: 엔지니어는 자기 자신에게만 배정할 수 있고, 다른 사람 배정·배정 해제는 업체 관리자만 한다.
-      const manager = await this.isManager(c, a.resp_id);
-      const me = String(a.id);
-      const owner = r.assignee_id ? String(r.assignee_id) : null;
-      const changing = Boolean(status || assignee !== undefined || priority);
-      if (changing && !manager) {
-        if (owner && owner !== me)
-          throw new ForbiddenException(
-            '담당자 또는 업체 관리자만 상태·담당자·우선순위를 바꿀 수 있습니다. 댓글과 내부 메모는 남길 수 있습니다.',
-          );
-        if (assignee !== undefined && assignee !== me)
-          throw new ForbiddenException(
-            '다른 사람에게 배정하거나 배정을 해제하는 것은 업체 관리자만 할 수 있습니다.',
-          );
-      }
-      // 처리 시작·처리 완료로 바꾸는데 담당자가 없으면 처리한 사람을 담당자로 정한다(담당 없는 진행 요청이 생기지 않게).
-      const resultingOwner = assignee !== undefined ? assignee : owner;
-      if (status && ['IN_PROGRESS', 'RESOLVED'].includes(status) && !resultingOwner)
-        finalAssignee = me;
+      // 되돌리기 사유는 업체 내부 사정이므로 내부 메모로, 취소 사유는 고객이 알아야 하므로 공개로 남긴다.
+      const note =
+        action === 'REVERT'
+          ? { body: '되돌림 사유: ' + comment, internal: true }
+          : action === 'CANCEL'
+            ? { body: '취소 사유: ' + comment, internal: false }
+            : comment
+              ? { body: comment, internal: Boolean(body.internal) }
+              : null;
       await c.query(
         `UPDATE app.service_requests SET status=coalesce($2,status),
          assignee_id=CASE WHEN $3 THEN $4::bigint ELSE assignee_id END,priority=coalesce($5,priority),updated_at=now(),
          resolved_at=CASE WHEN $2='RESOLVED' THEN now() WHEN $2 IS NOT NULL THEN NULL ELSE resolved_at END,
          closed_at=CASE WHEN $2='CANCELLED' THEN now() ELSE closed_at END,
          first_response_at=CASE WHEN first_response_at IS NULL AND $6 THEN now() ELSE first_response_at END WHERE id=$1`,
-        // $6: 고객에게 보이는 첫 응답(상태 변경 또는 공개 답변)이면 첫 응답 시각을 한 번만 기록한다(응답 SLA 계산용).
+        // $6: 고객에게 보이는 첫 응답(처리 시작·완료·취소 또는 공개 답변)이면 첫 응답 시각을 한 번만 기록한다(응답 SLA 계산용).
         [
           id,
           status,
-          finalAssignee !== undefined,
-          finalAssignee,
+          assignee !== undefined,
+          assignee ?? null,
           priority,
-          Boolean(status || (comment && !body.internal)),
+          Boolean((status && action !== 'REVERT') || (note && !note.internal)),
         ],
       );
       const toRequester: string[] = [];
       if (status) {
         await this.event(c, id, a.id, 'STATUS', { from: r.status, to: status });
-        toRequester.push(
-          status === 'RESOLVED'
-            ? '처리가 완료되어 확인을 기다립니다'
-            : `상태가 '${STATUS_LABEL[status]}'(으)로 바뀌었습니다`,
-        );
+        // 되돌리기는 업체 안의 재배정 과정이라 고객에게 알리지 않는다.
+        if (action === 'RESOLVE') toRequester.push('처리가 완료되어 확인을 기다립니다');
+        else if (action !== 'REVERT')
+          toRequester.push(`상태가 '${STATUS_LABEL[status]}'(으)로 바뀌었습니다`);
       }
-      if (finalAssignee !== undefined) {
-        await this.event(c, id, a.id, 'ASSIGN', {
-          from: r.assignee_id ? String(r.assignee_id) : null,
-          to: finalAssignee,
-        });
-        if (finalAssignee && finalAssignee !== me)
+      if (assignee !== undefined) {
+        await this.event(c, id, a.id, 'ASSIGN', { from: owner, to: assignee });
+        if (assignee && assignee !== me)
           await this.notify(
             c,
-            [finalAssignee],
+            [assignee],
             a.id,
             id,
             `#${r.request_no} 담당자로 지정되었습니다: ${r.title}`,
           );
       }
+      if (action === 'REVERT')
+        // 다시 맡을 사람이 필요하므로 업체 직원 전체에게 알린다.
+        await this.notify(
+          c,
+          await this.staffTargets(c, null),
+          a.id,
+          id,
+          `#${r.request_no} 담당이 해제되어 다시 배정이 필요합니다: ${r.title}`,
+        );
       if (priority) await this.event(c, id, a.id, 'PRIORITY', { from: r.priority, to: priority });
-      if (comment) {
-        await this.event(c, id, a.id, 'COMMENT', {
-          body: comment,
-          internal: Boolean(body.internal),
-        });
-        if (!body.internal) toRequester.push('담당자 답변이 등록되었습니다');
+      if (note) {
+        await this.event(c, id, a.id, 'COMMENT', note);
+        if (!note.internal && action !== 'CANCEL') toRequester.push('담당자 답변이 등록되었습니다');
       }
       if (toRequester.length)
         await this.notify(

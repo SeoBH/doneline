@@ -1785,3 +1785,45 @@ dialog.code-lookup {
   font-size: 12px;
   font-weight: 400;
 }
+
+/* 요청 작업함 진행 상자: 현재 담당자·단계 안내와 '다음 동작' 버튼 */
+.sr-progress {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-bg-page);
+}
+.sr-progress-now {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+.sr-progress-now small {
+  color: var(--color-text-muted);
+}
+.sr-progress-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.sr-progress-actions select {
+  width: auto;
+  min-width: 140px;
+  margin: 0;
+}
+/* 되돌리기 어려운 동작(요청 취소): 빨간 테두리, 오른쪽 끝으로 */
+button.danger-outline {
+  margin-left: auto;
+  color: var(--color-danger-strong);
+  border-color: #efc3c3;
+  background: var(--color-surface);
+}
+button.danger-outline:hover {
+  background: var(--color-danger-bg);
+}

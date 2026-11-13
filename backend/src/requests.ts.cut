@@ -1,0 +1,113 @@
+  /** 담당자 저장. 바뀐 항목마다 이력을 남기고, 고객에게 보이는 변경은 요청자에게 알린다. */
+  async deskUpdate(req: AppRequest, id: string, body: DeskUpdateDto) {
+    const a = this.staffActor(req);
+    return this.db.tx(async (c) => {
+      const r = (await c.query('SELECT * FROM app.service_requests WHERE id=$1 FOR UPDATE', [id]))
+        .rows[0];
+      if (!r) throw new NotFoundException('요청을 찾을 수 없습니다.');
+      if (r.version !== body.version)
+        throw new ConflictException('다른 사용자가 먼저 변경했습니다. 다시 조회해주세요.');
+      const status = body.status && body.status !== r.status ? body.status : null;
+      if (status && !DESK_TRANSITIONS[r.status].includes(status))
+        throw new BadRequestException(
+          `현재 상태(${r.status})에서 ${status}(으)로 바꿀 수 없습니다.`,
+        );
+      const assignee =
+        body.assigneeId !== undefined &&
+        (body.assigneeId || null) !== (r.assignee_id ? String(r.assignee_id) : null)
+          ? body.assigneeId || null
+          : undefined;
+      if (assignee) {
+        // 담당자는 같은 워크스페이스의 활성 SYSTEM 계정이어야 한다(RLS로 다른 업체 계정은 보이지 않음).
+        const ok = await c.query(
+          "SELECT 1 FROM app.account_access WHERE id=$1 AND authority_type='SYSTEM' AND account_enabled",
+          [assignee],
+        );
+        if (!ok.rowCount) throw new BadRequestException('담당자로 지정할 수 없는 계정입니다.');
+      }
+      let finalAssignee = assignee;
+      const priority = body.priority && body.priority !== r.priority ? body.priority : null;
+      const comment = body.comment?.trim();
+      if (!status && assignee === undefined && !priority && !comment)
+        throw new BadRequestException('변경된 내용이 없습니다.');
+      if (['CLOSED', 'CANCELLED'].includes(r.status))
+        throw new ConflictException('종료된 요청입니다.');
+      // 담당 규칙: 여러 엔지니어가 같은 요청의 상태·담당을 서로 바꾸지 않도록 변경 권한을 담당자에게 모은다.
+      // - 담당자가 있으면: 담당자 본인과 업체 관리자만 상태·담당자·우선순위를 바꾼다(다른 직원은 댓글·내부 메모만).
+      // - 담당자가 없으면: 엔지니어는 자기 자신에게만 배정할 수 있고, 다른 사람 배정·배정 해제는 업체 관리자만 한다.
+      const manager = await this.isManager(c, a.resp_id);
+      const me = String(a.id);
+      const owner = r.assignee_id ? String(r.assignee_id) : null;
+      const changing = Boolean(status || assignee !== undefined || priority);
+      if (changing && !manager) {
+        if (owner && owner !== me)
+          throw new ForbiddenException(
+            '담당자 또는 업체 관리자만 상태·담당자·우선순위를 바꿀 수 있습니다. 댓글과 내부 메모는 남길 수 있습니다.',
+          );
+        if (assignee !== undefined && assignee !== me)
+          throw new ForbiddenException(
+            '다른 사람에게 배정하거나 배정을 해제하는 것은 업체 관리자만 할 수 있습니다.',
+          );
+      }
+      // 처리 시작·처리 완료로 바꾸는데 담당자가 없으면 처리한 사람을 담당자로 정한다(담당 없는 진행 요청이 생기지 않게).
+      const resultingOwner = assignee !== undefined ? assignee : owner;
+      if (status && ['IN_PROGRESS', 'RESOLVED'].includes(status) && !resultingOwner)
+        finalAssignee = me;
+      await c.query(
+        `UPDATE app.service_requests SET status=coalesce($2,status),
+         assignee_id=CASE WHEN $3 THEN $4::bigint ELSE assignee_id END,priority=coalesce($5,priority),updated_at=now(),
+         resolved_at=CASE WHEN $2='RESOLVED' THEN now() WHEN $2 IS NOT NULL THEN NULL ELSE resolved_at END,
+         closed_at=CASE WHEN $2='CANCELLED' THEN now() ELSE closed_at END,
+         first_response_at=CASE WHEN first_response_at IS NULL AND $6 THEN now() ELSE first_response_at END WHERE id=$1`,
+        // $6: 고객에게 보이는 첫 응답(상태 변경 또는 공개 답변)이면 첫 응답 시각을 한 번만 기록한다(응답 SLA 계산용).
+        [
+          id,
+          status,
+          finalAssignee !== undefined,
+          finalAssignee,
+          priority,
+          Boolean(status || (comment && !body.internal)),
+        ],
+      );
+      const toRequester: string[] = [];
+      if (status) {
+        await this.event(c, id, a.id, 'STATUS', { from: r.status, to: status });
+        toRequester.push(
+          status === 'RESOLVED'
+            ? '처리가 완료되어 확인을 기다립니다'
+            : `상태가 '${STATUS_LABEL[status]}'(으)로 바뀌었습니다`,
+        );
+      }
+      if (finalAssignee !== undefined) {
+        await this.event(c, id, a.id, 'ASSIGN', {
+          from: r.assignee_id ? String(r.assignee_id) : null,
+          to: finalAssignee,
+        });
+        if (finalAssignee && finalAssignee !== me)
+          await this.notify(
+            c,
+            [finalAssignee],
+            a.id,
+            id,
+            `#${r.request_no} 담당자로 지정되었습니다: ${r.title}`,
+          );
+      }
+      if (priority) await this.event(c, id, a.id, 'PRIORITY', { from: r.priority, to: priority });
+      if (comment) {
+        await this.event(c, id, a.id, 'COMMENT', {
+          body: comment,
+          internal: Boolean(body.internal),
+        });
+        if (!body.internal) toRequester.push('담당자 답변이 등록되었습니다');
+      }
+      if (toRequester.length)
+        await this.notify(
+          c,
+          await this.customerTargets(c, r),
+          a.id,
+          id,
+          `#${r.request_no} ${toRequester.join(', ')}: ${r.title}`,
+        );
+      await this.auditWrite(c, req, 'SR_UPDATE');
+      return { message: '저장했습니다.' };
+    });

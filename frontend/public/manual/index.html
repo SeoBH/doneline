@@ -269,7 +269,9 @@
                 </tr>
                 <tr>
                   <td><span class="badge b-cancel">취소</span></td>
-                  <td>잘못 올린 요청 등으로 처리하지 않고 닫았습니다.</td>
+                  <td>
+                    잘못 올렸거나 고객이 취소를 요청해 처리하지 않고 닫았습니다(사유가 남습니다).
+                  </td>
                   <td>업체 관리자·엔지니어</td>
                 </tr>
               </tbody>
@@ -466,11 +468,6 @@
                 처음 로그인하면 해야 할 일 7단계가 나옵니다. 각 줄의 <kbd>열기</kbd>를 누르면 해당
                 화면이 열리고, 끝낸 단계에는 ✓ 표시가 붙습니다.
               </p>
-              <div class="warn">
-                <b>남의 담당 요청</b>다른 직원이 담당하는 요청은 상태·담당자·우선순위 칸이 잠기고
-                안내가 나옵니다. 댓글이나 내부 메모로 의견을 남기세요. 업체 관리자는 언제든 바꿀 수
-                있습니다.
-              </div>
               <div class="tip"><b>팁</b>휴대폰에서는 왼쪽 위 ☰ 버튼을 눌러 메뉴를 엽니다.</div>
             </div>
             <figure>
@@ -762,57 +759,109 @@
             <div>
               <h3><span class="step-no">3</span>요청 처리하기</h3>
               <p>
-                <b>요청 작업함</b> 목록에서 요청을 누르면 오른쪽에 내용과 처리 칸이 나옵니다. 바꾼
-                뒤 오른쪽 위 <kbd>저장</kbd>을 누르면 고객에게 알림이 갑니다.
+                <b>요청 작업함</b> 목록에서 요청을 누르면 오른쪽에 내용과 <b>진행 상자</b>가
+                나옵니다. 진행 상자에는 지금 단계에서 누를 수 있는 버튼만 보입니다. 단계를
+                건너뛰거나 거꾸로 갈 수 없어서, 요청마다 누가 언제 맡고 끝냈는지가 정확히 남습니다.
               </p>
             </div>
             <video controls muted playsinline preload="metadata" poster="media/17-desk-detail.png">
               <source src="media/v4-desk-process.webm" type="video/webm" />
             </video>
             <figcaption>
-              영상: 알림 → 요청 열기 → 처리 중·담당자 지정·답변 저장 → 처리 완료(확인 대기)
+              영상: 알림 → 요청 열기 → 내가 맡아 처리 시작 → 답변 저장 → 처리 완료
             </figcaption>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>지금 상태</th>
+                  <th>보이는 버튼</th>
+                  <th>누르면</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="badge b-open">접수</span> (담당자 없음)</td>
+                  <td><kbd>내가 맡아 처리 시작</kbd> · <kbd>요청 취소</kbd></td>
+                  <td>
+                    내가 담당자가 되고 <b>처리 중</b>이 됩니다. 업체 관리자는 다른 직원을 골라 맡길
+                    수 있습니다.
+                  </td>
+                </tr>
+                <tr>
+                  <td><span class="badge b-progress">처리 중</span></td>
+                  <td><kbd>처리 완료</kbd> · <kbd>되돌리기</kbd> · <kbd>요청 취소</kbd></td>
+                  <td>
+                    처리 완료: 고객에게 결과 확인 요청이 갑니다.<br />
+                    되돌리기: 접수 상태로 돌아가고 담당자가 비워집니다(사유 필수, 다른 직원이 다시
+                    맡음).
+                  </td>
+                </tr>
+                <tr>
+                  <td><span class="badge b-resolved">확인 대기</span></td>
+                  <td>없음</td>
+                  <td>
+                    고객이 <kbd>완료 확인</kbd>을 누르면 완료, <kbd>재처리 요청</kbd>을 누르면 다시
+                    처리 중이 됩니다.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="step pair">
+            <figure>
+              <a href="media/17a-desk-open.png" target="_blank"
+                ><img
+                  src="media/17a-desk-open.png"
+                  alt="접수 요청의 진행 상자: 내가 맡아 처리 시작 버튼"
+                  loading="lazy"
+              /></a>
+              <figcaption>접수 단계: ① 내가 맡아 처리 시작</figcaption>
+            </figure>
+            <figure>
+              <a href="media/17-desk-detail.png" target="_blank"
+                ><img
+                  src="media/17-desk-detail.png"
+                  alt="처리 중 요청의 진행 상자, 답변 칸, 저장 버튼"
+                  loading="lazy"
+              /></a>
+              <figcaption>처리 중: ① 진행 상자 ② 답변 ③ 저장</figcaption>
+            </figure>
           </div>
           <div class="step">
             <div>
-              <ol class="marks">
-                <li data-n="1">
-                  <b>상태</b>: 작업을 시작하면 '처리 중', 끝나면 '처리 완료 (고객 확인 대기)'로
-                  바꿉니다. 최종 '완료'는 고객이 결과를 확인하면 자동으로 바뀝니다. 담당자가 없는
-                  요청을 '처리 중'으로 바꾸면 내가 담당자가 됩니다.
+              <ul>
+                <li>
+                  <b>답변 / 메모</b>: 고객에게 보일 답변을 쓰고 아래 <kbd>저장</kbd>을 누릅니다.
+                  <b>내부 메모</b>에 체크하면 고객에게 보이지 않고 알림도 가지 않습니다.
                 </li>
-                <li data-n="2">
-                  <b>담당자</b>: 엔지니어는 담당자가 없는 요청을 '나'에게 가져올 수 있습니다. 다른
-                  직원에게 배정하거나 바꾸는 것은 업체 관리자가 합니다. 지정된 사람에게 알림이
-                  갑니다.
+                <li>
+                  <b>되돌리기·요청 취소</b>: 먼저 답변/메모 칸에 사유를 적고 버튼을 누릅니다. 되돌림
+                  사유는 내부 메모로, 취소 사유는 고객에게 보이게 남습니다. 고객이 전화로 "없던 걸로
+                  해 주세요"라고 하면 [요청 취소]를 쓰면 됩니다.
                 </li>
-                <li data-n="3">
-                  <b>답변 / 메모</b>: 고객에게 보일 답변을 씁니다. <b>내부 메모</b>에 체크하면
-                  고객에게 보이지 않고 알림도 가지 않습니다.
+                <li><b>우선순위</b>: 담당자와 업체 관리자가 바꾸고 <kbd>저장</kbd>합니다.</li>
+                <li>
+                  <b>담당자 변경</b>: 처리 중인 요청의 담당자를 바꾸는 것은 업체 관리자만 할 수
+                  있습니다(진행 상자 아래 [담당자 변경]).
                 </li>
-                <li data-n="4">
-                  <kbd>저장</kbd>을 누릅니다. 처리 칸 바로 아래의 <kbd>저장</kbd>도 같은
-                  동작입니다(변경한 내용이 있을 때만 눌립니다).
-                </li>
-              </ol>
+              </ul>
+              <div class="warn">
+                <b>남의 담당 요청</b>다른 직원이 담당하는 요청은 진행 버튼과 우선순위가 잠기고
+                안내가 나옵니다. 댓글이나 내부 메모로 의견을 남기세요. 업체 관리자는 언제든 진행할
+                수 있습니다.
+              </div>
               <div class="tip">
                 <b>목록 거르기</b>위쪽 '담당'에서 <b>내 담당</b>·<b>미배정</b>을 고르면 내 일만,
                 아직 아무도 안 맡은 일만 볼 수 있습니다.
               </div>
               <div class="warn">
                 <b>"다른 사용자가 먼저 변경했습니다"</b>가 뜨면 같은 요청을 동료가 먼저 저장한
-                것입니다. <kbd>조회</kbd>로 최신 내용을 본 뒤 다시 저장하세요. 내 변경이 다른 사람
-                것을 덮어쓰지 않도록 막는 기능입니다.
+                것입니다. <kbd>조회</kbd>로 최신 내용을 본 뒤 다시 하세요. 내 변경이 다른 사람 것을
+                덮어쓰지 않도록 막는 기능입니다.
               </div>
             </div>
-            <figure>
-              <a href="media/17-desk-detail.png" target="_blank"
-                ><img
-                  src="media/17-desk-detail.png"
-                  alt="요청 작업함 상세: 상태, 담당자, 답변, 저장"
-                  loading="lazy"
-              /></a>
-            </figure>
           </div>
         </section>
 
@@ -986,8 +1035,8 @@
           <details>
             <summary>요청을 잘못 올렸어요. 지울 수 있나요?</summary>
             <div>
-              고객은 요청을 지울 수 없습니다. 댓글로 사정을 남기면 업체가 상태를 '취소'로 바꿉니다.
-              기록은 남습니다.
+              고객은 요청을 지울 수 없습니다. 댓글이나 전화로 알리면 업체 담당자가 [요청 취소]로
+              닫습니다. 취소 사유와 기록은 남습니다.
             </div>
           </details>
           <details>

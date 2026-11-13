@@ -422,20 +422,19 @@ const overlayScript = () => {
     .locator('.account-card')
     .filter({ has: park2.getByRole('heading', { name: '회의실 프로젝터 화면이 안 나옵니다' }) });
   await expect(card).toBeVisible();
-  await field(card, '상태').selectOption({ label: '처리 중' });
-  await field(card, '담당자').selectOption({ label: '박주임' });
+  // 다음 동작 버튼: 내가 맡아 처리 시작(확인 창은 page.on('dialog')가 자동 수락) → 답변 저장 → 처리 완료
+  await shot(park2, '17a-desk-open', [card.getByRole('button', { name: '내가 맡아 처리 시작' })]);
+  await click(park2, card.getByRole('button', { name: '내가 맡아 처리 시작' }));
+  await expect(card.getByRole('button', { name: '처리 완료' })).toBeVisible();
   await type(park2, field(card, '답변 / 메모'), '확인했습니다. 10분 내 방문하겠습니다.');
   await shot(park2, '17-desk-detail', [
-    field(card, '상태'),
-    field(card, '담당자'),
+    card.locator('.sr-progress'),
     field(card, '답변 / 메모'),
-    toolbarBtn(park2, '저장'),
+    card.locator('.form-actions button'),
   ]);
-  await click(park2, toolbarBtn(park2, '저장'));
+  await click(park2, card.locator('.form-actions button'));
   await park2.waitForTimeout(1000);
-  await field(card, '상태').selectOption({ label: '처리 완료 (고객 확인 대기)' });
-  await type(park2, field(card, '답변 / 메모'), 'HDMI 케이블 교체 후 정상 출력됩니다.');
-  await click(park2, toolbarBtn(park2, '저장'));
+  await click(park2, card.getByRole('button', { name: '처리 완료' }));
   await park2.waitForTimeout(1200);
   await shot(park2, '18-desk-list', [active(park2).getByLabel('요청 목록', { exact: true })]);
   await finish(park2);
