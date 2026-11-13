@@ -8,6 +8,8 @@ const paths: Record<string, string> = {
   menu: 'M4 6h16 M4 12h16 M4 18h16',
   logout: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4 M16 17l5-5-5-5 M21 12H9',
   message: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
+  // 물음표가 든 원: 도움말(사용 설명서)
+  help: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3 M12 17h.01',
 };
 
 export function Icon({ name, size = 18 }: { name: keyof typeof paths; size?: number }) {

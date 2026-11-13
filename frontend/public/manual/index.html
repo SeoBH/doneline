@@ -1,0 +1,1033 @@
+<!doctype html>
+<!--
+  Doneline 사용 설명서. 앱과 같은 서버에서 /manual/ 주소로 열린다(Vite가 public 폴더를 그대로 dist에 복사).
+  그림(media/*.png)과 영상(media/*.webm)은 backend/manual-capture.cjs가 실제 화면을 촬영해 만든다.
+  화면이 바뀌면 촬영 스크립트를 다시 실행하고, 이 문서의 설명도 함께 고친다.
+  앱 보안 정책(인라인 스크립트 금지)에 맞춰 스크립트 없이 HTML·CSS만 사용한다.
+-->
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Doneline 사용 설명서</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
+    />
+    <link rel="stylesheet" href="manual.css" />
+  </head>
+  <body>
+    <header class="hero">
+      <div class="hero-inner">
+        <div class="brand">DONELINE</div>
+        <h1>사용 설명서</h1>
+        <p>처음 쓰는 분도 이 순서대로 따라 하면 고객 요청을 받고 처리할 수 있습니다.</p>
+        <div class="meta">
+          화면 사진·영상은 실제 Doneline 화면입니다. 예시 업체 '한빛IT서비스'와 고객사
+          '서울메디랩'은 설명을 위한 가상의 이름입니다.
+        </div>
+      </div>
+    </header>
+
+    <div class="layout">
+      <nav class="toc" aria-label="목차">
+        <strong>시작</strong>
+        <a href="#who">어떤 분이세요?</a>
+        <a href="#overview">한눈에 보기</a>
+        <a href="#notify">알림은 누구에게 가나요?</a>
+        <strong>유지보수 업체 관리자</strong>
+        <a href="#a1">1. 업체 가입</a>
+        <a href="#a2">2. 시작하기 안내</a>
+        <a href="#a3">3. 고객사·법인·부서 등록</a>
+        <a href="#a4">4. 우리 직원 등록</a>
+        <a href="#a5">5. 고객에게 가입 링크 보내기</a>
+        <a href="#a6">6. 가입 신청 승인</a>
+        <a href="#a7">7. 처리 기한(SLA) 설정</a>
+        <a href="#a8">8. 월간 리포트</a>
+        <strong>업체 엔지니어</strong>
+        <a href="#b1">1. 비밀번호 설정</a>
+        <a href="#b2">2. 새 요청 알림 확인</a>
+        <a href="#b3">3. 요청 처리하기</a>
+        <strong>고객사 직원</strong>
+        <a href="#c1">1. 회원가입</a>
+        <a href="#c2">2. 요청 등록</a>
+        <a href="#c3">3. 진행 상황 보기</a>
+        <a href="#c4">4. 완료 확인 · 재처리 요청</a>
+        <strong>도움말</strong>
+        <a href="#screen">화면 구성과 버튼</a>
+        <a href="#faq">자주 묻는 질문</a>
+        <a href="#feedback">개선 요청 보내기</a>
+      </nav>
+
+      <main>
+        <!-- ===== 역할 고르기 ===== -->
+        <section id="who">
+          <h2>어떤 분이세요?</h2>
+          <p class="lead">
+            본인 역할의 장만 읽어도 됩니다. 처음 도입하는 관리자는 위에서부터 차례로 읽어 주세요.
+          </p>
+          <div class="roles">
+            <a class="role" href="#a1">
+              <b>유지보수 업체 관리자</b>
+              <span>Doneline에 가입해 고객사와 직원을 등록하고, 고객을 초대합니다.</span>
+              <em>관리자 안내 보기 →</em>
+            </a>
+            <a class="role" href="#b1">
+              <b>업체 엔지니어</b>
+              <span>고객 요청을 받아 담당자를 정하고 답변·처리합니다.</span>
+              <em>엔지니어 안내 보기 →</em>
+            </a>
+            <a class="role" href="#c1">
+              <b>고객사 직원</b>
+              <span>장애·작업·문의를 등록하고 처리 결과를 확인합니다.</span>
+              <em>고객 안내 보기 →</em>
+            </a>
+          </div>
+        </section>
+
+        <!-- ===== 전체 흐름 ===== -->
+        <section id="overview">
+          <h2>한눈에 보기</h2>
+          <p class="lead">
+            고객이 요청을 올리면 업체가 처리하고, <b>고객이 결과를 확인해야 완료</b>됩니다. 요청
+            하나는 아래 순서로 상태가 바뀝니다.
+          </p>
+          <div class="diagram">
+            <svg
+              viewBox="0 0 900 250"
+              role="img"
+              aria-label="요청 상태 흐름: 접수, 처리 중, 확인 대기, 완료. 확인 대기에서 재처리 요청 시 처리 중으로 돌아가고, 접수·처리 중에서 취소할 수 있다."
+            >
+              <defs>
+                <marker
+                  id="arr"
+                  viewBox="0 0 10 10"
+                  refX="9"
+                  refY="5"
+                  markerWidth="7"
+                  markerHeight="7"
+                  orient="auto"
+                >
+                  <path d="M0,0 L10,5 L0,10 z" fill="#64758c" />
+                </marker>
+              </defs>
+              <g font-size="18" text-anchor="middle">
+                <!-- 상태 상자 -->
+                <rect
+                  x="20"
+                  y="70"
+                  width="160"
+                  height="70"
+                  rx="12"
+                  fill="#fff1d6"
+                  stroke="#e7c27a"
+                />
+                <text x="100" y="100" font-weight="700" fill="#8a5a00">접수</text>
+                <text x="100" y="122" font-size="14" fill="#8a5a00">고객이 요청 등록</text>
+
+                <rect
+                  x="250"
+                  y="70"
+                  width="160"
+                  height="70"
+                  rx="12"
+                  fill="#dbeafe"
+                  stroke="#93b8f0"
+                />
+                <text x="330" y="100" font-weight="700" fill="#1d4ed8">처리 중</text>
+                <text x="330" y="122" font-size="14" fill="#1d4ed8">업체가 담당·작업</text>
+
+                <rect
+                  x="480"
+                  y="70"
+                  width="160"
+                  height="70"
+                  rx="12"
+                  fill="#ede9fe"
+                  stroke="#c4b5fd"
+                />
+                <text x="560" y="100" font-weight="700" fill="#6d28d9">확인 대기</text>
+                <text x="560" y="122" font-size="14" fill="#6d28d9">업체가 처리 완료</text>
+
+                <rect
+                  x="710"
+                  y="70"
+                  width="160"
+                  height="70"
+                  rx="12"
+                  fill="#dcfce7"
+                  stroke="#86d6a4"
+                />
+                <text x="790" y="100" font-weight="700" fill="#166534">완료</text>
+                <text x="790" y="122" font-size="14" fill="#166534">고객이 결과 확인</text>
+
+                <!-- 정방향 화살표 -->
+                <line
+                  x1="182"
+                  y1="105"
+                  x2="246"
+                  y2="105"
+                  stroke="#64758c"
+                  stroke-width="2"
+                  marker-end="url(#arr)"
+                />
+                <line
+                  x1="412"
+                  y1="105"
+                  x2="476"
+                  y2="105"
+                  stroke="#64758c"
+                  stroke-width="2"
+                  marker-end="url(#arr)"
+                />
+                <line
+                  x1="642"
+                  y1="105"
+                  x2="706"
+                  y2="105"
+                  stroke="#64758c"
+                  stroke-width="2"
+                  marker-end="url(#arr)"
+                />
+                <text x="214" y="95" font-size="14" fill="#64758c">업체</text>
+                <text x="444" y="95" font-size="14" fill="#64758c">업체</text>
+                <text x="674" y="95" font-size="14" fill="#64758c">고객</text>
+
+                <!-- 재처리 요청: 확인 대기 → 처리 중 -->
+                <path
+                  d="M560,68 C560,36 330,36 330,66"
+                  fill="none"
+                  stroke="#e11d48"
+                  stroke-width="2"
+                  stroke-dasharray="6 4"
+                  marker-end="url(#arr)"
+                />
+                <text x="445" y="22" font-size="15" fill="#e11d48">
+                  고객이 [재처리 요청] (사유 필수)
+                </text>
+
+                <!-- 취소 -->
+                <rect
+                  x="135"
+                  y="190"
+                  width="160"
+                  height="44"
+                  rx="12"
+                  fill="#f1f5f9"
+                  stroke="#cbd5e1"
+                />
+                <text x="215" y="217" font-weight="700" fill="#475569">취소</text>
+                <path
+                  d="M100,142 L100,212 L131,212"
+                  fill="none"
+                  stroke="#94a3b8"
+                  stroke-width="1.5"
+                  marker-end="url(#arr)"
+                />
+                <path
+                  d="M330,142 L330,212 L299,212"
+                  fill="none"
+                  stroke="#94a3b8"
+                  stroke-width="1.5"
+                  marker-end="url(#arr)"
+                />
+                <text x="215" y="180" font-size="14" fill="#64758c">
+                  접수·처리 중에 업체가 취소 가능
+                </text>
+              </g>
+            </svg>
+          </div>
+          <div class="table-wrap" style="margin-top: 14px">
+            <table>
+              <thead>
+                <tr>
+                  <th>상태</th>
+                  <th>뜻</th>
+                  <th>누가 바꾸나요?</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="badge b-open">접수</span></td>
+                  <td>고객이 요청을 올렸고 아직 처리를 시작하지 않았습니다.</td>
+                  <td>고객이 등록하면 자동</td>
+                </tr>
+                <tr>
+                  <td><span class="badge b-progress">처리 중</span></td>
+                  <td>업체가 확인하고 작업하고 있습니다.</td>
+                  <td>업체 관리자·엔지니어</td>
+                </tr>
+                <tr>
+                  <td><span class="badge b-resolved">확인 대기</span></td>
+                  <td>업체가 처리를 끝냈고 고객의 확인을 기다립니다.</td>
+                  <td>업체 관리자·엔지니어</td>
+                </tr>
+                <tr>
+                  <td><span class="badge b-closed">완료</span></td>
+                  <td>고객이 결과를 확인했습니다. 더 이상 바꿀 수 없습니다.</td>
+                  <td>고객만 가능</td>
+                </tr>
+                <tr>
+                  <td><span class="badge b-cancel">취소</span></td>
+                  <td>잘못 올린 요청 등으로 처리하지 않고 닫았습니다.</td>
+                  <td>업체 관리자·엔지니어</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ===== 알림 흐름 ===== -->
+        <section id="notify">
+          <h2>알림은 누구에게 가나요?</h2>
+          <p class="lead">
+            알림은 Doneline 화면 오른쪽 위 <b>종 모양 아이콘</b>에 숫자로 표시됩니다. 알림을 누르면
+            해당 요청 화면이 바로 열립니다. (메일·메신저로 보내는 알림은 아직 없습니다.)
+          </p>
+          <div class="diagram">
+            <svg
+              viewBox="0 0 900 470"
+              role="img"
+              aria-label="알림 흐름도. 요청 등록 시 업체 직원 전체, 담당자 지정 시 담당 엔지니어, 답변과 상태 변경 시 요청자와 고객사 관리자, 고객 댓글과 완료 확인·재처리 요청 시 담당 엔지니어에게 알림이 간다."
+            >
+              <defs>
+                <marker
+                  id="arr2"
+                  viewBox="0 0 10 10"
+                  refX="9"
+                  refY="5"
+                  markerWidth="7"
+                  markerHeight="7"
+                  orient="auto"
+                >
+                  <path d="M0,0 L10,5 L0,10 z" fill="#245d93" />
+                </marker>
+              </defs>
+              <g font-size="17" text-anchor="middle">
+                <!-- 사람(세로줄) -->
+                <rect x="40" y="10" width="160" height="50" rx="10" fill="#e8f0f8" />
+                <text x="120" y="32" font-weight="700" fill="#17324d">고객 (요청자)</text>
+                <text x="120" y="50" font-size="14" fill="#64758c">예: 이과장</text>
+                <rect x="250" y="10" width="160" height="50" rx="10" fill="#e8f0f8" />
+                <text x="330" y="32" font-weight="700" fill="#17324d">고객사 관리자</text>
+                <text x="330" y="50" font-size="14" fill="#64758c">요청 부서 담당</text>
+                <rect x="470" y="10" width="160" height="50" rx="10" fill="#fdf2e9" />
+                <text x="550" y="32" font-weight="700" fill="#7a3d0b">업체 직원 전체</text>
+                <text x="550" y="50" font-size="14" fill="#64758c">관리자·엔지니어</text>
+                <rect x="690" y="10" width="160" height="50" rx="10" fill="#fdf2e9" />
+                <text x="770" y="32" font-weight="700" fill="#7a3d0b">담당 엔지니어</text>
+                <text x="770" y="50" font-size="14" fill="#64758c">예: 박주임</text>
+                <g stroke="#cbd5e1" stroke-dasharray="4 4">
+                  <line x1="120" y1="62" x2="120" y2="460" />
+                  <line x1="330" y1="62" x2="330" y2="460" />
+                  <line x1="550" y1="62" x2="550" y2="460" />
+                  <line x1="770" y1="62" x2="770" y2="460" />
+                </g>
+              </g>
+              <g font-size="15">
+                <!-- 1. 요청 등록 -->
+                <text x="20" y="100" font-weight="700" fill="#1e293b">① 고객이 요청 등록</text>
+                <line
+                  x1="120"
+                  y1="112"
+                  x2="545"
+                  y2="112"
+                  stroke="#245d93"
+                  stroke-width="2"
+                  marker-end="url(#arr2)"
+                />
+                <circle cx="550" cy="112" r="9" fill="#245d93" />
+
+                <text x="565" y="132" fill="#64758c">
+                  "#1 새 요청: …" (담당자 지정 전이라 전체에게)
+                </text>
+
+                <!-- 2. 담당자 지정 -->
+                <text x="20" y="170" font-weight="700" fill="#1e293b">② 업체가 담당자 지정</text>
+                <line
+                  x1="550"
+                  y1="182"
+                  x2="765"
+                  y2="182"
+                  stroke="#245d93"
+                  stroke-width="2"
+                  marker-end="url(#arr2)"
+                />
+                <circle cx="770" cy="182" r="9" fill="#245d93" />
+
+                <text x="600" y="202" fill="#64758c">"담당자로 지정되었습니다"</text>
+
+                <!-- 3. 답변·상태 변경 -->
+                <text x="20" y="240" font-weight="700" fill="#1e293b">
+                  ③ 담당자가 답변 · 상태 변경(처리 중, 확인 대기 등)
+                </text>
+                <line
+                  x1="770"
+                  y1="252"
+                  x2="125"
+                  y2="252"
+                  stroke="#245d93"
+                  stroke-width="2"
+                  marker-end="url(#arr2)"
+                />
+                <circle cx="120" cy="252" r="9" fill="#245d93" />
+                <circle cx="330" cy="252" r="9" fill="#245d93" />
+
+                <text x="140" y="276" fill="#64758c">
+                  요청자와 그 부서의 고객사 관리자가 함께 받습니다.
+                </text>
+                <text x="140" y="296" fill="#64758c">
+                  내부 메모는 알림이 가지 않고 고객 화면에도 보이지 않습니다.
+                </text>
+
+                <!-- 4. 고객 댓글 -->
+                <text x="20" y="315" font-weight="700" fill="#1e293b">④ 고객이 댓글 작성</text>
+                <line
+                  x1="120"
+                  y1="327"
+                  x2="765"
+                  y2="327"
+                  stroke="#245d93"
+                  stroke-width="2"
+                  marker-end="url(#arr2)"
+                />
+                <circle cx="770" cy="327" r="9" fill="#245d93" />
+
+                <text x="140" y="347" fill="#64758c">
+                  담당자에게 갑니다. 담당자가 아직 없으면 업체 직원 전체에게 갑니다.
+                </text>
+
+                <!-- 5. 완료 확인/재처리 -->
+                <text x="20" y="390" font-weight="700" fill="#1e293b">
+                  ⑤ 고객이 [완료 확인] 또는 [재처리 요청]
+                </text>
+                <line
+                  x1="120"
+                  y1="402"
+                  x2="765"
+                  y2="402"
+                  stroke="#245d93"
+                  stroke-width="2"
+                  marker-end="url(#arr2)"
+                />
+                <circle cx="770" cy="402" r="9" fill="#245d93" />
+
+                <text x="140" y="422" fill="#64758c">
+                  재처리 요청 사유는 요청의 처리 이력에 그대로 남습니다.
+                </text>
+                <text x="20" y="455" font-size="14" fill="#64758c">
+                  ※ 고객사 직원이 회원가입을 신청하면 업체 직원 전체에게 "새 가입 신청" 알림이
+                  갑니다.
+                </text>
+              </g>
+            </svg>
+          </div>
+        </section>
+
+        <!-- ===== A. 업체 관리자 ===== -->
+        <section id="admin">
+          <h2><span class="tag">업체 관리자</span>처음 도입하기</h2>
+          <p class="lead">
+            가입부터 첫 고객 요청을 받기까지 약 10분이면 됩니다. 순서: 업체 가입 → 고객사·법인·부서
+            등록 → 직원 등록 → 고객 초대 → 가입 승인.
+          </p>
+
+          <div class="step wide" id="a1">
+            <div>
+              <h3><span class="step-no">1</span>업체 가입</h3>
+              <p>
+                로그인 화면 아래 <kbd>무료로 시작하기</kbd>를 누르고 업체 정보와 관리자 계정을
+                입력합니다. <kbd>가입하기</kbd>를 누르면 바로 로그인됩니다.
+              </p>
+              <ul>
+                <li>
+                  <b>업체 코드</b>: 영문 소문자·숫자·하이픈(-) 2~40자. 대문자나 띄어쓰기는 자동으로
+                  바뀝니다. 예) <code>hanbit-it</code>
+                </li>
+                <li><b>비밀번호</b>: 15자 이상. 문장처럼 길게 쓰면 기억하기 쉽습니다.</li>
+              </ul>
+            </div>
+            <video
+              controls
+              muted
+              playsinline
+              preload="metadata"
+              poster="media/02-workspace-signup.png"
+            >
+              <source src="media/v1-workspace-signup.webm" type="video/webm" />
+            </video>
+            <figcaption>영상: 업체 가입부터 첫 화면까지(약 15초)</figcaption>
+          </div>
+
+          <div class="step" id="a2">
+            <div>
+              <h3><span class="step-no">2</span>시작하기 안내 따라가기</h3>
+              <p>
+                처음 로그인하면 해야 할 일 7단계가 나옵니다. 각 줄의 <kbd>열기</kbd>를 누르면 해당
+                화면이 열리고, 끝낸 단계에는 ✓ 표시가 붙습니다.
+              </p>
+              <div class="tip"><b>팁</b>휴대폰에서는 왼쪽 위 ☰ 버튼을 눌러 메뉴를 엽니다.</div>
+            </div>
+            <figure>
+              <a href="media/03-start-guide.png" target="_blank"
+                ><img src="media/03-start-guide.png" alt="시작하기 안내 7단계 화면" loading="lazy"
+              /></a>
+              <figcaption>사진을 누르면 크게 볼 수 있습니다.</figcaption>
+            </figure>
+          </div>
+
+          <div class="step" id="a3">
+            <div>
+              <h3><span class="step-no">3</span>고객사 · 법인 · 부서 등록</h3>
+              <p>
+                요청은 <b>고객사 → 법인 → 부서</b> 단위로 올라옵니다. 세 화면 모두 표(그리드)에 줄을
+                추가하고 저장하는 같은 방식입니다.
+              </p>
+              <ol class="marks">
+                <li data-n="1"><kbd>행추가</kbd>를 누르면 빈 줄이 생깁니다.</li>
+                <li data-n="2">
+                  칸을 <b>두 번 클릭</b>해 코드·이름을 입력하고 <kbd>Enter</kbd>를 누릅니다. 입력할
+                  수 있는 칸은 옅은 바탕으로 표시됩니다.
+                </li>
+                <li data-n="3">
+                  오른쪽 위 파란 <kbd>저장</kbd>을 누릅니다. 체크된 줄만 저장됩니다.
+                </li>
+              </ol>
+              <p>
+                법인등록은 왼쪽에서 <b>고객사</b>를, 부서등록은 <b>고객사와 법인</b>을 먼저 고른 뒤
+                같은 방법으로 추가합니다.
+              </p>
+              <div class="warn">
+                <b>주의</b>저장하지 않고 다른 조회를 하면 입력한 줄은 사라집니다. 탭 이름 옆 *
+                표시는 저장 안 된 변경이 있다는 뜻입니다.
+              </div>
+            </div>
+            <figure>
+              <a href="media/04-customers.png" target="_blank"
+                ><img
+                  src="media/04-customers.png"
+                  alt="고객사등록 화면: 행추가, 입력한 줄, 저장 버튼"
+                  loading="lazy"
+              /></a>
+              <figcaption>고객사등록</figcaption>
+            </figure>
+          </div>
+          <div class="step">
+            <video controls muted playsinline preload="metadata" poster="media/06-departments.png">
+              <source src="media/v5-setup.webm" type="video/webm" />
+            </video>
+            <figcaption>영상: 고객사 → 법인 → 부서를 차례로 추가하고 저장하기</figcaption>
+          </div>
+          <div class="step pair">
+            <figure>
+              <a href="media/05-corporations.png" target="_blank"
+                ><img src="media/05-corporations.png" alt="법인등록 화면" loading="lazy"
+              /></a>
+              <figcaption>법인등록: ① 고객사를 고르고 ② 법인 줄을 추가</figcaption>
+            </figure>
+            <figure>
+              <a href="media/06-departments.png" target="_blank"
+                ><img src="media/06-departments.png" alt="부서등록 화면" loading="lazy"
+              /></a>
+              <figcaption>부서등록: ① 고객사 ② 법인을 고르고 ③ 부서 줄을 추가</figcaption>
+            </figure>
+          </div>
+
+          <div class="step" id="a4">
+            <div>
+              <h3><span class="step-no">4</span>우리 직원(엔지니어) 등록</h3>
+              <p><b>사용자등록</b> 화면에서 요청을 처리할 직원을 추가합니다.</p>
+              <ol class="marks">
+                <li data-n="1">
+                  고객사 칸에서 <b>우리 업체 직원 (고객사 없음)</b>을 고르고, <kbd>초기화</kbd> 후
+                  아이디·이름·연락처를 입력합니다. 역할은 <b>업체 담당자</b>(엔지니어) 또는
+                  <b>업체 관리자</b>를 고릅니다. <kbd>저장</kbd>을 누릅니다.
+                </li>
+                <li data-n="2">
+                  <b>비밀번호 설정 링크</b>가 나타납니다. <kbd>복사</kbd>를 눌러 메신저·문자로
+                  직원에게 보내 주세요. 링크는 <b>24시간</b> 유효합니다.
+                </li>
+              </ol>
+              <div class="tip">
+                <b>팁</b>링크를 잃어버렸거나 기한이 지났으면 직원을 선택하고
+                <kbd>비밀번호 설정 링크 만들기</kbd>로 새로 만듭니다.
+              </div>
+            </div>
+            <figure>
+              <a href="media/07-staff-link.png" target="_blank"
+                ><img
+                  src="media/07-staff-link.png"
+                  alt="사용자등록 화면: 우리 업체 직원 선택과 비밀번호 설정 링크"
+                  loading="lazy"
+              /></a>
+            </figure>
+          </div>
+
+          <div class="step" id="a5">
+            <div>
+              <h3><span class="step-no">5</span>고객에게 가입 링크 보내기</h3>
+              <p>
+                <b>고객사등록</b>에서 저장된 고객사 줄을 누르면 화면 아래에 그 고객사 전용 가입
+                링크가 나타납니다.
+              </p>
+              <ol class="marks">
+                <li data-n="1">
+                  <kbd>가입 링크 복사</kbd>를 눌러 고객 담당자에게 보냅니다. 이 링크로 가입한 사람은
+                  자동으로 이 고객사 소속이 됩니다.
+                </li>
+              </ol>
+              <div class="tip">
+                <b>팁</b>고객사 직원 여러 명에게 같은 링크를 보내도 됩니다. 각자 가입 신청하면
+                관리자가 승인합니다.
+              </div>
+            </div>
+            <figure>
+              <a href="media/09-signup-link.png" target="_blank"
+                ><img
+                  src="media/09-signup-link.png"
+                  alt="고객사등록 화면 아래 가입 링크 복사 버튼"
+                  loading="lazy"
+              /></a>
+            </figure>
+          </div>
+
+          <div class="step wide" id="a6">
+            <div>
+              <h3><span class="step-no">6</span>가입 신청 승인</h3>
+              <p>
+                고객이 가입을 신청하면 종 아이콘에 알림이 옵니다. 승인과 소속 부서 지정을 한 번에
+                끝냅니다.
+              </p>
+              <ol>
+                <li>
+                  <b>사용자등록</b>에서 고객사를 고르고 <kbd>조회</kbd>합니다. 상태가 '승인 대기'인
+                  사람이 보입니다.
+                </li>
+                <li>그 줄의 체크칸을 누르고 오른쪽 위 <kbd>승인</kbd>을 누릅니다.</li>
+                <li>
+                  창에서 <b>역할</b>(고객사 사용자 / 고객사 관리자)과 <b>소속 부서</b>를 고르고
+                  <kbd>승인</kbd>을 누르면 끝입니다. 고객은 바로 로그인할 수 있습니다.
+                </li>
+              </ol>
+              <div class="tip">
+                <b>역할 차이</b>고객사 사용자는 본인 부서의 요청만, 고객사 관리자는 맡은 부서 전체
+                요청을 보고 알림도 함께 받습니다.
+              </div>
+            </div>
+            <video
+              controls
+              muted
+              playsinline
+              preload="metadata"
+              poster="media/13-approve-dialog.png"
+            >
+              <source src="media/v2-approve.webm" type="video/webm" />
+            </video>
+            <figcaption>영상: 알림 확인 → 조회 → 체크 → 승인 창에서 역할·부서 선택</figcaption>
+          </div>
+          <div class="step pair">
+            <figure>
+              <a href="media/12-signup-notification.png" target="_blank"
+                ><img
+                  src="media/12-signup-notification.png"
+                  alt="새 가입 신청 알림 숫자"
+                  loading="lazy"
+              /></a>
+              <figcaption>① 가입 신청이 오면 종 아이콘에 숫자가 표시됩니다.</figcaption>
+            </figure>
+            <figure>
+              <a href="media/13-approve-dialog.png" target="_blank"
+                ><img
+                  src="media/13-approve-dialog.png"
+                  alt="가입 승인 창: 역할, 소속 부서, 승인 버튼"
+                  loading="lazy"
+              /></a>
+              <figcaption>① 역할 ② 소속 부서(하나 이상) ③ 승인</figcaption>
+            </figure>
+          </div>
+
+          <div class="step" id="a7">
+            <div>
+              <h3><span class="step-no">7</span>처리 기한(SLA) 설정</h3>
+              <p>
+                긴급도(우선순위)별로 <b>첫 응답 기한</b>(등록 후 첫 답변까지)과
+                <b>처리 기한</b>(등록 후 처리 완료까지)을 시간 단위로 정합니다. 기본값이 들어 있어
+                바꾸지 않아도 됩니다.
+              </p>
+              <p>
+                기한이 지난 요청에는 목록에 빨간 <b>기한 초과</b> 표시가 붙고, 월간 리포트의
+                준수율에 반영됩니다.
+              </p>
+              <ul>
+                <li>
+                  기본값: 긴급 1·4시간 / 높음 4·24시간 / 보통 8·72시간 / 낮음 24·168시간 (첫
+                  응답·처리)
+                </li>
+                <li>기한은 <b>주말을 포함한</b> 시간으로 계산합니다.</li>
+                <li>바꾼 기한은 <b>저장 후 새로 등록되는 요청부터</b> 적용됩니다.</li>
+              </ul>
+              <div class="tip">
+                <b>용어</b>고객 화면의 '긴급도'와 업체 화면의 '우선순위'는 같은 값입니다. 업체가
+                작업함에서 우선순위를 바꿀 수 있습니다.
+              </div>
+            </div>
+            <figure>
+              <a href="media/20-sla.png" target="_blank"
+                ><img src="media/20-sla.png" alt="SLA 설정 화면" loading="lazy"
+              /></a>
+            </figure>
+          </div>
+
+          <div class="step" id="a8">
+            <div>
+              <h3><span class="step-no">8</span>월간 리포트</h3>
+              <p>
+                달과 고객사를 고르고 <kbd>조회</kbd>하면 고객사별 등록·처리 건수와 기한 준수율이
+                나옵니다. 고객 보고 자료로 쓰세요.
+              </p>
+              <ol class="marks">
+                <li data-n="1">
+                  <kbd>엑셀 다운로드</kbd>는 요약과 요청 목록을 한 파일(시트 2개)로 내려받습니다.
+                </li>
+              </ol>
+              <ul>
+                <li><b>처리 SLA 준수율</b>: 처리 완료 건 중 기한 안에 끝낸 비율</li>
+                <li><b>첫 응답 SLA 준수율</b>: 등록 건 중 첫 응답 기한 안에 답한 비율</li>
+                <li><b>평균 처리 시간</b>: 등록부터 처리 완료까지 걸린 평균 시간</li>
+              </ul>
+            </div>
+            <figure>
+              <a href="media/21-report.png" target="_blank"
+                ><img src="media/21-report.png" alt="월간 리포트 화면" loading="lazy"
+              /></a>
+            </figure>
+          </div>
+        </section>
+
+        <!-- ===== B. 엔지니어 ===== -->
+        <section id="engineer">
+          <h2><span class="tag">업체 엔지니어</span>요청 처리하기</h2>
+          <p class="lead">
+            관리자에게 받은 링크로 비밀번호를 정하고, 알림이 오면 요청 작업함에서 처리합니다.
+          </p>
+
+          <div class="step phone" id="b1">
+            <div>
+              <h3><span class="step-no">1</span>비밀번호 설정 (처음 한 번)</h3>
+              <p>
+                관리자가 보내 준 링크를 엽니다. 화면 위에 <b>내 이름과 업체 이름</b>이 맞는지
+                확인하고, 새 비밀번호(15자 이상)를 두 번 입력한 뒤 <kbd>완료</kbd>를 누르면 바로
+                로그인됩니다.
+              </p>
+              <div class="warn">
+                <b>주의</b>링크는 24시간만 유효합니다. 기한이 지났으면 관리자에게 새 링크를
+                요청하세요.
+              </div>
+            </div>
+            <figure>
+              <a href="media/08-password-setup.png" target="_blank"
+                ><img
+                  src="media/08-password-setup.png"
+                  alt="휴대폰 비밀번호 설정 화면"
+                  loading="lazy"
+              /></a>
+            </figure>
+          </div>
+
+          <div class="step" id="b2">
+            <div>
+              <h3><span class="step-no">2</span>새 요청 알림 확인</h3>
+              <p>
+                새 요청이 오면 오른쪽 위 종 아이콘에 숫자가 붙습니다. 눌러서 열고, 알림 한 줄을
+                누르면 그 요청이 바로 열립니다.
+              </p>
+              <p><kbd>모두 읽음</kbd>은 숫자만 지우고 요청 상태는 바꾸지 않습니다.</p>
+            </div>
+            <figure>
+              <a href="media/16-notifications.png" target="_blank"
+                ><img
+                  src="media/16-notifications.png"
+                  alt="알림 창: 새 요청과 가입 신청 알림 목록"
+                  loading="lazy"
+              /></a>
+            </figure>
+          </div>
+
+          <div class="step wide" id="b3">
+            <div>
+              <h3><span class="step-no">3</span>요청 처리하기</h3>
+              <p>
+                <b>요청 작업함</b> 목록에서 요청을 누르면 오른쪽에 내용과 처리 칸이 나옵니다. 바꾼
+                뒤 오른쪽 위 <kbd>저장</kbd>을 누르면 고객에게 알림이 갑니다.
+              </p>
+            </div>
+            <video controls muted playsinline preload="metadata" poster="media/17-desk-detail.png">
+              <source src="media/v4-desk-process.webm" type="video/webm" />
+            </video>
+            <figcaption>
+              영상: 알림 → 요청 열기 → 처리 중·담당자 지정·답변 저장 → 처리 완료(확인 대기)
+            </figcaption>
+          </div>
+          <div class="step">
+            <div>
+              <ol class="marks">
+                <li data-n="1">
+                  <b>상태</b>: 작업을 시작하면 '처리 중', 끝나면 '확인 대기'로 바꿉니다. '완료'는
+                  고객만 누를 수 있습니다.
+                </li>
+                <li data-n="2">
+                  <b>담당자</b>: 본인 또는 다른 직원을 지정합니다. 지정된 사람에게 알림이 갑니다.
+                </li>
+                <li data-n="3">
+                  <b>답변 / 메모</b>: 고객에게 보일 답변을 씁니다. <b>내부 메모</b>에 체크하면
+                  고객에게 보이지 않고 알림도 가지 않습니다.
+                </li>
+                <li data-n="4"><kbd>저장</kbd>을 누릅니다.</li>
+              </ol>
+              <div class="tip">
+                <b>목록 거르기</b>위쪽 '담당'에서 <b>내 담당</b>·<b>미배정</b>을 고르면 내 일만,
+                아직 아무도 안 맡은 일만 볼 수 있습니다.
+              </div>
+              <div class="warn">
+                <b>"다른 사용자가 먼저 변경했습니다"</b>가 뜨면 같은 요청을 동료가 먼저 저장한
+                것입니다. <kbd>조회</kbd>로 최신 내용을 본 뒤 다시 저장하세요. 내 변경이 다른 사람
+                것을 덮어쓰지 않도록 막는 기능입니다.
+              </div>
+            </div>
+            <figure>
+              <a href="media/17-desk-detail.png" target="_blank"
+                ><img
+                  src="media/17-desk-detail.png"
+                  alt="요청 작업함 상세: 상태, 담당자, 답변, 저장"
+                  loading="lazy"
+              /></a>
+            </figure>
+          </div>
+        </section>
+
+        <!-- ===== C. 고객사 ===== -->
+        <section id="customer">
+          <h2><span class="tag">고객사 직원</span>요청 올리고 확인하기</h2>
+          <p class="lead">휴대폰으로도 똑같이 쓸 수 있습니다. 아래 사진은 휴대폰 화면입니다.</p>
+
+          <div class="step phone" id="c1">
+            <div>
+              <h3><span class="step-no">1</span>회원가입</h3>
+              <p>
+                업체에서 받은 <b>가입 링크</b>를 엽니다. 위에 우리 회사 이름이 보이면 맞는
+                링크입니다.
+              </p>
+              <ol class="marks">
+                <li data-n="1">
+                  <kbd>회원가입</kbd>을 누르고 아이디·이름·연락처·비밀번호(15자 이상)를 입력한 뒤
+                  <kbd>가입 신청</kbd>을 누릅니다.
+                </li>
+              </ol>
+              <p>
+                업체 관리자가 승인하면 로그인할 수 있습니다. 급하면 담당 업체에 승인을 요청하세요.
+              </p>
+            </div>
+            <figure>
+              <a href="media/11-customer-signup-form.png" target="_blank"
+                ><img
+                  src="media/11-customer-signup-form.png"
+                  alt="휴대폰 회원가입 입력 화면"
+                  loading="lazy"
+              /></a>
+            </figure>
+          </div>
+
+          <div class="step phone" id="c2">
+            <div>
+              <h3><span class="step-no">2</span>요청 등록</h3>
+              <p>
+                로그인하면 <b>고객 요청</b> 화면이 바로 열립니다. <kbd>+ 새 요청</kbd>을 누릅니다.
+              </p>
+              <ul>
+                <li><b>구분</b>: 장애(고장·오류) / 작업 요청(계정 생성, 설치 등) / 문의</li>
+                <li><b>긴급도</b>: 낮음·보통·높음·긴급. 긴급도에 따라 처리 기한이 정해집니다.</li>
+                <li><b>내용</b>: 언제, 어디서, 무엇이 안 되는지 적어 주면 빨리 처리됩니다.</li>
+              </ul>
+              <p>다 썼으면 아래 <kbd>요청 등록</kbd>을 누릅니다.</p>
+            </div>
+            <video controls muted playsinline preload="metadata" poster="media/14-request-form.png">
+              <source src="media/v3-request-mobile.webm" type="video/webm" />
+            </video>
+          </div>
+
+          <div class="step phone" id="c3">
+            <div>
+              <h3><span class="step-no">3</span>진행 상황 보기</h3>
+              <p>
+                요청 카드의 색 표시로 상태를 알 수 있습니다(<a href="#overview">상태 설명</a>).
+                담당자가 답변하거나 상태를 바꾸면 종 아이콘에 알림이 옵니다.
+              </p>
+              <p>
+                카드를 누르면 처리 이력이 나오고, 아래 <b>댓글</b>로 추가 내용을 남길 수 있습니다.
+              </p>
+              <div class="tip">
+                <b>고객사 관리자</b>는 맡은 부서 직원들의 요청도 모두 보고 알림도 함께 받습니다.
+              </div>
+            </div>
+            <figure>
+              <a href="media/15-request-list.png" target="_blank"
+                ><img src="media/15-request-list.png" alt="휴대폰 요청 목록" loading="lazy"
+              /></a>
+            </figure>
+          </div>
+
+          <div class="step phone" id="c4">
+            <div>
+              <h3><span class="step-no">4</span>완료 확인 · 재처리 요청</h3>
+              <p>
+                업체가 처리를 끝내면 상태가 <span class="badge b-resolved">확인 대기</span>가 되고
+                보라색 안내가 나옵니다.
+              </p>
+              <ol class="marks">
+                <li data-n="1">
+                  해결됐으면 <kbd>완료 확인</kbd>을 누릅니다. 아직 안 됐으면 아래 <b>댓글</b> 칸에
+                  이유를 쓰고 <kbd>재처리 요청</kbd>을 누릅니다. 이유는 꼭 적어야 합니다.
+                </li>
+              </ol>
+            </div>
+            <figure>
+              <a href="media/19-confirm.png" target="_blank"
+                ><img src="media/19-confirm.png" alt="휴대폰 완료 확인 화면" loading="lazy"
+              /></a>
+            </figure>
+          </div>
+        </section>
+
+        <!-- ===== 화면 구성 ===== -->
+        <section id="screen">
+          <h2>화면 구성과 버튼</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>위치</th>
+                  <th>무엇인가요?</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>왼쪽 메뉴</td>
+                  <td>내 역할에서 쓸 수 있는 화면 목록입니다. 휴대폰에서는 왼쪽 위 ☰로 엽니다.</td>
+                </tr>
+                <tr>
+                  <td>오른쪽 위</td>
+                  <td>종 아이콘(알림) · 개선 요청 · 내 이름 · 로그아웃(문 모양 아이콘)</td>
+                </tr>
+                <tr>
+                  <td>화면 위 버튼줄</td>
+                  <td>
+                    <kbd>초기화</kbd> 입력·선택을 처음 상태로 / <kbd>조회</kbd> 최신 내용 불러오기 /
+                    <b>파란 버튼</b> 저장·등록 같은 주요 동작 / <b>빨간 테두리</b> 삭제처럼 되돌리기
+                    어려운 동작
+                  </td>
+                </tr>
+                <tr>
+                  <td>흐린 버튼</td>
+                  <td>
+                    지금 조건에서는 쓸 수 없는 버튼입니다. 누르면 이유를 알려 줍니다(예: 줄을 먼저
+                    체크하세요).
+                  </td>
+                </tr>
+                <tr>
+                  <td>아래쪽 탭</td>
+                  <td>
+                    열어 둔 화면들입니다. 탭을 눌러 오가고 ×로 닫습니다. 이름 옆 *는 저장 안 된
+                    변경이 있다는 뜻입니다.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ===== FAQ ===== -->
+        <section id="faq">
+          <h2>자주 묻는 질문</h2>
+          <details>
+            <summary>고객이 "로그인할 수 없습니다"라고 합니다.</summary>
+            <div>
+              고객사 직원은 <b>승인</b>과 <b>소속 부서 지정</b>이 모두 끝나야 로그인할 수 있습니다.
+              사용자등록에서 그 사람의 상태가 '승인 완료'인지, [법인·부서 매핑] 탭에 부서가 체크되어
+              있는지 확인하세요. <a href="#a6">가입 승인</a> 방법대로 승인하면 두 가지가 한 번에
+              처리됩니다.
+            </div>
+          </details>
+          <details>
+            <summary>비밀번호를 잊어버렸어요.</summary>
+            <div>
+              로그인 화면의 <kbd>아이디 찾기 · 비밀번호 재설정</kbd>을 누르세요. 메일 발송이
+              준비되기 전까지는 업체 관리자에게 요청하면 사용자등록에서
+              <kbd>비밀번호 설정 링크 만들기</kbd>로 새 링크를 보내 줍니다.
+            </div>
+          </details>
+          <details>
+            <summary>직원에게 보낸 비밀번호 링크가 안 열립니다.</summary>
+            <div>
+              링크는 24시간 유효하고 한 번 쓰면 끝납니다. 사용자등록에서 그 직원을 선택하고 링크를
+              새로 만들어 보내세요.
+            </div>
+          </details>
+          <details>
+            <summary>요청을 잘못 올렸어요. 지울 수 있나요?</summary>
+            <div>
+              고객은 요청을 지울 수 없습니다. 댓글로 사정을 남기면 업체가 상태를 '취소'로 바꿉니다.
+              기록은 남습니다.
+            </div>
+          </details>
+          <details>
+            <summary>업체가 '완료'로 바꿀 수는 없나요?</summary>
+            <div>
+              없습니다. 업체는 '확인 대기'까지만 바꾸고, 고객이 결과를 확인해야 '완료'가 됩니다.
+              처리했다고 생각한 일이 실제로 해결됐는지 고객이 확인하도록 한 규칙입니다.
+            </div>
+          </details>
+          <details>
+            <summary>"다른 사용자가 먼저 변경했습니다"라는 메시지가 떠요.</summary>
+            <div>
+              같은 내용을 다른 사람이 먼저 저장했습니다. <kbd>조회</kbd>로 최신 내용을 확인하고 다시
+              저장하세요. 서로의 변경을 모르고 덮어쓰지 않도록 막는 기능입니다.
+            </div>
+          </details>
+          <details>
+            <summary>메일이나 메신저로 알림을 받을 수 있나요?</summary>
+            <div>
+              지금은 Doneline 화면의 종 아이콘 알림만 제공합니다. 메일·메신저 알림은 준비 중입니다.
+              필요하면 아래 [개선 요청]으로 알려 주세요.
+            </div>
+          </details>
+          <details>
+            <summary>다른 업체가 우리 고객 정보를 볼 수 있나요?</summary>
+            <div>
+              볼 수 없습니다. 업체마다 데이터가 데이터베이스 수준에서 분리되어 있고, 고객사 직원은
+              본인 고객사(사용자는 본인 부서)의 요청만 봅니다.
+            </div>
+          </details>
+        </section>
+
+        <section id="feedback">
+          <h2>개선 요청 보내기</h2>
+          <div class="step">
+            <div>
+              <p>
+                쓰다가 불편한 점이나 바라는 기능이 있으면 오른쪽 위 <kbd>개선 요청</kbd>을 눌러 보내
+                주세요. 보고 있던 화면 이름이 함께 전달되어 Doneline 운영팀이 바로 확인할 수
+                있습니다.
+              </p>
+              <p>구분은 개선 제안 · 오류 신고 · 문의 중에서 고릅니다.</p>
+            </div>
+            <figure>
+              <a href="media/22-feedback.png" target="_blank"
+                ><img src="media/22-feedback.png" alt="개선 요청 작성 창" loading="lazy"
+              /></a>
+            </figure>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

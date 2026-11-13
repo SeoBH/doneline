@@ -503,6 +503,9 @@ function App() {
                 </button>
               </div>
             )}
+            <a className="login-manual" href="/manual/" target="_blank" rel="noopener">
+              처음이신가요? 사용 설명서 보기
+            </a>
           </form>
         </main>
       </>
@@ -538,6 +541,18 @@ function App() {
             메뉴 새로고침은 화면·메뉴 등록 저장 시 자동으로 실행되므로 헤더에서 뺐다. */}
         <div className="header-actions">
           <NotificationBell onOpen={openNotification} />
+          {/* 사용 설명서(frontend/public/manual)는 작업 중인 화면을 잃지 않도록 새 탭으로 연다. */}
+          <a
+            className="header-link"
+            href="/manual/"
+            target="_blank"
+            rel="noopener"
+            title="사용 설명서"
+            aria-label="사용 설명서"
+          >
+            <Icon name="help" size={16} />
+            <span>도움말</span>
+          </a>
           <FeedbackButton page={current?.name} notify={notify} />
           <span className="user-chip" title={user.displayName}>
             {user.displayName}

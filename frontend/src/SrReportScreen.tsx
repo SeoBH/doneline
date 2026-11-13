@@ -15,6 +15,11 @@ function thisMonth() {
 }
 const pct = (v: number | null) => (v === null || v === undefined ? '—' : v + '%');
 
+// 평균 처리 시간(서버가 시간 단위 소수 1자리로 반올림)을 읽기 쉬운 글로 바꾼다.
+// 1시간 미만은 '0시간' 대신 분으로 보여 주고, 0.0(3분 미만으로 반올림된 값)은 '3분 미만'으로 표시한다.
+const duration = (h: number | null) =>
+  h === null ? '—' : h === 0 ? '3분 미만' : h < 1 ? Math.round(h * 60) + '분' : h + '시간';
+
 export const SrReportScreen = forwardRef<
   ScreenHandle,
   { screen: Screen; notify: Notify; onState: (s: ViewState) => void }
@@ -129,7 +134,7 @@ export const SrReportScreen = forwardRef<
                 <td>{r.closed}</td>
                 <td>{pct(r.resolveRate)}</td>
                 <td>{pct(r.responseRate)}</td>
-                <td>{r.avg_resolve_hours === null ? '—' : r.avg_resolve_hours + '시간'}</td>
+                <td>{duration(r.avg_resolve_hours)}</td>
                 <td>{r.open_now}</td>
               </tr>
             ))}

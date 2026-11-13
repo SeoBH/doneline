@@ -1,0 +1,410 @@
+/*
+ * Doneline 사용 설명서(frontend/public/manual/index.html) 전용 스타일.
+ * 앱(style.css)과 같은 색·글꼴을 써서 설명서와 실제 화면이 한 제품처럼 보이게 한다.
+ * 앱 보안 정책상 인라인 스크립트를 쓸 수 없어 설명서는 스크립트 없이 HTML·CSS만으로 동작한다.
+ */
+:root {
+  --bg: #f5f7fa;
+  --surface: #ffffff;
+  --border: #dfe5ec;
+  --text: #1e293b;
+  --muted: #64758c;
+  --primary: #245d93;
+  --primary-soft: #e8f0f8;
+  --mark: #e11d48;
+  --ok: #1f7a4d;
+  --warn-bg: #fff7e6;
+  --warn: #8a5a00;
+  --radius: 10px;
+}
+* {
+  box-sizing: border-box;
+}
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 16px;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font:
+    16px/1.7 'Pretendard Variable',
+    Pretendard,
+    -apple-system,
+    'Malgun Gothic',
+    sans-serif;
+  letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
+}
+a {
+  color: var(--primary);
+}
+img,
+video {
+  max-width: 100%;
+  display: block;
+}
+
+/* 상단 제목 띠 */
+.hero {
+  background: #17324d;
+  color: #fff;
+  padding: 40px 24px 36px;
+}
+.hero-inner,
+.layout {
+  max-width: 1180px;
+  margin: 0 auto;
+}
+.hero .brand {
+  letter-spacing: 3px;
+  font-weight: 700;
+  opacity: 0.8;
+}
+.hero h1 {
+  margin: 8px 0 8px;
+  font-size: 32px;
+  line-height: 1.3;
+}
+.hero p {
+  margin: 0;
+  opacity: 0.85;
+}
+.hero .meta {
+  margin-top: 12px;
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+/* 본문: 왼쪽 목차 + 오른쪽 내용 */
+.layout {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  gap: 32px;
+  padding: 32px 24px 80px;
+}
+.toc {
+  position: sticky;
+  top: 16px;
+  align-self: start;
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  font-size: 14px;
+}
+.toc strong {
+  display: block;
+  margin: 16px 0 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.toc a {
+  display: block;
+  padding: 4px 10px;
+  border-left: 2px solid var(--border);
+  color: var(--text);
+  text-decoration: none;
+}
+.toc a:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+/* 그리드 칸은 기본적으로 안의 가장 넓은 요소(흐름도 최소 760px)만큼 늘어나므로, 0으로 풀어 화면 폭에 맞추고
+   넓은 그림은 자기 상자(.diagram) 안에서만 가로로 스크롤되게 한다. */
+main {
+  min-width: 0;
+}
+main > section {
+  margin-bottom: 56px;
+}
+h2 {
+  margin: 0 0 8px;
+  font-size: 26px;
+  line-height: 1.35;
+}
+h2 .tag {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 14px;
+  vertical-align: middle;
+}
+h3 {
+  margin: 0 0 6px;
+  font-size: 19px;
+}
+.lead {
+  margin: 0 0 20px;
+  color: var(--muted);
+}
+
+/* 역할 고르기 카드 */
+.roles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+.role {
+  display: block;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+  transition: border-color 0.15s;
+}
+.role:hover {
+  border-color: var(--primary);
+}
+.role b {
+  display: block;
+  font-size: 17px;
+}
+.role span {
+  color: var(--muted);
+  font-size: 14px;
+}
+.role em {
+  display: inline-block;
+  margin-top: 10px;
+  color: var(--primary);
+  font-style: normal;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+/* 단계 카드: 설명(왼쪽) + 화면 사진(오른쪽) */
+.step {
+  display: grid;
+  /* PC 화면 사진은 글자가 작아 설명 아래에 넓게 싣는다. 휴대폰 사진(.phone)만 설명 옆에 둔다. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+  padding: 22px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.step.pair {
+  grid-template-columns: 1fr 1fr;
+}
+.step.phone {
+  grid-template-columns: minmax(0, 1fr) 300px;
+}
+.step-no {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  vertical-align: 2px;
+}
+.step p {
+  margin: 6px 0;
+}
+/* 사진 속 빨간 번호와 같은 번호 목록 */
+ol.marks {
+  list-style: none;
+  margin: 10px 0;
+  padding: 0;
+}
+ol.marks li {
+  position: relative;
+  padding: 3px 0 3px 32px;
+}
+ol.marks li::before {
+  content: attr(data-n);
+  position: absolute;
+  left: 0;
+  top: 5px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--mark);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 22px;
+  text-align: center;
+}
+figure {
+  margin: 0;
+}
+figure a {
+  display: block;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #eef2f6;
+}
+figcaption {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+video {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #0f172a;
+}
+.phone video,
+.phone figure a {
+  max-width: 300px;
+}
+
+/* 알림 상자 */
+.tip,
+.warn {
+  margin: 10px 0;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 15px;
+}
+.tip {
+  background: var(--primary-soft);
+}
+.warn {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+.tip b,
+.warn b {
+  margin-right: 4px;
+}
+kbd {
+  padding: 1px 7px;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--surface);
+  font: inherit;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+/* 표 */
+.table-wrap {
+  overflow-x: auto;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 15px;
+}
+th,
+td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+th {
+  background: #eef2f6;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.badge {
+  display: inline-block;
+  padding: 1px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.b-open {
+  background: #fff1d6;
+  color: #8a5a00;
+}
+.b-progress {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+.b-resolved {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+.b-closed {
+  background: #dcfce7;
+  color: #166534;
+}
+.b-cancel {
+  background: #f1f5f9;
+  color: #475569;
+}
+.yes {
+  color: var(--ok);
+  font-weight: 700;
+}
+
+/* 그림(SVG) 상자 */
+.diagram {
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow-x: auto;
+}
+.diagram svg {
+  display: block;
+  min-width: 760px;
+  width: 100%;
+  height: auto;
+}
+
+/* 자주 묻는 질문: details는 눌러서 펼치는 기본 HTML 요소(스크립트 없이 동작) */
+details {
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+summary {
+  padding: 12px 16px;
+  cursor: pointer;
+  font-weight: 600;
+}
+details > div {
+  padding: 0 16px 12px;
+}
+
+/* 휴대폰·좁은 화면: 한 줄로 쌓는다 */
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: 1fr;
+    padding: 20px 16px 60px;
+  }
+  .toc {
+    position: static;
+    max-height: none;
+    padding: 12px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+  }
+  .roles,
+  .step.pair,
+  .step.phone {
+    grid-template-columns: 1fr;
+  }
+  .phone video,
+  .phone figure a {
+    margin: 0 auto;
+  }
+  .hero h1 {
+    font-size: 26px;
+  }
+}

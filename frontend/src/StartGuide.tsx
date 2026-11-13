@@ -90,7 +90,10 @@ export function StartGuide({
       <p className="hint">
         {done === steps.length
           ? '준비가 모두 끝났습니다. 메뉴(휴대폰은 왼쪽 위 ☰)에서 화면을 선택하세요.'
-          : `순서대로 진행하면 고객이 요청을 올릴 수 있습니다. (${done}/${steps.length} 완료)`}
+          : `순서대로 진행하면 고객이 요청을 올릴 수 있습니다. (${done}/${steps.length} 완료)`}{' '}
+        <a href="/manual/#admin" target="_blank" rel="noopener">
+          사진·영상으로 보기
+        </a>
       </p>
       <ol>
         {steps.map(([code, title, desc, ok], i) => (
