@@ -8,3 +8,8 @@ runtime/
 참고/
 *.pptx
 *.dump
+
+# 개인 개발 도구(impeccable 등 에이전트 스킬)는 제품 저장소에 올리지 않는다
+.github/agents/
+.github/hooks/
+.github/skills/
