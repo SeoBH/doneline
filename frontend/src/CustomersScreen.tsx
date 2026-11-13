@@ -255,15 +255,31 @@ export const CustomersScreen = forwardRef<
           />
         </section>
       </div>
-      {customer && kind === 'customers' && (
-        <p>
-          회원가입 링크:{' '}
-          {/* 링크에는 추측하기 쉬운 고객사 코드 대신 서버가 만든 무작위 가입 토큰을 쓴다. */}
-          <a href={'/?signup=' + customer.signup_token} target="_blank" rel="noreferrer">
-            {window.location.origin + '/?signup=' + customer.signup_token}
-          </a>
-        </p>
-      )}
+      {kind === 'customers' &&
+        (customer?.signup_token ? (
+          // 링크에는 추측하기 쉬운 고객사 코드 대신 서버가 만든 무작위 가입 토큰을 쓴다.
+          <div className="link-box">
+            <strong>{customer.name} 고객 가입 링크</strong>
+            <code>{window.location.origin + '/?signup=' + customer.signup_token}</code>
+            <button
+              type="button"
+              onClick={() =>
+                navigator.clipboard
+                  .writeText(window.location.origin + '/?signup=' + customer.signup_token)
+                  .then(() =>
+                    notify('가입 링크를 복사했습니다. 고객 담당자에게 보내주세요.', 'success'),
+                  )
+                  .catch(() => notify('복사하지 못했습니다. 링크를 직접 선택해 복사해주세요.'))
+              }
+            >
+              가입 링크 복사
+            </button>
+          </div>
+        ) : (
+          <p className="hint">
+            저장된 고객사 행을 누르면 고객이 가입할 때 쓰는 링크가 여기에 나타납니다.
+          </p>
+        ))}
     </div>
   );
 });

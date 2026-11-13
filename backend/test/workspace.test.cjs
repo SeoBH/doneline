@@ -185,7 +185,11 @@ test('self-service workspace signup creates an isolated workspace with a ready a
   };
   const agent = request.agent(app.getHttpServer());
   const guest = { agent, csrf: (await agent.get('/api/auth/csrf').expect(200)).body.csrfToken };
-  await post(guest, 'workspaces/signup', { ...body, workspaceCode: 'Bad Code' }).expect(400);
+  // 형식 오류는 어느 칸이 틀렸는지 한국어로 알려 준다(영문 'Bad Request Exception' 금지).
+  const bad = await post(guest, 'workspaces/signup', { ...body, workspaceCode: 'Bad Code' }).expect(
+    400,
+  );
+  assert.match(bad.body.message, /업체 코드/);
   await post(guest, 'workspaces/signup', body).expect(201);
   // 같은 업체 코드, 같은 아이디는 각각 409로 거절한다.
   await post(guest, 'workspaces/signup', { ...body, loginId: prefix + '_self2' }).expect(409);
@@ -203,6 +207,32 @@ test('self-service workspace signup creates an isolated workspace with a ready a
   const options = (await get(admin, 'accounts/options', userMenu).expect(200)).body;
   assert.ok(!options.responsibilities.some((r) => r.code === 'ADMIN'));
   assert.ok(options.responsibilities.some((r) => r.code === 'WORKSPACE_ADMIN'));
+  // 시작하기 현황: 새 업체는 고객사가 없고 직원은 관리자 1명이다.
+  const start = (await admin.agent.get('/api/workspaces/onboarding').expect(200)).body;
+  assert.equal(start.customers, 0);
+  assert.equal(start.staff, 1);
+  // 직원을 등록하면 메일 발송 없이도 전달할 수 있도록 비밀번호 설정 링크를 돌려준다.
+  const engineer = (
+    await admin.agent.get('/api/accounts/options').set('X-Menu-ID', userMenu).expect(200)
+  ).body.responsibilities.find((r) => r.code === 'WORKSPACE_ENGINEER');
+  const created = (
+    await post(
+      admin,
+      'accounts',
+      {
+        customerId: null,
+        loginId: prefix + '_eng',
+        name: '엔지니어',
+        address: '',
+        mobile: '010-0000-0000',
+        email: prefix + '_eng@example.com',
+        respId: engineer.id,
+      },
+      userMenu,
+    ).expect(201)
+  ).body;
+  assert.match(created.link, /#account=PASSWORD:[a-f0-9]{64}$/);
+  assert.equal((await admin.agent.get('/api/workspaces/onboarding').expect(200)).body.staff, 2);
 });
 
 test('feedback goes to the platform inbox only', async () => {

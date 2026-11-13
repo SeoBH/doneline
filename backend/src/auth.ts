@@ -66,7 +66,9 @@ export class AuthService {
     ).rows[0].id;
     const { rows } = workspaceId
       ? await this.db.query(
-          'SELECT u.*,a.account_enabled AS resp_active FROM app.users u JOIN app.account_access a ON a.id=u.id WHERE login_id=$1 AND a.account_enabled AND a.mapping_ready',
+          `SELECT u.*,a.account_enabled AS resp_active,a.authority_type,w.name AS workspace_name,w.is_platform
+           FROM app.users u JOIN app.account_access a ON a.id=u.id JOIN app.workspaces w ON w.id=u.workspace_id
+           WHERE login_id=$1 AND a.account_enabled AND a.mapping_ready`,
           [body.loginId],
           workspaceId,
         )
@@ -100,6 +102,9 @@ export class AuthService {
         id: user.id,
         displayName: user.display_name,
         mustChangePassword: user.must_change_password,
+        workspaceName: user.workspace_name,
+        staff: user.authority_type === 'SYSTEM',
+        platform: user.is_platform,
       },
       csrfToken: req.session.csrf,
     };
@@ -171,6 +176,10 @@ export class AuthController {
         id: req.actor!.id,
         displayName: req.actor!.display_name,
         mustChangePassword: req.actor!.must_change_password,
+        // 헤더 표시(어느 업체에서 작업 중인지)와 화면별 안내 분기에 쓴다.
+        workspaceName: req.actor!.workspace_name,
+        staff: req.actor!.authority_type === 'SYSTEM',
+        platform: req.actor!.is_platform,
       },
       csrfToken: req.session.csrf,
     };

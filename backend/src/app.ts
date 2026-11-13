@@ -23,6 +23,7 @@ import { NavigationController, NavigationService } from './navigation';
 import { Accounts, AccountsController } from './accounts';
 import { Recovery, RecoveryController } from './recovery';
 import { Mail } from './mail';
+import { validationError } from './validation';
 import { Notifier } from './notifier';
 import { Workspaces, WorkspacesController } from './workspaces';
 import { Requests, RequestsController } from './requests';
@@ -124,7 +125,13 @@ export async function createApp() {
   );
   // DTO에 선언되지 않은 입력을 거절하고 검증된 요청만 컨트롤러에 전달한다.
   app.useGlobalPipes(
-    new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+      // 형식 오류를 어느 칸이 틀렸는지 알 수 있는 한국어 문장으로 응답한다(validation.ts).
+      exceptionFactory: validationError,
+    }),
   );
   app.useGlobalFilters(app.get(ErrorFilter));
   app.useStaticAssets(join(__dirname, '../../frontend/dist'));

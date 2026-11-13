@@ -1,22 +1,39 @@
 /** 로그인 전 아이디 찾기·인증 재요청·비밀번호 설정 화면. 메일 링크는 GET으로 소비하지 않고 명시적 제출로만 사용한다. */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from './api';
 import { Notify } from './Toasts';
+import { User } from './types';
 export type RecoveryLink = { purpose: 'VERIFY' | 'PASSWORD'; token: string };
 export function RecoveryScreen({
   code,
   link,
   onBack,
+  onLoggedIn,
   notify,
 }: {
   code: string;
   link: RecoveryLink | null;
   onBack: () => void;
+  // 비밀번호를 정한 직후 자동 로그인에 성공하면 호출한다(main.tsx가 업무 화면으로 전환).
+  onLoggedIn: (user: User) => void;
   notify: Notify;
 }) {
   const [kind, setKind] = useState('PASSWORD'),
     [busy, setBusy] = useState(false),
-    [done, setDone] = useState(false);
+    [done, setDone] = useState(false),
+    // 링크 주인의 이름·업체명. 남의 링크를 받았거나 어느 계정인지 헷갈리지 않게 화면 위에 보여 준다.
+    [owner, setOwner] = useState<{ name: string; workspaceName: string } | null>(null);
+  useEffect(() => {
+    if (!link) return;
+    // 토큰은 주소가 아니라 본문으로 보낸다. 실패(만료 등)하면 안내 없이 두고 제출 때 서버 오류를 보여 준다.
+    api('auth/csrf')
+      .then(() =>
+        api('recovery/info', { method: 'POST', body: JSON.stringify({ token: link.token }) }),
+      )
+      .then(setOwner)
+      .catch((e) => notify((e as Error).message, 'error'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [link?.token]);
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const data = new FormData(e.currentTarget),
@@ -42,6 +59,18 @@ export function RecoveryScreen({
       });
       notify(r.message, 'success');
       setDone(true);
+      // 비밀번호 설정이면 같은 아이디·비밀번호로 바로 로그인한다. 승인·부서 지정 전이라 실패하면 완료 안내만 남긴다.
+      if (link?.purpose === 'PASSWORD' && r.loginId) {
+        try {
+          const login = await api('auth/login', {
+            method: 'POST',
+            body: JSON.stringify({ loginId: r.loginId, password }),
+          });
+          onLoggedIn(login.user);
+        } catch {
+          // 고객사 사용자는 승인·부서 지정이 끝나야 로그인할 수 있다.
+        }
+      }
     } catch (e) {
       notify((e as Error).message, 'error');
     } finally {
@@ -58,10 +87,16 @@ export function RecoveryScreen({
               : '비밀번호 설정'
             : '계정 찾기·비밀번호 재설정'}
         </h1>
+        {owner && !done && (
+          <p className="signup-banner">
+            <strong>{owner.name}</strong>님 계정
+            <span>{owner.workspaceName}</span>
+          </p>
+        )}
         {done ? (
           <p role="status">
             {link
-              ? '처리를 완료했습니다. 로그인 화면으로 돌아가주세요.'
+              ? '처리를 완료했습니다. 승인·소속 부서 지정이 끝나면 로그인할 수 있습니다.'
               : '요청을 처리했습니다. 현재 이메일 실제 발송은 보류되어 있으므로 관리자에게 문의해주세요.'}
           </p>
         ) : (

@@ -15,7 +15,9 @@ export function SignupScreen({
   const [customer, setCustomer] = useState<any>(null),
     [draft, setDraft] = useState(emptyAccount),
     [busy, setBusy] = useState(true),
-    [done, setDone] = useState(false);
+    [done, setDone] = useState(false),
+    // 비밀번호 오타로 가입 후 로그인하지 못하는 일을 막기 위한 확인 입력.
+    [confirm, setConfirm] = useState('');
   useEffect(() => {
     let active = true;
     setBusy(true);
@@ -36,6 +38,10 @@ export function SignupScreen({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (busy || !customer) return;
+    if (draft.password !== confirm) {
+      notify('비밀번호와 비밀번호 확인이 다릅니다.', 'error');
+      return;
+    }
     setBusy(true);
     try {
       await api('auth/csrf');
@@ -57,10 +63,16 @@ export function SignupScreen({
     <main className="signup-page">
       <form className="account-card" onSubmit={submit}>
         <h1>회원가입</h1>
+        {customer?.customerName && (
+          <p className="signup-banner">
+            <strong>{customer.customerName}</strong> 고객 요청 포털
+            <span>{customer.workspaceName}에서 운영합니다.</span>
+          </p>
+        )}
         {done ? (
           <p role="status">
-            가입 신청이 완료되었습니다. 관리자 승인과 법인·부서 매핑이 완료되면 로그인할 수
-            있습니다.
+            가입 신청이 완료되었습니다. {customer?.workspaceName || '업체'} 관리자가 승인하고 소속
+            부서를 지정하면 로그인할 수 있습니다. 급하면 담당 업체에 승인을 요청해주세요.
           </p>
         ) : customer ? (
           <>
@@ -71,7 +83,22 @@ export function SignupScreen({
               signup
               disabled={busy}
             />
-            <button disabled={busy}>가입 신청</button>
+            <label>
+              비밀번호 확인
+              <input
+                type="password"
+                value={confirm}
+                required
+                minLength={15}
+                maxLength={128}
+                autoComplete="new-password"
+                disabled={busy}
+                onChange={(e) => setConfirm(e.target.value)}
+              />
+            </label>
+            <button className="primary" disabled={busy}>
+              가입 신청
+            </button>
           </>
         ) : (
           <p>{busy ? '불러오는 중…' : '가입 링크를 확인해주세요.'}</p>

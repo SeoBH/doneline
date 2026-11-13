@@ -29,6 +29,9 @@ class RequestDto {
   @IsString() @Length(0, 80) loginId!: string;
   @IsEmail() @Length(3, 254) email!: string;
 }
+class InfoDto {
+  @IsString() @Matches(/^[a-f0-9]{64}$/) token!: string;
+}
 class RedeemDto {
   @IsString() @Matches(/^[a-f0-9]{64}$/) token!: string;
   @IsIn(['VERIFY', 'PASSWORD']) purpose!: 'VERIFY' | 'PASSWORD';
@@ -63,8 +66,12 @@ export class Recovery {
     });
     if (denied) throw new HttpException('요청이 많습니다. 잠시 후 다시 시도해주세요.', 429);
   }
-  /** 호출자는 사용자 행을 잠근다. 최신 링크 하나만 유효하며 발급 자체로 기존 비밀번호는 바뀌지 않는다. */
-  async issue(c: PoolClient, user: any, purpose: 'VERIFY' | 'PASSWORD') {
+  /**
+   * 호출자는 사용자 행을 잠근다. 최신 링크 하나만 유효하며 발급 자체로 기존 비밀번호는 바뀌지 않는다.
+   * 링크 원문을 돌려준다. 실제 메일 발송이 연결되기 전까지 관리자가 화면에서 복사해 직접 전달하는 용도다.
+   * hours: 유효 시간. 본인이 요청한 복구 링크는 30분, 관리자가 전달하는 링크는 전달 시간을 고려해 24시간.
+   */
+  async issue(c: PoolClient, user: any, purpose: 'VERIFY' | 'PASSWORD', hours = 0.5) {
     if (!user.email) throw new BadRequestException('사용자정보에 이메일을 먼저 저장해주세요.');
     await c.query('DELETE FROM app.account_tokens WHERE user_id=$1', [user.id]);
     await c.query(
@@ -73,16 +80,17 @@ export class Recovery {
     );
     const token = randomBytes(32).toString('hex');
     await c.query(
-      `INSERT INTO app.account_tokens(token_hash,user_id,purpose,email,expires_at) VALUES($1,$2,$3,$4,now()+interval '30 minutes')`,
-      [digest(token), user.id, purpose, user.email],
+      `INSERT INTO app.account_tokens(token_hash,user_id,purpose,email,expires_at) VALUES($1,$2,$3,$4,now()+make_interval(mins=>$5))`,
+      [digest(token), user.id, purpose, user.email, Math.round(hours * 60)],
     );
     // URL fragment는 HTTP 요청·Referer에 포함되지 않는다. 화면이 읽은 뒤 주소창에서도 제거한다.
     const link = settings.origin + '/#account=' + purpose + ':' + token;
     await this.mail.hold(c, user.id, {
       to: user.email,
       subject: purpose === 'VERIFY' ? '이메일 인증 안내' : '비밀번호 설정 안내',
-      text: `${user.display_name}님, 아래 링크에서 ${purpose === 'VERIFY' ? '이메일을 인증' : '비밀번호를 설정'}해주세요. 링크는 30분 동안 한 번만 사용할 수 있습니다.\n${link}`,
+      text: `${user.display_name}님, 아래 링크에서 ${purpose === 'VERIFY' ? '이메일을 인증' : '비밀번호를 설정'}해주세요. 링크는 ${hours >= 1 ? hours + '시간' : Math.round(hours * 60) + '분'} 동안 한 번만 사용할 수 있습니다.\n${link}`,
     });
+    return link;
   }
   async request(req: AppRequest, body: RequestDto) {
     const email = emailAddress(body.email);
@@ -96,7 +104,7 @@ export class Recovery {
     // 외부 발송 미연결 상태를 숨기지 않는다. 계정 일치 여부와 무관하게 같은 메시지를 반환한다.
     return {
       message:
-        '정보가 일치하면 안내 메일을 발송 보류로 준비합니다. 현재 실제 발송은 연결되지 않았으므로 관리자에게 문의해주세요.',
+        '정보가 일치하면 안내를 준비합니다. 메일 자동 발송은 준비 중이므로, 소속 업체 관리자에게 비밀번호 설정 링크를 요청해주세요.',
     };
   }
   /** 한 워크스페이스 안에서 조건에 맞는 계정에 아이디 안내 또는 일회용 링크를 준비한다. */
@@ -136,7 +144,7 @@ export class Recovery {
     if (!workspaceId)
       throw new BadRequestException('사용할 수 없거나 만료된 링크입니다. 다시 요청해주세요.');
     useWorkspace(workspaceId);
-    await this.db.tx(async (c) => {
+    const loginId: string = await this.db.tx(async (c) => {
       await c.query('SELECT pg_advisory_xact_lock(720260910)');
       const u = (
         await c.query(
@@ -176,13 +184,41 @@ export class Recovery {
         },
         c,
       );
+      return u.login_id;
     });
     return {
       message:
-        body.purpose === 'PASSWORD'
-          ? '비밀번호를 설정했습니다. 로그인해주세요. 승인·매핑 조건은 그대로 적용됩니다.'
-          : '이메일 인증을 완료했습니다.',
+        body.purpose === 'PASSWORD' ? '비밀번호를 설정했습니다.' : '이메일 인증을 완료했습니다.',
+      // 비밀번호를 정한 직후 같은 화면에서 바로 로그인할 수 있도록 아이디를 돌려준다(링크를 가진 본인에게만).
+      loginId: body.purpose === 'PASSWORD' ? loginId : undefined,
     };
+  }
+  /**
+   * 링크 화면 안내용: 누구의, 어느 업체 계정인지 보여 준다. 유효한 토큰을 가진 사람에게만 이름과 업체명만 돌려준다.
+   * 토큰을 소비하지 않는다(메일 검사기의 GET 요청 등으로 링크가 사라지지 않게).
+   */
+  async info(token: string) {
+    if (!/^[a-f0-9]{64}$/.test(token)) throw new BadRequestException('링크를 확인해주세요.');
+    const workspaceId: string | null = (
+      await this.db.query('SELECT app.token_workspace($1) AS id', [digest(token)])
+    ).rows[0].id;
+    if (!workspaceId)
+      throw new BadRequestException(
+        '사용할 수 없거나 만료된 링크입니다. 관리자에게 새 링크를 요청해주세요.',
+      );
+    const row = (
+      await this.db.query(
+        `SELECT u.display_name,w.name AS workspace_name FROM app.account_tokens t JOIN app.users u ON u.id=t.user_id
+         JOIN app.workspaces w ON w.id=u.workspace_id WHERE t.token_hash=$1 AND t.expires_at>now()`,
+        [digest(token)],
+        workspaceId,
+      )
+    ).rows[0];
+    if (!row)
+      throw new BadRequestException(
+        '사용할 수 없거나 만료된 링크입니다. 관리자에게 새 링크를 요청해주세요.',
+      );
+    return { name: row.display_name, workspaceName: row.workspace_name };
   }
 }
 @Controller('api/recovery')
@@ -193,5 +229,9 @@ export class RecoveryController {
   }
   @Post('redeem') @Public() redeem(@Req() req: AppRequest, @Body() body: RedeemDto) {
     return this.recovery.redeem(req, body);
+  }
+  // 토큰은 주소가 아닌 본문으로 받는다(서버 접속 기록에 토큰이 남지 않게).
+  @Post('info') @Public() info(@Body() body: InfoDto) {
+    return this.recovery.info(body.token);
   }
 }

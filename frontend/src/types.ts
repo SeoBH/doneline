@@ -2,7 +2,15 @@
  * 서버 응답과 화면 간 공통 계약. bigint ID는 정밀도 손실을 피하도록 문자열로 다룬다.
  * ScreenHandle은 공통 툴바가 각 화면의 기능을 호출하는 인터페이스다.
  */
-export type User = { id: string; displayName: string; mustChangePassword: boolean };
+// workspaceName·staff·platform: 헤더 업체명 표시와 업체 직원/운영자 전용 안내 분기에 쓴다(로그인·/api/me 응답).
+export type User = {
+  id: string;
+  displayName: string;
+  mustChangePassword: boolean;
+  workspaceName?: string;
+  staff?: boolean;
+  platform?: boolean;
+};
 export type Screen = {
   id: string;
   menu_id: string;

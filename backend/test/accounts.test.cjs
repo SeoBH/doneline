@@ -220,7 +220,10 @@ test('selected catalog rows commit together, stale versions and immutable codes 
 });
 test('signup stores no RESP and rejects injected customer, scopes and RESP', async () => {
   const data = (await get(system, signupPath).expect(200)).body;
-  assert.deepEqual(data, { ok: true });
+  // 가입 화면 안내용으로 고객사·업체 이름을 함께 돌려준다(토큰을 가진 사람에게만).
+  assert.equal(data.ok, true);
+  assert.equal(data.customerName, prefix);
+  assert.ok(data.workspaceName);
   const g = await guest();
   await post(g, signupPath, { ...account('bad'), customerId: foreign.id }).expect(400);
   await post(g, signupPath, { ...account('bad'), scopes: [] }).expect(400);

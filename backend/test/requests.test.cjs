@@ -189,7 +189,14 @@ test('customer confirms a resolved request and closed requests reject changes', 
   let item = (await get(u1, 'requests/portal/' + srId).expect(200)).body.item;
   assert.equal(item.status, 'RESOLVED');
   // 재처리 요청 → 담당자 재처리 → 다시 완료 → 고객 확인 순서.
-  await post(u1, 'requests/portal/' + srId + '/reopen', { version: item.version }).expect(201);
+  // 재처리 요청은 사유가 필수이고, 사유는 처리 이력에 고객 댓글로 남는다.
+  await post(u1, 'requests/portal/' + srId + '/reopen', { version: item.version }).expect(400);
+  await post(u1, 'requests/portal/' + srId + '/reopen', {
+    version: item.version,
+    reason: '아직 인쇄가 안 됩니다.',
+  }).expect(201);
+  const reopened = (await get(engineer, 'requests/desk/' + srId).expect(200)).body;
+  assert.ok(reopened.events.some((e) => e.body === '재처리 요청 사유: 아직 인쇄가 안 됩니다.'));
   version = (await get(engineer, 'requests/desk/' + srId).expect(200)).body.item.version;
   await post(engineer, 'requests/desk/' + srId, { version, status: 'RESOLVED' }).expect(201);
   item = (await get(u1, 'requests/portal/' + srId).expect(200)).body.item;

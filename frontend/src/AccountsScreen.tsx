@@ -33,6 +33,12 @@ export const AccountsScreen = forwardRef<
     [editCustomer, setEditCustomer] = useState('');
   const form = useRef<HTMLFormElement>(null),
     epoch = useRef(0);
+  // 관리자가 직원에게 직접 전달할 비밀번호 설정 링크(메일 자동 발송 전까지 사용). 닫거나 다른 작업 전까지 표시한다.
+  const [issuedLink, setIssuedLink] = useState<{ who: string; link: string } | null>(null);
+  // 한 번에 승인하기 창: 대상 사용자, 지정할 역할, 소속 부서. 승인·역할 저장·부서 지정을 한 번의 확인으로 처리한다.
+  const [quick, setQuick] = useState<GridRow | null>(null),
+    [quickResp, setQuickResp] = useState(''),
+    [quickDepts, setQuickDepts] = useState<string[]>([]);
   const customer = options.customers.find((c: any) => c.id === customerId),
     headers = { 'X-Menu-ID': screen.menu_id };
   const formDirty = Boolean(
@@ -141,7 +147,7 @@ export const AccountsScreen = forwardRef<
     if (editing) return updateAccount();
     if (
       !window.confirm(
-        '승인 없이 사용자를 등록할까요? CUSTOMER 계정은 매핑까지 완료해야 로그인할 수 있습니다.',
+        '사용자를 등록할까요? 등록 후 비밀번호 설정 링크를 직원에게 전달해야 로그인할 수 있습니다.',
       )
     )
       return false;
@@ -159,6 +165,7 @@ export const AccountsScreen = forwardRef<
       });
       setDraft(emptyAccount());
       notify(r.message, 'success');
+      if (r.link) setIssuedLink({ who: profile.name, link: r.link });
       await query();
       return true;
     } catch (e) {
@@ -189,7 +196,7 @@ export const AccountsScreen = forwardRef<
     if (
       !editing ||
       !window.confirm(
-        '저장된 이메일로 비밀번호 설정 메일을 준비할까요? 현재 실제 발송은 보류됩니다.',
+        '비밀번호 설정 링크를 새로 만들까요? 이전에 만든 링크는 사용할 수 없게 됩니다.',
       )
     )
       return;
@@ -201,6 +208,7 @@ export const AccountsScreen = forwardRef<
         body: JSON.stringify({ userId: editing.id, version: editing.version }),
       });
       notify(r.message, 'success');
+      if (r.link) setIssuedLink({ who: editing.display_name, link: r.link });
     } catch (e) {
       notify((e as Error).message, 'error');
     } finally {
@@ -246,8 +254,25 @@ export const AccountsScreen = forwardRef<
       notify('처리할 행을 체크해주세요.');
       return;
     }
+    // 가입 신청 1건 승인은 역할·소속 부서를 함께 고르는 창으로 한 번에 처리한다.
+    if (
+      action === 'approve' &&
+      selected.length === 1 &&
+      selected[0].account_status === 'PENDING' &&
+      selected[0].customer_id
+    ) {
+      const row = selected[0];
+      const defaultResp =
+        row.resp_id ||
+        options.responsibilities.find((r: any) => r.code === 'CUSTOMER_USER')?.id ||
+        '';
+      setQuick(row);
+      setQuickResp(String(defaultResp));
+      setQuickDepts((row.scopes || []).map((x: any) => String(x.department_id)));
+      return;
+    }
     if (action === 'approve' && selected.some((r) => !r.resp_id)) {
-      notify('사용자 수정에서 RESP를 먼저 지정해주세요.');
+      notify('사용자정보에서 역할을 먼저 지정하고 저장해주세요.');
       return;
     }
     const reapprove = action === 'approve' && selected.some((r) => r.account_status !== 'PENDING');
@@ -284,6 +309,77 @@ export const AccountsScreen = forwardRef<
       await query();
     } catch (e) {
       notify((e as Error).message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+  /**
+   * 한 번에 승인: (1) 역할이 바뀌었으면 저장 -> (2) 승인 -> (3) 소속 법인·부서 지정을 차례로 요청한다.
+   * 각 단계는 서버의 기존 검사(권한·버전)를 그대로 거치며, 버전이 바뀌므로 단계마다 최신 행을 다시 읽는다.
+   * 중간에 실패하면 거기서 멈추고 이유를 알린다(끝난 단계는 유지되며 사용자등록 화면에서 이어서 처리할 수 있다).
+   */
+  async function quickApprove() {
+    if (!quick || !customer) return;
+    if (!quickResp || !quickDepts.length) {
+      notify('역할과 소속 부서를 하나 이상 선택해주세요.', 'error');
+      return;
+    }
+    setBusy(true);
+    const latest = async () =>
+      (await api('accounts/' + customerId, { headers })).items.find((r: any) => r.id === quick.id);
+    try {
+      let row: any = quick;
+      if (String(row.resp_id || '') !== quickResp) {
+        await api('accounts/update', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            userId: row.id,
+            version: row.version,
+            name: row.display_name,
+            address: row.address || '',
+            mobile: row.mobile,
+            email: row.email || '',
+            respId: quickResp,
+            customerId: row.customer_id,
+          }),
+        });
+        row = await latest();
+      }
+      await api('accounts/approve', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          customerId,
+          note: '',
+          rows: [{ id: row.id, version: row.version }],
+        }),
+      });
+      row = await latest();
+      // 선택한 부서의 법인도 함께 지정한다(법인마다 부서가 하나 이상 있어야 로그인할 수 있음).
+      const corporationIds = [
+        ...new Set(
+          customer.departments
+            .filter((d: any) => quickDepts.includes(String(d.id)))
+            .map((d: any) => String(d.corporation_id)),
+        ),
+      ];
+      await api('accounts/mapping', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          userId: row.id,
+          version: row.version,
+          corporationIds,
+          departmentIds: quickDepts,
+        }),
+      });
+      notify(quick.display_name + '님을 승인했습니다. 이제 로그인할 수 있습니다.', 'success');
+      setQuick(null);
+      await query();
+    } catch (e) {
+      notify((e as Error).message, 'error');
+      await query();
     } finally {
       setBusy(false);
     }
@@ -408,6 +504,65 @@ export const AccountsScreen = forwardRef<
           법인·부서 매핑
         </button>
       </div>
+      {quick && (
+        <div className="modal-backdrop" onClick={() => !busy && setQuick(null)}>
+          <div
+            className="account-card quick-approve"
+            role="dialog"
+            aria-label="가입 승인"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2>{quick.display_name}님 가입 승인</h2>
+            <p className="hint">역할과 소속 부서를 고르고 승인하면 바로 로그인할 수 있습니다.</p>
+            <label>
+              역할
+              <select value={quickResp} onChange={(e) => setQuickResp(e.target.value)}>
+                {options.responsibilities
+                  .filter((r: any) => r.authority_type === 'CUSTOMER')
+                  .map((r: any) => (
+                    <option key={r.id} value={String(r.id)}>
+                      {r.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <fieldset className="account-fields">
+              <legend>소속 부서 (하나 이상)</legend>
+              {!customer?.departments.length && (
+                <p className="hint">등록된 부서가 없습니다. 부서등록에서 먼저 추가해주세요.</p>
+              )}
+              {(customer?.departments || []).map((d: any) => {
+                const corp = customer.corporations.find((c: any) => c.id === d.corporation_id);
+                const id = String(d.id);
+                return (
+                  <label key={id} className="sr-check">
+                    <input
+                      type="checkbox"
+                      checked={quickDepts.includes(id)}
+                      onChange={(e) =>
+                        setQuickDepts(
+                          e.target.checked
+                            ? [...quickDepts, id]
+                            : quickDepts.filter((x) => x !== id),
+                        )
+                      }
+                    />
+                    {corp?.name} / {d.name}
+                  </label>
+                );
+              })}
+            </fieldset>
+            <div className="lookup-actions">
+              <button type="button" disabled={busy} onClick={() => setQuick(null)}>
+                취소
+              </button>
+              <button type="button" className="primary" disabled={busy} onClick={quickApprove}>
+                승인
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="account-screen">
         <section className="account-list">
           <div className="query-bar">
@@ -420,7 +575,7 @@ export const AccountsScreen = forwardRef<
                 onChange={(e) => chooseCustomer(e.target.value)}
               >
                 <option value="">선택</option>
-                {options.operator && <option value="system">SYSTEM 계정 (고객사 없음)</option>}
+                {options.operator && <option value="system">우리 업체 직원 (고객사 없음)</option>}
                 {options.customers.map((c: any) => (
                   <option key={c.id} value={c.id}>
                     {c.code} · {c.name}
@@ -458,8 +613,7 @@ export const AccountsScreen = forwardRef<
               { field: 'login_id', header: '아이디', width: 140 },
               { field: 'display_name', header: '이름', width: 100 },
               { field: 'account_status', header: '상태', format: (v) => names[v] },
-              { field: 'resp_code', header: 'RESP', width: 170 },
-              { field: 'resp_level', header: 'RESP 레벨' },
+              { field: 'resp_name', header: '역할', width: 150 },
               { field: 'email', header: '이메일', width: 220 },
               {
                 field: 'mapping_ready',
@@ -507,8 +661,29 @@ export const AccountsScreen = forwardRef<
               disabled={busy || !editing || !screen.buttons.SAVE?.allowed || formDirty}
               onClick={passwordLink}
             >
-              비밀번호 재설정 메일 준비
+              비밀번호 설정 링크 만들기
             </button>
+            {/* 메일 자동 발송 전까지: 관리자가 링크를 복사해 메신저 등으로 직접 전달한다. */}
+            {issuedLink && (
+              <div className="link-box" role="status">
+                <strong>{issuedLink.who}님 비밀번호 설정 링크 (24시간 유효)</strong>
+                <code>{issuedLink.link}</code>
+                <button
+                  type="button"
+                  onClick={() =>
+                    navigator.clipboard
+                      .writeText(issuedLink.link)
+                      .then(() => notify('링크를 복사했습니다. 직원에게 전달해주세요.', 'success'))
+                      .catch(() => notify('복사하지 못했습니다. 링크를 직접 선택해 복사해주세요.'))
+                  }
+                >
+                  복사
+                </button>
+                <button type="button" onClick={() => setIssuedLink(null)}>
+                  닫기
+                </button>
+              </div>
+            )}
             {editing && (
               <small>
                 이메일 {editing.email_verified_at ? '인증 완료' : '미인증'} · 비밀번호{' '}
@@ -527,7 +702,7 @@ export const AccountsScreen = forwardRef<
                     setDraft({ ...draft, respId: '' });
                   }}
                 >
-                  {options.operator && <option value="system">SYSTEM 계정 (고객사 없음)</option>}
+                  {options.operator && <option value="system">우리 업체 직원 (고객사 없음)</option>}
                   {options.customers.map((c: any) => (
                     <option key={c.id} value={c.id}>
                       {c.code} · {c.name}
@@ -539,7 +714,7 @@ export const AccountsScreen = forwardRef<
             <p>
               {editing
                 ? '상단 저장으로 기본정보를 변경합니다. 고객사를 변경하면 기존 매핑은 제거됩니다.'
-                : '직접 등록은 별도 승인이 없습니다. CUSTOMER 계정은 두 번째 탭에서 매핑해주세요.'}
+                : '여기서 등록한 사용자는 승인 없이 바로 사용됩니다. 고객사 사용자는 [법인·부서 매핑] 탭에서 소속 부서를 지정해야 로그인할 수 있습니다.'}
             </p>
             <AccountForm
               editing={Boolean(editing)}

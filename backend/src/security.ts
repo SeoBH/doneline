@@ -30,6 +30,7 @@ export interface AppRequest extends Request {
     customer_id: string | null;
     authority_type: 'SYSTEM' | 'CUSTOMER';
     workspace_id: string;
+    workspace_name: string;
     // 운영 워크스페이스 소속 여부. 화면·메뉴·RESP 공통 구성 변경 허용 판단에 사용한다.
     is_platform: boolean;
   };
@@ -63,7 +64,7 @@ export class SecurityGuard implements CanActivate {
     // 이후 이 요청의 모든 DB 작업은 로그인 사용자의 워크스페이스 안에서만 행을 보고 쓴다.
     useWorkspace(req.session.workspaceId);
     const { rows } = await this.db.query(
-      `SELECT u.id,u.resp_id,u.display_name,u.must_change_password,u.customer_id,a.authority_type,u.workspace_id,w.is_platform
+      `SELECT u.id,u.resp_id,u.display_name,u.must_change_password,u.customer_id,a.authority_type,u.workspace_id,w.is_platform,w.name AS workspace_name
        FROM app.users u JOIN app.account_access a ON a.id=u.id JOIN app.workspaces w ON w.id=u.workspace_id
        WHERE u.id=$1 AND a.account_enabled AND a.mapping_ready`,
       [req.session.userId],

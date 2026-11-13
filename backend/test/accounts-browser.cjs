@@ -97,10 +97,11 @@ const path = require('node:path');
     await signup.getByLabel('아이디', { exact: true }).fill(code + '_applicant');
     await signup.getByLabel('이름', { exact: true }).fill('가입 신청자');
     await signup.getByLabel('비밀번호', { exact: true }).fill(password);
+    await signup.getByLabel('비밀번호 확인', { exact: true }).fill(password);
     await signup.getByLabel('휴대전화번호', { exact: true }).fill('010-1111-2222');
     await signup.getByLabel('주소', { exact: true }).fill('서울');
     await signup.getByLabel('이메일', { exact: true }).fill(code + '@example.com');
-    await expect(signup.getByLabel('RESP', { exact: true })).toHaveCount(0);
+    await expect(signup.getByLabel('역할', { exact: true })).toHaveCount(0);
     await signup.getByRole('button', { name: '가입 신청', exact: true }).click();
     await expect(signup.getByRole('status').filter({ hasText: '가입 신청이 완료' })).toBeVisible();
     await page.locator('aside').getByRole('button', { name: '사용자등록', exact: true }).click();
@@ -113,48 +114,42 @@ const path = require('node:path');
     await expect(panel.getByLabel('승인 RESP', { exact: true })).toHaveCount(0);
     await panel.getByText(code + '_applicant', { exact: true }).click();
     await expect(panel.getByLabel('아이디', { exact: true })).toHaveValue(code + '_applicant');
-    await panel
-      .getByLabel('RESP', { exact: true })
-      .selectOption({ label: 'CUSTOMER_MANAGER · 고객사 관리자 (레벨 10)' });
-    const [assigned] = await Promise.all([
-      page.waitForResponse((r) => r.url().endsWith('/accounts/update')),
-      toolbar.getByRole('button', { name: '저장', exact: true }).click(),
-    ]);
-    expect(assigned.status()).toBe(201);
-    await expect(panel.getByLabel('아이디', { exact: true })).toHaveValue(code + '_applicant');
+    // 가입 신청 1건 승인: [승인]을 누르면 역할과 소속 부서를 한 번에 고르는 창이 열린다.
     await panel.getByRole('checkbox', { name: '사용자 목록 행 선택 1', exact: true }).click();
     await toolbar.getByRole('button', { name: '승인', exact: true }).click();
+    const quick = page.getByRole('dialog', { name: '가입 승인' });
+    await expect(quick).toBeVisible();
+    await quick.locator('select').selectOption({ label: '고객사 관리자' });
+    await quick.getByLabel('법인 하나 / 개발', { exact: true }).check();
+    const [mapping] = await Promise.all([
+      page.waitForResponse((r) => r.url().endsWith('/accounts/mapping')),
+      quick.getByRole('button', { name: '승인', exact: true }).click(),
+    ]);
+    expect(mapping.status()).toBe(201);
+    await expect(quick).toHaveCount(0);
     await expect(
       panel
         .locator('.ag-row')
         .filter({ hasText: code + '_applicant' })
         .getByText('승인 완료', { exact: true }),
     ).toBeVisible();
-    // 승인만으로는 로그인되지 않는다. 두 번째 탭에서 법인과 실제 부서를 확정한다.
-    await signup.getByRole('button', { name: '로그인으로 돌아가기', exact: true }).click();
-    await signup.getByLabel('아이디', { exact: true }).fill(code + '_applicant');
-    await signup.getByLabel('비밀번호', { exact: true }).fill(password);
-    await signup.getByRole('button', { name: '로그인', exact: true }).click();
-    await expect(signup.locator('.toast-error')).toContainText('아이디 또는 비밀번호');
+    // 매핑 탭은 저장된 부서를 보여 주고, 체크를 바꿔도 초기화하면 저장된 값으로 돌아간다.
     await page.getByRole('tab', { name: '법인·부서 매핑', exact: true }).click();
     await expect(toolbar.getByRole('button')).toHaveText(['초기화', '조회', '매핑 저장']);
     await panel.getByText(code + '_applicant', { exact: true }).click();
-    await panel.getByRole('checkbox', { name: '법인 매핑 행 선택 1', exact: true }).click();
     await panel
       .getByLabel('법인 매핑', { exact: true })
       .getByText('법인 하나', { exact: true })
       .click();
-    await panel.getByRole('checkbox', { name: '부서 매핑 행 선택 1', exact: true }).click();
-    const [mapping] = await Promise.all([
-      page.waitForResponse((r) => r.url().endsWith('/accounts/mapping')),
-      toolbar.getByRole('button', { name: '매핑 저장', exact: true }).click(),
-    ]);
-    expect(mapping.status()).toBe(201);
     const mappedDept = panel.getByRole('checkbox', { name: '부서 매핑 행 선택 1', exact: true });
     await expect(mappedDept).toBeChecked();
     await mappedDept.click();
     await toolbar.getByRole('button', { name: '초기화', exact: true }).click();
     await expect(mappedDept).toBeChecked();
+    // 승인과 부서 지정이 한 번에 끝났으므로 신청자는 바로 로그인할 수 있다.
+    await signup.getByRole('button', { name: '로그인으로 돌아가기', exact: true }).click();
+    await signup.getByLabel('아이디', { exact: true }).fill(code + '_applicant');
+    await signup.getByLabel('비밀번호', { exact: true }).fill(password);
     await signup.getByRole('button', { name: '로그인', exact: true }).click();
     await expect(signup.getByRole('button', { name: '로그아웃', exact: true })).toBeVisible();
     // 고객사 운영자에게는 고객사등록이 없고 법인/부서등록 및 사용자등록은 제공된다.
@@ -163,8 +158,8 @@ const path = require('node:path');
     ).toHaveCount(0);
     await signup.locator('aside').getByRole('button', { name: '사용자등록', exact: true }).click();
     await expect(signup.getByLabel('고객사', { exact: true })).toBeDisabled();
-    await expect(signup.getByLabel('RESP', { exact: true }).locator('option')).not.toContainText([
-      'ADMIN · 시스템 관리자',
+    await expect(signup.getByLabel('역할', { exact: true }).locator('option')).not.toContainText([
+      '시스템 관리자',
     ]);
     await page.getByRole('tab', { name: '기본정보·승인', exact: true }).click();
     await expect(toolbar.getByRole('button')).toHaveText([
@@ -182,9 +177,7 @@ const path = require('node:path');
     await expect(panel.getByLabel('임시 비밀번호', { exact: false })).toHaveCount(0);
     await panel.getByLabel('이메일', { exact: true }).fill(code + '_direct@example.com');
     await panel.getByLabel('휴대전화번호', { exact: true }).fill('010-3333-4444');
-    await panel
-      .getByLabel('RESP', { exact: true })
-      .selectOption({ label: 'CUSTOMER_MANAGER · 고객사 관리자 (레벨 10)' });
+    await panel.getByLabel('역할', { exact: true }).selectOption({ label: '고객사 관리자' });
     await toolbar.getByRole('button', { name: '저장', exact: true }).click();
     await expect(panel.getByLabel('아이디', { exact: true })).toHaveValue('');
     await expect(panel.getByText(code + '_direct', { exact: true })).toBeVisible();

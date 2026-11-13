@@ -48,6 +48,14 @@ const DESK_TRANSITIONS: Record<string, string[]> = {
   CANCELLED: [],
 };
 const ID = /^\d{1,18}$/;
+// 알림 문구에 쓰는 상태 이름. 고객에게 영문 코드를 보이지 않는다.
+const STATUS_LABEL: Record<string, string> = {
+  OPEN: '접수',
+  IN_PROGRESS: '처리 중',
+  RESOLVED: '확인 대기',
+  CLOSED: '완료',
+  CANCELLED: '취소',
+};
 
 class CreateDto {
   @IsString() @Length(1, 200) title!: string;
@@ -62,6 +70,8 @@ class CommentDto {
 }
 class VersionDto {
   @IsInt() @Min(1) version!: number;
+  // 재처리 요청 사유. 완료 확인에는 쓰지 않고, 재처리 요청에는 필수다(엔지니어가 무엇을 다시 해야 하는지 알 수 있게).
+  @IsOptional() @IsString() @Length(1, 2000) reason?: string;
 }
 class DeskUpdateDto {
   @IsInt() @Min(1) version!: number;
@@ -121,6 +131,21 @@ export class Requests {
       'INSERT INTO app.notifications(user_id,request_id,message) SELECT unnest($1::bigint[]),$2,$3',
       [targets, requestId, message.slice(0, 300)],
     );
+  }
+  /**
+   * 고객 쪽 알림 대상: 요청자 + 그 요청 부서를 담당하는 고객사 관리자(CUSTOMER_MANAGER).
+   * 관리자도 부서 요청의 진행·완료 확인을 챙길 수 있게 한다.
+   */
+  private async customerTargets(c: PoolClient, r: any) {
+    const managers = (
+      await c.query(
+        `SELECT DISTINCT u.id FROM app.users u JOIN app.responsibilities p ON p.id=u.resp_id
+         JOIN app.user_scopes s ON s.user_id=u.id
+         WHERE p.code='CUSTOMER_MANAGER' AND u.is_active AND u.customer_id=$1 AND s.department_id=$2`,
+        [r.customer_id, r.department_id],
+      )
+    ).rows.map((x) => String(x.id));
+    return [String(r.requester_id), ...managers];
   }
   /** 담당자가 있으면 담당자, 없으면 워크스페이스의 활성 SYSTEM 계정 전체(소규모 팀 기준)에게 알린다. */
   private async staffTargets(c: PoolClient, assigneeId: string | null) {
@@ -311,6 +336,8 @@ export class Requests {
         throw new ConflictException('다른 사용자가 먼저 변경했습니다. 다시 조회해주세요.');
       if (r.status !== 'RESOLVED')
         throw new ConflictException('처리 완료된 요청만 확인할 수 있습니다.');
+      const reason = body.reason?.trim();
+      if (!accept && !reason) throw new BadRequestException('재처리가 필요한 이유를 적어주세요.');
       const to = accept ? 'CLOSED' : 'IN_PROGRESS';
       await c.query(
         `UPDATE app.service_requests SET status=$2,updated_at=now(),
@@ -318,6 +345,9 @@ export class Requests {
         [id, to],
       );
       await this.event(c, id, a.id, 'STATUS', { from: r.status, to });
+      // 재처리 사유는 처리 이력에 고객 댓글로 남겨 담당자가 바로 볼 수 있게 한다.
+      if (!accept && reason)
+        await this.event(c, id, a.id, 'COMMENT', { body: '재처리 요청 사유: ' + reason });
       await this.notify(
         c,
         await this.staffTargets(c, r.assignee_id),
@@ -413,7 +443,7 @@ export class Requests {
         toRequester.push(
           status === 'RESOLVED'
             ? '처리가 완료되어 확인을 기다립니다'
-            : `상태가 ${status}(으)로 바뀌었습니다`,
+            : `상태가 '${STATUS_LABEL[status]}'(으)로 바뀌었습니다`,
         );
       }
       if (assignee !== undefined) {
@@ -441,7 +471,7 @@ export class Requests {
       if (toRequester.length)
         await this.notify(
           c,
-          [String(r.requester_id)],
+          await this.customerTargets(c, r),
           a.id,
           id,
           `#${r.request_no} ${toRequester.join(', ')}: ${r.title}`,

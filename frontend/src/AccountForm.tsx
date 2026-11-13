@@ -107,9 +107,9 @@ export function AccountForm({
         </label>
         {!signup && (
           <label>
-            RESP
+            역할
             <select
-              aria-label="RESP"
+              aria-label="역할"
               required
               value={value.respId}
               onChange={(e) => set('respId', e.target.value)}
@@ -117,7 +117,7 @@ export function AccountForm({
               <option value="">선택</option>
               {customer?.responsibilities?.map((r: any) => (
                 <option key={r.id} value={r.id}>
-                  {r.code} · {r.name} (레벨 {r.level})
+                  {r.name}
                 </option>
               ))}
             </select>

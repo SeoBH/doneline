@@ -23,8 +23,14 @@ const emptyForm = { status: '', assigneeId: '', priority: '', comment: '', inter
 
 export const SrDeskScreen = forwardRef<
   ScreenHandle,
-  { screen: Screen; notify: Notify; onState: (s: ViewState) => void }
->(function SrDeskScreen({ screen, notify, onState }, ref) {
+  {
+    screen: Screen;
+    notify: Notify;
+    onState: (s: ViewState) => void;
+    // 알림에서 넘어온 요청 ID. 바뀔 때마다 그 요청을 열어 보여 준다.
+    focus?: { id: string; seq: number } | null;
+  }
+>(function SrDeskScreen({ screen, notify, onState, focus }, ref) {
   const [filters, setFilters] = useState({ status: '', filter: 'all' }),
     [items, setItems] = useState<any[]>([]),
     [assignees, setAssignees] = useState<any[]>([]),
@@ -120,6 +126,10 @@ export const SrDeskScreen = forwardRef<
     notify(r.message, 'success');
     return true;
   }
+  useEffect(() => {
+    if (focus) void pick(focus.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus?.seq]);
   useImperativeHandle(ref, () => ({
     query: () => query(),
     reset: () => {
@@ -296,7 +306,7 @@ export const SrDeskScreen = forwardRef<
             </ol>
           </div>
         ) : (
-          <div className="empty">왼쪽 목록에서 요청을 선택하세요.</div>
+          <div className="empty">목록에서 요청을 선택하세요.</div>
         )}
       </section>
     </div>

@@ -20,8 +20,14 @@ const emptyDraft = {
 
 export const SrPortalScreen = forwardRef<
   ScreenHandle,
-  { screen: Screen; notify: Notify; onState: (s: ViewState) => void }
->(function SrPortalScreen({ screen, notify, onState }, ref) {
+  {
+    screen: Screen;
+    notify: Notify;
+    onState: (s: ViewState) => void;
+    // 알림에서 넘어온 요청 ID. 바뀔 때마다 그 요청을 열어 보여 준다.
+    focus?: { id: string; seq: number } | null;
+  }
+>(function SrPortalScreen({ screen, notify, onState, focus }, ref) {
   const [items, setItems] = useState<any[]>([]),
     [scopes, setScopes] = useState<any[]>([]),
     [selected, setSelected] = useState<string | null>(null),
@@ -117,8 +123,25 @@ export const SrPortalScreen = forwardRef<
     notify(r.message, 'success');
     return true;
   }
+  /** 폼 아래 버튼용 저장. 툴바 저장과 같은 처리를 하고, 오류는 여기서 알린다(툴바는 main.tsx가 알림). */
+  async function submitHere() {
+    setBusy(true);
+    try {
+      await save();
+    } catch (e) {
+      notify((e as Error).message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
   async function decide(accept: boolean) {
     if (!detail || !canConfirm) return;
+    // 재처리 요청은 이유가 있어야 담당자가 무엇을 다시 할지 안다. 아래 댓글 칸에 적은 내용을 사유로 보낸다.
+    if (!accept && !comment.trim()) {
+      notify('재처리가 필요한 이유를 아래 댓글 칸에 적은 뒤 [재처리 요청]을 눌러주세요.', 'error');
+      document.querySelector<HTMLTextAreaElement>('.sr-detail textarea')?.focus();
+      return;
+    }
     const question = accept
       ? '처리 결과를 확인하고 요청을 완료할까요?'
       : '처리 결과가 맞지 않아 다시 처리를 요청할까요?';
@@ -127,7 +150,9 @@ export const SrPortalScreen = forwardRef<
     try {
       const r = await call('/' + selected + (accept ? '/confirm' : '/reopen'), {
         version: detail.item.version,
+        ...(accept ? {} : { reason: comment.trim() }),
       });
+      if (!accept) setComment('');
       await load(selected);
       notify(r.message, 'success');
     } catch (e) {
@@ -136,6 +161,10 @@ export const SrPortalScreen = forwardRef<
       setBusy(false);
     }
   }
+  useEffect(() => {
+    if (focus) void pick(focus.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus?.seq]);
   useImperativeHandle(ref, () => ({
     // 툴바는 탭 상태가 바뀔 때만 다시 그려지므로 작성 모드에 따라 바뀌는 문구 대신 두 경우에 맞는 고정 문구를 쓴다.
     buttonLabels: { SAVE: '등록', ETC1: '완료 확인' },
@@ -159,7 +188,8 @@ export const SrPortalScreen = forwardRef<
     <div className="sr-screen">
       <section className="sr-list">
         <div className="grid-tools">
-          <h2>내 요청</h2>
+          {/* 고객사 관리자는 담당 부서 전체 요청을 보므로 '내 요청' 대신 '요청 목록'으로 부른다. */}
+          <h2>요청 목록</h2>
           {screen.buttons.SAVE?.allowed && (
             <button className="primary" disabled={busy} onClick={startNew}>
               + 새 요청
@@ -180,7 +210,7 @@ export const SrPortalScreen = forwardRef<
             </span>
             <strong>{r.title}</strong>
             <small>
-              {r.department_name} · {dateTime(r.updated_at)}
+              {r.department_name} · {r.requester_name} · {dateTime(r.updated_at)}
             </small>
           </button>
         ))}
@@ -251,7 +281,10 @@ export const SrPortalScreen = forwardRef<
                 onChange={(e) => setDraft({ ...draft, body: e.target.value })}
               />
             </label>
-            <p className="hint">작성 후 상단의 [등록]을 누르세요.</p>
+            {/* 휴대폰에서 내용을 쓴 뒤 화면 맨 위 툴바까지 올라가지 않도록 폼 아래에도 등록 버튼을 둔다. */}
+            <button className="primary" disabled={busy} onClick={() => void submitHere()}>
+              요청 등록
+            </button>
           </div>
         ) : detail ? (
           <div className="account-card">
@@ -297,15 +330,20 @@ export const SrPortalScreen = forwardRef<
             </ol>
             {!['CLOSED', 'CANCELLED'].includes(detail.item.status) &&
               screen.buttons.SAVE?.allowed && (
-                <label>
-                  댓글
-                  <textarea
-                    rows={3}
-                    value={comment}
-                    maxLength={10000}
-                    onChange={(e) => setComment(e.target.value)}
-                  />
-                </label>
+                <>
+                  <label>
+                    댓글
+                    <textarea
+                      rows={3}
+                      value={comment}
+                      maxLength={10000}
+                      onChange={(e) => setComment(e.target.value)}
+                    />
+                  </label>
+                  <button disabled={busy || !comment.trim()} onClick={() => void submitHere()}>
+                    댓글 등록
+                  </button>
+                </>
               )}
           </div>
         ) : (

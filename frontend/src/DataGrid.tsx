@@ -161,6 +161,13 @@ export const DataGrid = forwardRef<
         !col.boolean &&
         !col.lookup &&
         (typeof col.editable === 'function' ? col.editable(p.data!) : Boolean(col.editable)),
+      // 입력할 수 있는 칸을 옅은 바탕과 테두리로 표시한다(두 번 눌러 편집한다는 것을 알아보기 쉽게).
+      cellClassRules: {
+        'cell-editable': (p) =>
+          !col.boolean &&
+          !col.lookup &&
+          (typeof col.editable === 'function' ? col.editable(p.data!) : Boolean(col.editable)),
+      },
       // choices는 자유 입력 대신 선택 목록을 제공한다. RESP 구분의 오타를 줄이되 서버도 재검사한다.
       ...(col.choices
         ? { cellEditor: 'agSelectCellEditor', cellEditorParams: { values: col.choices } }

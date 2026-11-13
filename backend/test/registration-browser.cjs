@@ -86,8 +86,10 @@ const assert = require('node:assert/strict');
     await expect(page.locator('aside')).toBeHidden();
     await splitter.press('Enter');
     await expect(splitter).toHaveAttribute('aria-valuenow', '370');
+    // 휴대폰 폭에서는 사이드 메뉴가 ☰ 버튼으로 여닫는 덮개가 되고 너비 조절 손잡이는 숨긴다.
     await page.setViewportSize({ width: 640, height: 900 });
-    await expect(splitter).toHaveAttribute('aria-valuenow', '360');
+    await expect(page.getByRole('button', { name: '메뉴 열기', exact: true })).toBeVisible();
+    await expect(splitter).toBeHidden();
     await page.setViewportSize({ width: 1700, height: 1050 });
     await expect(splitter).toHaveAttribute('aria-valuenow', '370');
     const resizedBox = await splitter.boundingBox();

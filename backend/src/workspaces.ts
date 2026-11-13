@@ -8,6 +8,8 @@ import {
   Body,
   ConflictException,
   Controller,
+  ForbiddenException,
+  Get,
   HttpException,
   Injectable,
   Post,
@@ -114,15 +116,44 @@ export class Workspaces {
       `🆕 새 업체 가입: ${body.workspaceName.trim()} (${body.workspaceCode}) · 요금제 FREE`,
     );
     return {
-      message:
-        '업체 가입을 완료했습니다. 아이디와 비밀번호로 로그인해주세요. 이메일 인증 메일은 발송 보류입니다.',
+      message: '업체 가입을 완료했습니다.',
     };
+  }
+  /**
+   * 시작하기 체크리스트의 각 단계 완료 여부를 건수로 돌려준다(현재 워크스페이스, RLS 범위).
+   * customerUsers는 승인·부서 지정이 끝나 로그인할 수 있는 고객사 사용자 수다.
+   */
+  async onboarding(req: AppRequest) {
+    if (req.actor!.authority_type !== 'SYSTEM')
+      throw new ForbiddenException('업체 직원만 볼 수 있습니다.');
+    return this.db.tx(async (c) => {
+      const n = async (sql: string) => (await c.query(sql)).rows[0].n as number;
+      return {
+        customers: await n('SELECT count(*)::int n FROM app.customers'),
+        corporations: await n('SELECT count(*)::int n FROM app.corporations'),
+        departments: await n('SELECT count(*)::int n FROM app.departments'),
+        staff: await n(
+          "SELECT count(*)::int n FROM app.users u JOIN app.account_access a ON a.id=u.id WHERE a.authority_type='SYSTEM'",
+        ),
+        customerUsers: await n(
+          "SELECT count(*)::int n FROM app.users u JOIN app.account_access a ON a.id=u.id WHERE a.authority_type='CUSTOMER' AND a.account_enabled AND a.mapping_ready",
+        ),
+        pendingUsers: await n(
+          "SELECT count(*)::int n FROM app.users WHERE account_status='PENDING'",
+        ),
+        requests: await n('SELECT count(*)::int n FROM app.service_requests'),
+      };
+    });
   }
 }
 
 @Controller('api/workspaces')
 export class WorkspacesController {
   constructor(private readonly workspaces: Workspaces) {}
+  // 첫 화면 '시작하기' 안내용 진행 현황. 로그인한 업체 직원만 볼 수 있다(화면 권한 없이 조회).
+  @Get('onboarding') onboarding(@Req() req: AppRequest) {
+    return this.workspaces.onboarding(req);
+  }
   @Post('signup') @Public() signup(@Req() req: AppRequest, @Body() body: WorkspaceSignupDto) {
     return this.workspaces.signup(req, body);
   }

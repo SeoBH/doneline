@@ -18,6 +18,7 @@ import { SlaSettingsScreen } from './SlaSettingsScreen';
 import { SrReportScreen } from './SrReportScreen';
 import { FeedbackButton } from './FeedbackButton';
 import { FeedbackInboxScreen } from './FeedbackInboxScreen';
+import { StartGuide } from './StartGuide';
 import { RecoveryScreen, RecoveryLink } from './RecoveryScreen';
 import { sourceModules, buttonLabel } from './sourceModules';
 import { actions, Nav, Screen, ScreenHandle, Tab, tabKey, User, ViewState } from './types';
@@ -110,6 +111,19 @@ function App() {
   const [signup, setSignup] = useState(false);
   // 업체(워크스페이스) 무료 가입 화면 표시 여부. 링크 없이 로그인 화면에서 바로 연다.
   const [workspaceSignup, setWorkspaceSignup] = useState(false);
+  // 가입 링크의 고객사·업체 이름(로그인 화면 안내용). 토큰이 잘못되었으면 null로 두고 회원가입 화면에서 오류를 보여 준다.
+  const [signupInfo, setSignupInfo] = useState<{
+    customerName: string;
+    workspaceName: string;
+  } | null>(null);
+  useEffect(() => {
+    if (!signupToken) return;
+    api('signup/' + encodeURIComponent(signupToken))
+      .then((r) => setSignupInfo(r))
+      .catch(() => setSignupInfo(null));
+  }, [signupToken]);
+  // 휴대폰 화면에서 사이드 메뉴 펼침 여부.
+  const [menuOpen, setMenuOpen] = useState(false);
   // 링크의 비밀값은 주소창에서 즉시 제거하고 이 화면의 메모리에만 유지한다.
   const [recoveryLink, setRecoveryLink] = useState<RecoveryLink | null>(() => {
     const match = /^#account=(VERIFY|PASSWORD):([a-f0-9]{64})$/.exec(window.location.hash);
@@ -161,6 +175,16 @@ function App() {
           .map((k) => n.screens.find((s) => tabKey(s) === k))
           .filter((s): s is Screen => Boolean(s))
           .map((s) => ({ ...s, path: pathFor(n, s.menu_id) }));
+        // 열 수 있는 화면이 하나뿐이면(예: 고객사 사용자의 '고객 요청') 빈 화면 대신 바로 연다.
+        // 고객사 사용자·관리자는 주 업무인 '고객 요청'을 바로 연다(관리자는 다른 메뉴도 있지만 요청 확인이 우선).
+        const visible = n.screens.filter((s) => !s.hidden);
+        const first =
+          visible.length === 1
+            ? visible[0]
+            : !u.staff
+              ? visible.find((s) => s.code === 'SR_PORTAL')
+              : undefined;
+        if (!opened.length && first) opened.push({ ...first, path: pathFor(n, first.menu_id) });
         setTabs(opened);
         setActive(
           opened.some((s) => tabKey(s) === saved.active)
@@ -271,7 +295,24 @@ function App() {
         : [...old, { ...s, path }],
     );
     setActive(tabKey(s));
+    setMenuOpen(false);
     clear();
+  }
+  // 알림에서 요청을 열 때 대상 요청 ID. seq를 매번 올려 같은 요청을 다시 눌러도 화면이 반응하게 한다.
+  const [focusRequest, setFocusRequest] = useState<{ id: string; seq: number } | null>(null);
+  /** 알림 클릭: 요청 알림은 요청 화면(고객 요청 또는 작업함)을 열고 그 요청을 선택, 가입 알림은 사용자등록을 연다. */
+  function openNotification(n: { request_id?: string | null; message: string }) {
+    const code = n.request_id
+      ? nav.screens.some((s) => s.code === 'SR_DESK')
+        ? 'SR_DESK'
+        : 'SR_PORTAL'
+      : n.message.startsWith('새 가입 신청')
+        ? 'USER_REGISTER'
+        : '';
+    const s = nav.screens.find((x) => x.code === code);
+    if (!s) return;
+    open(s, pathFor(nav, s.menu_id));
+    if (n.request_id) setFocusRequest({ id: String(n.request_id), seq: Date.now() });
   }
   function discard(keys: string[]) {
     setTabs((old) => old.filter((t) => !keys.includes(tabKey(t))));
@@ -290,13 +331,17 @@ function App() {
   // 허용된 버튼만 실행한다. 화면별 동작 재정의가 공통 동작보다 우선한다.
   async function action(code: string) {
     const h = handles.current.get(active);
+    if (!current?.buttons[code]?.allowed || !h) return;
+    // 조건이 맞지 않아 쓸 수 없는 버튼은 아무 반응 없이 무시하지 않고 이유를 알려 준다.
     if (
-      !current?.buttons[code]?.allowed ||
-      !h ||
       states[active]?.disabledActions?.includes(code) ||
       (states[active]?.visibleActions && !states[active].visibleActions!.includes(code))
-    )
+    ) {
+      notify(
+        '지금은 사용할 수 없습니다. 처리할 행을 체크했는지, 선택한 항목의 상태를 확인해주세요.',
+      );
       return;
+    }
     const method =
       h.actions?.[code] ||
       (code === 'RESET'
@@ -329,6 +374,11 @@ function App() {
           code={signupToken}
           link={recoveryLink}
           notify={notify}
+          onLoggedIn={(u) => {
+            setRecoveryLink(null);
+            setRecovering(false);
+            void initialize(u);
+          }}
           onBack={() => {
             setRecoveryLink(null);
             setRecovering(false);
@@ -342,7 +392,14 @@ function App() {
     return (
       <>
         {toasts}
-        <WorkspaceSignupScreen onBack={() => setWorkspaceSignup(false)} notify={notify} />
+        <WorkspaceSignupScreen
+          onBack={() => setWorkspaceSignup(false)}
+          onLoggedIn={(u) => {
+            setWorkspaceSignup(false);
+            void initialize(u);
+          }}
+          notify={notify}
+        />
       </>
     );
   if (!user && signup)
@@ -358,12 +415,21 @@ function App() {
         {toasts}
         <main className="login">
           <form onSubmit={submit}>
-            <small>Doneline · WORKSPACE</small>
+            <small className="brand-line">Doneline</small>
+            {/* 고객사 가입 링크로 들어온 경우: 어느 업체·고객사의 포털인지 먼저 보여 주고 회원가입으로 안내한다. */}
+            {!user && signupInfo && (
+              <div className="signup-banner">
+                <strong>{signupInfo.customerName}</strong> 고객 요청 포털
+                <span>{signupInfo.workspaceName}에서 운영합니다.</span>
+              </div>
+            )}
             <h1>{user ? '비밀번호 변경' : '로그인'}</h1>
             <p>
               {user
                 ? '처음 로그인했습니다. 사용할 비밀번호를 설정해주세요.'
-                : '업무 계정으로 시작하세요.'}
+                : signupInfo
+                  ? '처음이면 아래 [회원가입]으로 신청하세요. 승인 후 로그인할 수 있습니다.'
+                  : '고객 요청 접수부터 처리·월간 리포트까지 한곳에서 관리합니다.'}
             </p>
             {user ? (
               <>
@@ -408,29 +474,33 @@ function App() {
                 </label>
               </>
             )}
-            <button disabled={busy}>{busy ? '처리 중…' : user ? '변경' : '로그인'}</button>
-            {!user && (
-              <button type="button" disabled={busy} onClick={() => setRecovering(true)}>
-                아이디 찾기 / 비밀번호 재설정
-              </button>
-            )}
+            <button className="primary" disabled={busy}>
+              {busy ? '처리 중…' : user ? '변경' : '로그인'}
+            </button>
             {!user && (
               <button
                 type="button"
+                className="link-button login-link"
                 disabled={busy}
-                onClick={() =>
-                  signupToken
-                    ? setSignup(true)
-                    : notify('고객사에서 안내받은 가입 링크로 접속해주세요.')
-                }
+                onClick={() => setRecovering(true)}
               >
+                아이디 찾기 · 비밀번호 재설정
+              </button>
+            )}
+            {/* 회원가입은 고객사 가입 링크로 들어온 사람에게만, 업체 가입은 링크 없이 들어온 사람에게만 보여
+                고객이 실수로 업체를 만들거나 링크 없이 회원가입에서 막히지 않게 한다. */}
+            {!user && signupToken && (
+              <button type="button" disabled={busy} onClick={() => setSignup(true)}>
                 회원가입
               </button>
             )}
-            {!user && (
-              <button type="button" disabled={busy} onClick={() => setWorkspaceSignup(true)}>
-                업체 무료 가입
-              </button>
+            {!user && !signupToken && (
+              <div className="login-cta">
+                <span>유지보수·IT 서비스 업체이신가요?</span>
+                <button type="button" disabled={busy} onClick={() => setWorkspaceSignup(true)}>
+                  무료로 시작하기
+                </button>
+              </div>
             )}
           </form>
         </main>
@@ -438,20 +508,43 @@ function App() {
     );
   return (
     <div
-      className={'workspace' + (sidebar.dragging ? ' sidebar-dragging' : '')}
+      className={
+        'workspace' + (sidebar.dragging ? ' sidebar-dragging' : '') + (menuOpen ? ' menu-open' : '')
+      }
       style={{ gridTemplateColumns: sidebar.width + 'px minmax(0,1fr)' }}
-      onClick={() => context && setContext(null)}
+      onClick={() => {
+        if (context) setContext(null);
+        // 휴대폰에서 메뉴 덮개 바깥(본문)을 누르면 메뉴를 닫는다.
+        if (menuOpen) setMenuOpen(false);
+      }}
     >
       {toasts}
       <header>
+        {/* 휴대폰에서는 사이드 메뉴를 숨기고 이 버튼으로 연다(style.css의 좁은 화면 규칙). */}
+        <button
+          className="menu-toggle"
+          aria-label="메뉴 열기"
+          onClick={(e) => {
+            e.stopPropagation();
+            setMenuOpen(!menuOpen);
+          }}
+        >
+          ☰
+        </button>
         <strong>Doneline</strong>
+        {user.workspaceName && <em className="workspace-name">{user.workspaceName}</em>}
         <span>{user.displayName}</span>
-        <NotificationBell />
+        <NotificationBell onOpen={openNotification} />
         <FeedbackButton page={current?.name} notify={notify} />
-        <button onClick={refreshNavigation}>메뉴 새로고침</button>
+        {/* 메뉴 구성을 바꾸는 운영 관리자에게만 필요하다. */}
+        {user.platform && <button onClick={refreshNavigation}>메뉴 새로고침</button>}
         <button onClick={logout}>로그아웃</button>
       </header>
-      <div className={'sidebar-pane' + (sidebar.collapsed ? ' collapsed' : '')}>
+      <div
+        className={'sidebar-pane' + (sidebar.collapsed ? ' collapsed' : '')}
+        // 메뉴 안을 누른 것은 바깥 클릭으로 보지 않아 폴더를 펼쳐도 메뉴가 닫히지 않게 한다.
+        onClick={(e) => e.stopPropagation()}
+      >
         <aside id="sidebar-menu" hidden={sidebar.collapsed}>
           <small>메뉴</small>
           {nav.rootMenuId && (
@@ -486,8 +579,11 @@ function App() {
               .map((a) => (
                 <button
                   key={a}
-                  disabled={
-                    running || states[active]?.busy || states[active]?.disabledActions?.includes(a)
+                  // 처리 중일 때만 실제로 막는다. 조건이 안 맞는 버튼은 흐리게만 표시하고, 누르면 이유를 알려 준다.
+                  disabled={running || states[active]?.busy}
+                  aria-disabled={states[active]?.disabledActions?.includes(a) || undefined}
+                  className={
+                    states[active]?.disabledActions?.includes(a) ? 'is-disabled' : undefined
                   }
                   onClick={() => action(a)}
                 >
@@ -498,7 +594,16 @@ function App() {
           </div>
         </div>
         <div className="content">
-          {!current && <div className="empty">왼쪽 메뉴에서 화면을 선택해주세요.</div>}
+          {!current && (
+            <StartGuide
+              user={user}
+              canOpen={(code) => nav.screens.some((s) => s.code === code)}
+              onOpen={(code) => {
+                const s = nav.screens.find((x) => x.code === code);
+                if (s) open(s, pathFor(nav, s.menu_id));
+              }}
+            />
+          )}
           {tabs.map((t) => (
             <div key={tabKey(t)} hidden={tabKey(t) !== active}>
               {Object.hasOwn(sourceModules, t.component_key || '') ? (
@@ -542,6 +647,7 @@ function App() {
                   return (
                     <Sr
                       screen={t}
+                      focus={focusRequest}
                       notify={notify}
                       onState={(s) => markState(tabKey(t), s)}
                       ref={(h) => {

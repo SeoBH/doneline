@@ -1036,3 +1036,267 @@ button.primary:hover {
   white-space: normal;
   max-width: 420px;
 }
+
+/* ---------- 사용성 개선(페르소나 테스트 반영) ---------- */
+/* 헤더: 글자가 세로로 쪼개지지 않게 한 줄로 유지하고, 넘치면 이름부터 줄인다 */
+header {
+  gap: 12px;
+  white-space: nowrap;
+  min-width: 0;
+}
+header > * {
+  flex-shrink: 0;
+}
+header span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
+}
+.workspace-name {
+  font-style: normal;
+  font-size: 13px;
+  opacity: 0.8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
+}
+.menu-toggle {
+  display: none;
+  background: transparent;
+  border-color: transparent;
+  color: var(--color-text-inverse);
+  font-size: 18px;
+  padding: 6px 10px;
+}
+.toolbar-actions {
+  flex-wrap: wrap;
+}
+.toolbar-actions button {
+  white-space: nowrap;
+}
+/* 조건이 맞지 않는 툴바 버튼: 흐리게 보이지만 누르면 이유를 알려 준다 */
+.toolbar-actions button.is-disabled {
+  opacity: 0.45;
+}
+
+/* 로그인 화면: 주요 동작 1개(로그인) + 보조 링크 + 대상별 안내 */
+.brand-line {
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--color-primary);
+}
+.login form > button.link-button {
+  width: auto;
+  margin: 10px auto 0;
+  display: block;
+  background: none;
+  color: var(--color-link);
+}
+.login-cta {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--color-border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--color-text-muted);
+}
+.signup-banner {
+  display: block;
+  padding: 12px 14px;
+  margin: 12px 0;
+  border-radius: 8px;
+  background: var(--color-surface-selected);
+  color: var(--color-primary-strong);
+  line-height: 1.6;
+}
+.signup-banner span {
+  display: block;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+/* 시작하기 안내 */
+.start-guide {
+  max-width: 720px;
+  margin: 24px auto;
+  padding: 24px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 10px;
+}
+.start-guide h2 {
+  margin: 0 0 4px;
+}
+.start-guide ol {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0 0;
+}
+.start-guide li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+.start-guide li > div {
+  flex: 1;
+  min-width: 0;
+}
+.start-guide li small {
+  display: block;
+  margin-top: 2px;
+}
+.step-mark {
+  display: grid;
+  place-items: center;
+  flex: 0 0 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--color-surface-subtle);
+  font-weight: 700;
+}
+.start-guide li.done .step-mark {
+  background: var(--color-success-bg);
+  color: var(--color-success-strong);
+}
+.start-guide li.done strong {
+  color: var(--color-text-muted);
+}
+
+/* 그리드에서 입력할 수 있는 칸 표시(두 번 눌러 편집) */
+.registration-grid .cell-editable {
+  background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border-input);
+}
+
+/* 가입 링크 상자 */
+.link-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  margin-top: 12px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  background: var(--color-surface);
+}
+.link-box code {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+/* 휴대폰: 사이드 메뉴는 ☰로 여닫는 덮개, 본문은 화면 전체 폭, 가로 넘침 없음 */
+@media (max-width: 700px) {
+  body {
+    overflow-x: hidden;
+  }
+  .workspace {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: 52px 1fr;
+  }
+  header {
+    padding: 0 8px;
+    gap: 6px;
+  }
+  header strong {
+    letter-spacing: 1px;
+  }
+  .workspace-name {
+    display: none;
+  }
+  .menu-toggle {
+    display: inline-block;
+  }
+  header > button:not(.menu-toggle) {
+    padding: 6px 8px;
+    font-size: 13px;
+  }
+  .sidebar-pane {
+    position: fixed;
+    top: 52px;
+    left: 0;
+    bottom: 0;
+    width: 240px;
+    z-index: 40;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    box-shadow: var(--shadow-popover);
+  }
+  .menu-open .sidebar-pane {
+    transform: translateX(0);
+  }
+  .sidebar-resizer {
+    display: none;
+  }
+  .work {
+    grid-column: 1;
+  }
+  .toolbar {
+    padding: 8px 10px;
+  }
+  .toolbar-actions button {
+    padding: 6px 10px;
+  }
+  .bell-panel {
+    position: fixed;
+    top: 56px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+  }
+  .start-guide {
+    margin: 8px 0;
+    padding: 16px;
+  }
+}
+
+/* 한 번에 승인하기 창(화면 위에 띄우는 대화 상자) */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: var(--color-backdrop);
+}
+.quick-approve {
+  width: min(480px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+}
+.quick-approve select {
+  width: 100%;
+  padding: 8px;
+  margin: 4px 0 12px;
+  border: 1px solid var(--color-border-input);
+  border-radius: 5px;
+  font: inherit;
+  background: var(--color-surface);
+}
+.quick-approve legend {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.bell-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+}

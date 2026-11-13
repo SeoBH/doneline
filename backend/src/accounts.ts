@@ -104,7 +104,7 @@ export class Accounts {
       )
     ).rows[0];
     if (!r || (!systemAllowed && r.authority_type === 'SYSTEM'))
-      throw new BadRequestException('허용된 RESP를 선택해주세요.');
+      throw new BadRequestException('지정할 수 있는 역할을 선택해주세요.');
     return r;
   }
   private async log(
@@ -301,9 +301,15 @@ export class Accounts {
     useWorkspace(t.workspace_id);
     return String(t.customer_id);
   }
+  /** 가입 화면에 보여 줄 고객사·업체 이름. 추측할 수 없는 가입 토큰을 가진 사람에게만 응답한다. */
   async publicOptions(token: string) {
-    await this.signupTarget(token);
-    return { ok: true };
+    const customerId = await this.signupTarget(token);
+    return this.db.tx(async (c) => {
+      const customer = (await c.query('SELECT name FROM app.customers WHERE id=$1', [customerId]))
+        .rows[0];
+      const workspace = (await c.query('SELECT name FROM app.workspaces')).rows[0];
+      return { ok: true, customerName: customer?.name, workspaceName: workspace?.name };
+    });
   }
   async create(req: AppRequest, body: any, signupToken?: string) {
     fields(
@@ -366,7 +372,7 @@ export class Accounts {
       if (resp?.authority_type === 'CUSTOMER' && !customerId)
         throw new BadRequestException('고객사를 선택해주세요.');
       if (resp?.authority_type === 'SYSTEM' && customerId)
-        throw new BadRequestException('SYSTEM 계정은 고객사를 지정하지 않습니다.');
+        throw new BadRequestException('업체 직원 역할은 고객사를 지정하지 않습니다.');
       const user = (
         await c.query(
           `INSERT INTO app.users(login_id,password_hash,display_name,resp_id,is_active,must_change_password,customer_id,address,mobile,account_status,registration_source,reviewed_by,reviewed_at,email)
@@ -396,12 +402,38 @@ export class Accounts {
         },
         c,
       );
-      await this.recovery.issue(c, user, actor ? 'PASSWORD' : 'VERIFY');
-      return {
-        message: actor
-          ? '등록했습니다. 비밀번호 설정 메일은 발송 보류입니다. 비밀번호 설정과 CUSTOMER 매핑 후 로그인할 수 있습니다.'
-          : '가입 신청을 접수했습니다. 이메일 인증 메일은 발송 보류입니다. 승인과 법인·부서 매핑 후 로그인할 수 있습니다.',
-      };
+      // 관리자 등록: 메일 자동 발송 전까지 관리자가 직접 전달하도록 24시간 유효 링크를 돌려준다.
+      const link = await this.recovery.issue(
+        c,
+        user,
+        actor ? 'PASSWORD' : 'VERIFY',
+        actor ? 24 : 0.5,
+      );
+      if (!actor) {
+        // 공개 가입 신청: 업체 직원(SYSTEM)들이 승인할 수 있도록 앱 안 알림을 남긴다.
+        const customer = (await c.query('SELECT name FROM app.customers WHERE id=$1', [customerId]))
+          .rows[0];
+        await c.query(
+          `INSERT INTO app.notifications(user_id,message) SELECT u.id,$1 FROM app.users u JOIN app.account_access a ON a.id=u.id
+           WHERE a.authority_type='SYSTEM' AND a.account_enabled`,
+          [
+            `새 가입 신청: ${name} (${customer?.name || '고객사'}) · 사용자등록에서 승인해주세요`.slice(
+              0,
+              300,
+            ),
+          ],
+        );
+      }
+      return actor
+        ? {
+            message:
+              '등록했습니다. 비밀번호 설정 링크를 직원에게 전달해주세요(24시간 유효). 고객사 사용자는 소속 부서 지정 후 로그인할 수 있습니다.',
+            link,
+          }
+        : {
+            message:
+              '가입 신청을 접수했습니다. 업체 관리자가 승인하고 소속 부서를 지정하면 로그인할 수 있습니다.',
+          };
     });
   }
   /** 기본정보·RESP·고객사 변경. 고객사를 옮기면 이전 매핑을 비워 다른 고객사 권한이 남지 않게 한다. */
@@ -483,7 +515,7 @@ export class Accounts {
       if (u.version !== body.version) throw new ConflictException('다시 조회해주세요.');
       if (['REJECTED', 'SUSPENDED'].includes(u.account_status))
         throw new BadRequestException('반려·정지 계정은 재승인 후 처리해주세요.');
-      await this.recovery.issue(c, u, 'PASSWORD');
+      const link = await this.recovery.issue(c, u, 'PASSWORD', 24);
       const event = await this.audit.write(
         {
           requestId: req.requestId,
@@ -499,7 +531,8 @@ export class Accounts {
       );
       return {
         message:
-          '비밀번호 설정 메일을 발송 보류로 준비했습니다. 기존 비밀번호는 링크 사용 전까지 유지됩니다.',
+          '비밀번호 설정 링크를 만들었습니다. 사용자에게 전달해주세요(24시간 유효). 기존 비밀번호는 링크를 쓰기 전까지 유지됩니다.',
+        link,
       };
     });
   }
@@ -511,7 +544,7 @@ export class Accounts {
       const rows = (
         await c.query(
           `SELECT u.id,u.login_id,u.display_name,u.address,u.mobile,u.customer_id,u.account_status,u.registration_source,u.resp_id,u.version,u.review_note,u.email,u.email_verified_at,(u.password_hash IS NOT NULL) AS password_set,
-        a.authority_type,a.mapping_ready,r.code AS resp_code,r.level AS resp_level,
+        a.authority_type,a.mapping_ready,r.code AS resp_code,r.name AS resp_name,r.level AS resp_level,
         COALESCE((SELECT jsonb_agg(uc.corporation_id::text) FROM app.user_corporations uc WHERE uc.user_id=u.id),'[]') AS corporation_ids,
         COALESCE((SELECT jsonb_agg(jsonb_build_object('corporation_id',s.corporation_id::text,'department_id',s.department_id::text)) FROM app.user_scopes s WHERE s.user_id=u.id),'[]') AS scopes
         FROM app.users u JOIN app.account_access a ON a.id=u.id LEFT JOIN app.responsibilities r ON r.id=u.resp_id
@@ -705,7 +738,7 @@ export class Accounts {
         // 승인은 저장된 RESP만 사용한다. 승인 권한으로 RESP 수정 권한을 우회하지 못하게 한다.
         const respId = u.resp_id;
         if (action === 'approve') {
-          if (!respId) throw new BadRequestException('사용자 수정에서 RESP를 먼저 지정해주세요.');
+          if (!respId) throw new BadRequestException('역할을 먼저 지정해주세요.');
           await this.resp(c, respId);
           if (u.account_status !== 'PENDING' && !note)
             throw new BadRequestException('재승인 사유를 입력해주세요.');
