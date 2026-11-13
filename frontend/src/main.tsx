@@ -2,7 +2,7 @@
  * React 진입점과 업무 창틀. 로그인·메뉴 트리·탭·공통 툴바를 관리한다.
  * 탭은 메뉴와 화면 ID 조합으로 식별하여 메뉴별 권한을 구분한다.
  */
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { api } from './api';
 import { AuditScreen } from './AuditScreen';
@@ -432,8 +432,10 @@ function App() {
                   ? '처음이면 아래 [회원가입]으로 신청하세요. 승인 후 로그인할 수 있습니다.'
                   : '고객 요청 접수부터 처리·월간 리포트까지 한곳에서 관리합니다.'}
             </p>
+            {/* key: 변경 화면과 로그인 화면의 입력칸을 서로 다른 요소로 만든다. key가 없으면 React가 같은 자리의
+                입력칸을 재사용해, 변경 후 로그인 화면의 '아이디' 칸(글자가 보이는 칸)에 방금 입력한 비밀번호가 남는다. */}
             {user ? (
-              <>
+              <Fragment key="change-password">
                 <label>
                   현재 비밀번호
                   <input
@@ -456,9 +458,9 @@ function App() {
                   />
                 </label>
                 <small>15자 이상 입력해주세요.</small>
-              </>
+              </Fragment>
             ) : (
-              <>
+              <Fragment key="login">
                 <label>
                   아이디
                   <input name="loginId" autoComplete="username" required maxLength={80} />
@@ -473,7 +475,7 @@ function App() {
                     maxLength={128}
                   />
                 </label>
-              </>
+              </Fragment>
             )}
             <button className="primary" disabled={busy}>
               {busy ? '처리 중…' : user ? '변경' : '로그인'}

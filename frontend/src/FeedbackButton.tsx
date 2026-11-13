@@ -35,7 +35,12 @@ export function FeedbackButton({ page, notify }: { page?: string; notify: Notify
   }
   return (
     <>
-      <button className="header-link" onClick={() => dialog.current?.showModal()}>
+      <button
+        className="header-link"
+        aria-label="개선 요청"
+        title="개선 요청"
+        onClick={() => dialog.current?.showModal()}
+      >
         <Icon name="message" size={16} />
         <span>개선 요청</span>
       </button>

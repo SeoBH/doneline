@@ -1018,6 +1018,14 @@ button.primary:hover {
 }
 
 /* 개선 요청 창과 수신함 */
+/* 창이 헤더(.header-actions) 안에 그려져 헤더의 줄바꿈 금지(nowrap)·흰 글자를 물려받는다.
+   물려받으면 라벨과 입력칸이 한 줄에 붙고 입력칸이 창 밖으로 밀리므로 기본값으로 되돌린다. */
+.feedback-dialog {
+  white-space: normal;
+  letter-spacing: normal;
+  text-align: left;
+  color: var(--color-text);
+}
 .feedback-dialog form > label {
   display: block;
   margin-top: 8px;
