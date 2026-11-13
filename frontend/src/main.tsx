@@ -19,6 +19,7 @@ import { SrReportScreen } from './SrReportScreen';
 import { FeedbackButton } from './FeedbackButton';
 import { FeedbackInboxScreen } from './FeedbackInboxScreen';
 import { StartGuide } from './StartGuide';
+import { Icon } from './Icon';
 import { RecoveryScreen, RecoveryLink } from './RecoveryScreen';
 import { sourceModules, buttonLabel } from './sourceModules';
 import { actions, Nav, Screen, ScreenHandle, Tab, tabKey, User, ViewState } from './types';
@@ -529,16 +530,22 @@ function App() {
             setMenuOpen(!menuOpen);
           }}
         >
-          ☰
+          <Icon name="menu" />
         </button>
         <strong>Doneline</strong>
         {user.workspaceName && <em className="workspace-name">{user.workspaceName}</em>}
-        <span>{user.displayName}</span>
-        <NotificationBell onOpen={openNotification} />
-        <FeedbackButton page={current?.name} notify={notify} />
-        {/* 메뉴 구성을 바꾸는 운영 관리자에게만 필요하다. */}
-        {user.platform && <button onClick={refreshNavigation}>메뉴 새로고침</button>}
-        <button onClick={logout}>로그아웃</button>
+        {/* 오른쪽 영역: 전역 기능(알림·개선 요청)과 내 계정(이름·로그아웃)만 둔다.
+            메뉴 새로고침은 화면·메뉴 등록 저장 시 자동으로 실행되므로 헤더에서 뺐다. */}
+        <div className="header-actions">
+          <NotificationBell onOpen={openNotification} />
+          <FeedbackButton page={current?.name} notify={notify} />
+          <span className="user-chip" title={user.displayName}>
+            {user.displayName}
+          </span>
+          <button className="icon-button" aria-label="로그아웃" title="로그아웃" onClick={logout}>
+            <Icon name="logout" />
+          </button>
+        </div>
       </header>
       <div
         className={'sidebar-pane' + (sidebar.collapsed ? ' collapsed' : '')}
@@ -579,6 +586,8 @@ function App() {
               .map((a) => (
                 <button
                   key={a}
+                  // 버튼 위계: 저장은 주요 동작(채움), 삭제는 위험 동작(빨간 테두리), 나머지는 보조 동작.
+                  data-kind={a === 'SAVE' ? 'primary' : a === 'DELETE' ? 'danger' : undefined}
                   // 처리 중일 때만 실제로 막는다. 조건이 안 맞는 버튼은 흐리게만 표시하고, 누르면 이유를 알려 준다.
                   disabled={running || states[active]?.busy}
                   aria-disabled={states[active]?.disabledActions?.includes(a) || undefined}

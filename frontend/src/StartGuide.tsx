@@ -35,7 +35,7 @@ export function StartGuide({
       .catch(() => setCounts(null));
   }, [user.staff]);
   if (!user.staff || !counts)
-    return <div className="empty">왼쪽 메뉴에서 화면을 선택해주세요.</div>;
+    return <div className="empty">메뉴(휴대폰은 왼쪽 위 ☰)에서 화면을 선택해주세요.</div>;
   // [화면 코드, 제목, 설명, 완료 여부]. 순서대로 하면 고객이 첫 요청을 올릴 수 있는 상태가 된다.
   const steps: [string, string, string, boolean][] = [
     [
@@ -89,7 +89,7 @@ export function StartGuide({
       <h2>시작하기</h2>
       <p className="hint">
         {done === steps.length
-          ? '준비가 모두 끝났습니다. 왼쪽 메뉴에서 화면을 선택하세요.'
+          ? '준비가 모두 끝났습니다. 메뉴(휴대폰은 왼쪽 위 ☰)에서 화면을 선택하세요.'
           : `순서대로 진행하면 고객이 요청을 올릴 수 있습니다. (${done}/${steps.length} 완료)`}
       </p>
       <ol>

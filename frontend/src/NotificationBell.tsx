@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from './api';
 import { dateTime } from './srLabels';
+import { Icon } from './Icon';
 
 // onOpen: 알림을 누르면 관련 화면(요청 상세·사용자등록)을 여는 함수. main.tsx가 화면 이동을 맡는다.
 export function NotificationBell({ onOpen }: { onOpen: (n: any) => void }) {
@@ -55,7 +56,8 @@ export function NotificationBell({ onOpen }: { onOpen: (n: any) => void }) {
           if (!open) load();
         }}
       >
-        🔔{data.unread > 0 && <span className="bell-count">{data.unread}</span>}
+        <Icon name="bell" />
+        {data.unread > 0 && <span className="bell-count">{data.unread}</span>}
       </button>
       {open && (
         <div className="bell-panel" onClick={(e) => e.stopPropagation()}>

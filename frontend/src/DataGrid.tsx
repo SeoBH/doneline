@@ -10,8 +10,10 @@ ModuleRegistry.registerModules([AllCommunityModule]);
 // 그리드 테마는 한 번만 만든다. 렌더마다 withParams를 호출하면 새 테마 객체로 인식될 수 있다.
 // 색은 style.css의 토큰을 var()로 참조해 화면 테마와 함께 바뀌게 한다.
 const gridTheme = themeQuartz.withParams({
-  headerBackgroundColor: 'var(--color-accent)',
-  headerTextColor: 'var(--color-text-inverse)',
+  headerBackgroundColor: 'var(--color-grid-header)',
+  headerTextColor: 'var(--color-grid-header-text)',
+  headerFontWeight: 600,
+  fontFamily: 'inherit',
   rowHeight: 33,
   headerHeight: 36,
   fontSize: 12,

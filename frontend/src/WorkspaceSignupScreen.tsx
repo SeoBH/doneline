@@ -110,7 +110,7 @@ export function WorkspaceSignupScreen({
                 {hint && <small>{hint}</small>}
               </label>
             ))}
-            <button className="account-wide">{busy ? '처리 중…' : '가입하기'}</button>
+            <button className="account-wide primary">{busy ? '처리 중…' : '가입하기'}</button>
           </fieldset>
         )}
         <button type="button" disabled={busy} onClick={onBack}>

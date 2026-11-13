@@ -6,6 +6,7 @@
 import { useRef, useState } from 'react';
 import { api } from './api';
 import { Notify } from './Toasts';
+import { Icon } from './Icon';
 
 const empty = { kind: 'IMPROVEMENT', title: '', body: '' };
 
@@ -34,7 +35,10 @@ export function FeedbackButton({ page, notify }: { page?: string; notify: Notify
   }
   return (
     <>
-      <button onClick={() => dialog.current?.showModal()}>개선 요청</button>
+      <button className="header-link" onClick={() => dialog.current?.showModal()}>
+        <Icon name="message" size={16} />
+        <span>개선 요청</span>
+      </button>
       <dialog ref={dialog} className="code-lookup feedback-dialog" aria-label="개선 요청">
         <form onSubmit={submit}>
           <h2>개선 요청</h2>

@@ -170,7 +170,9 @@ export function RecoveryScreen({
               </>
             )}
             {link?.purpose === 'VERIFY' && <p>아래 버튼을 눌러 이메일 소유 확인을 완료해주세요.</p>}
-            <button disabled={busy}>{busy ? '처리 중…' : link ? '완료' : '안내 메일 요청'}</button>
+            <button className="primary" disabled={busy}>
+              {busy ? '처리 중…' : link ? '완료' : '안내 메일 요청'}
+            </button>
           </>
         )}
         <button type="button" disabled={busy} onClick={onBack}>
