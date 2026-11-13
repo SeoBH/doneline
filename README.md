@@ -204,6 +204,12 @@ npm.cmd run build
 powershell -ExecutionPolicy Bypass -File scripts/demo.ps1
 ```
 
+설명서의 예시 데이터(한빛IT서비스·서울메디랩, `hanbit_ceo`·`hanbit_park`·`smlab_lee`, 비밀번호는 `backend/manual-capture.cjs`의 `PW`)로 외부 테스트하려면 `-Sample`을 붙입니다. 예시 DB는 `npm run manual`을 실행하면 처음 상태로 다시 만들어집니다.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/demo.ps1 -Sample
+```
+
 처음 실행하면 Tailscale이 Funnel 사용 승인 링크를 보여줄 수 있습니다. 링크를 열어 이 PC(`castanets`)의 Funnel을 허용하면 됩니다. 스크립트는 `NODE_ENV=production`(HTTPS 출처·보안 쿠키), `APP_ORIGIN`(Funnel 주소), `TRUST_PROXY=1`(앞단 프록시 1개)로 서버를 실행합니다. 공개를 완전히 끄려면 아래 명령을 실행합니다.
 
 ```powershell
