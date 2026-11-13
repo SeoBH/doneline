@@ -99,6 +99,28 @@ async function seed() {
           );
         }
       }
+      // 마이그레이션(014~016)이 만든 업무·운영 화면도 운영 관리자 메뉴(ROOT)에 연결한다.
+      // 새 환경에서는 마이그레이션이 seed보다 먼저 실행되어 그때는 ROOT 메뉴가 없으므로 연결이 빠지기 때문이다.
+      // 버튼 허용은 화면에서 사용 중인 버튼과 같게 맞춘다. 이미 연결되어 있으면 아무것도 바꾸지 않는다.
+      for (const [code, sort] of [
+        ['SR_DESK', 1],
+        ['SR_REPORT', 2],
+        ['SLA_SETTINGS', 30],
+        ['FEEDBACK_INBOX', 95],
+      ] as const) {
+        const screen = (await c.query('SELECT id FROM app.screens WHERE code=$1', [code])).rows[0];
+        if (!screen) continue;
+        await c.query(
+          'INSERT INTO app.menu_screens(menu_id,screen_id,sort_order) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
+          [menu, screen.id, sort],
+        );
+        await c.query(
+          `INSERT INTO app.menu_screen_buttons(menu_screen_id,action_code,is_allowed)
+           SELECT ms.id,b.action_code,b.is_used FROM app.menu_screens ms JOIN app.screen_buttons b ON b.screen_id=ms.screen_id
+           WHERE ms.menu_id=$1 AND ms.screen_id=$2 ON CONFLICT DO NOTHING`,
+          [menu, screen.id],
+        );
+      }
 
       const inserted = await c.query(
         "INSERT INTO app.users(login_id,password_hash,display_name,resp_id) VALUES('admin',$1,'관리자',$2) ON CONFLICT(login_id) DO NOTHING RETURNING id",
