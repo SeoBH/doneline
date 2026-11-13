@@ -478,12 +478,12 @@ function App() {
                     name="newPassword"
                     type="password"
                     autoComplete="new-password"
-                    minLength={15}
+                    minLength={8}
                     maxLength={128}
                     required
                   />
                 </label>
-                <small>15자 이상 입력해주세요.</small>
+                <small>8자 이상 입력해주세요.</small>
               </Fragment>
             ) : (
               <Fragment key="login">

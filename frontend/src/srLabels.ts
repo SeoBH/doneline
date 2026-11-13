@@ -9,6 +9,13 @@ export const statusLabel: Record<string, string> = {
   CLOSED: '완료',
   CANCELLED: '취소',
 };
+// 담당자 화면의 상태 선택지 이름. '확인 대기'만 보면 담당자가 무엇을 끝낸 것인지 알기 어려워
+// '처리 완료'라는 동작 이름을 앞에 붙인다. 최종 '완료'는 고객이 [완료 확인]을 눌러야 된다.
+export const deskStatusLabel: Record<string, string> = {
+  OPEN: '접수(대기)',
+  IN_PROGRESS: '처리 중',
+  RESOLVED: '처리 완료 (고객 확인 대기)',
+};
 export const priorityLabel: Record<string, string> = {
   LOW: '낮음',
   NORMAL: '보통',

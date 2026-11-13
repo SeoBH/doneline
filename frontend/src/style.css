@@ -1769,3 +1769,19 @@ dialog.code-lookup {
   line-height: 20px;
   vertical-align: middle;
 }
+
+/* 요청 작업함: 남의 담당 요청 안내와 칸 아래 작은 안내문 */
+.sr-notice {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: var(--color-info-bg);
+  color: var(--color-info-strong);
+  font-size: 13px;
+}
+.field-hint {
+  display: block;
+  margin-top: -6px;
+  font-size: 12px;
+  font-weight: 400;
+}

@@ -148,7 +148,7 @@ export function RecoveryScreen({
                     name="password"
                     type="password"
                     required
-                    minLength={15}
+                    minLength={8}
                     maxLength={128}
                     disabled={busy}
                     autoComplete="new-password"
@@ -160,13 +160,13 @@ export function RecoveryScreen({
                     name="confirm"
                     type="password"
                     required
-                    minLength={15}
+                    minLength={8}
                     maxLength={128}
                     disabled={busy}
                     autoComplete="new-password"
                   />
                 </label>
-                <small>15~128자. 설정을 완료하면 기존 로그인 세션이 종료됩니다.</small>
+                <small>8~128자. 설정을 완료하면 기존 로그인 세션이 종료됩니다.</small>
               </>
             )}
             {link?.purpose === 'VERIFY' && <p>아래 버튼을 눌러 이메일 소유 확인을 완료해주세요.</p>}

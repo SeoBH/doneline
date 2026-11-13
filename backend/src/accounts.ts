@@ -328,10 +328,10 @@ export class Accounts {
       !/^[+0-9() -]{7,30}$/.test(mobile) ||
       (signupToken &&
         (typeof body.password !== 'string' ||
-          body.password.length < 15 ||
+          body.password.length < 8 ||
           body.password.length > 128))
     )
-      throw new BadRequestException('아이디·휴대전화·비밀번호(15~128자)를 확인해주세요.');
+      throw new BadRequestException('아이디·휴대전화·비밀번호(8~128자)를 확인해주세요.');
     if (signupToken) {
       // 공개 가입의 비싼 비밀번호 해시 계산 전에 IP별 요청 수를 제한한다.
       const bucket =
@@ -410,17 +410,21 @@ export class Accounts {
         actor ? 24 : 0.5,
       );
       if (!actor) {
-        // 공개 가입 신청: 업체 직원(SYSTEM)들이 승인할 수 있도록 앱 안 알림을 남긴다.
+        // 공개 가입 신청: 승인할 수 있는 사람에게 앱 안 알림을 남긴다.
+        // 업체 직원(SYSTEM) 전체와, 같은 고객사의 활성 고객사 관리자(CUSTOMER_MANAGER)다. 고객사 관리자도 자기 고객사
+        // 직원을 승인할 수 있으므로, 고객사 직원이 많아져도 승인이 업체에만 몰리지 않게 한다.
         const customer = (await c.query('SELECT name FROM app.customers WHERE id=$1', [customerId]))
           .rows[0];
         await c.query(
           `INSERT INTO app.notifications(user_id,message) SELECT u.id,$1 FROM app.users u JOIN app.account_access a ON a.id=u.id
-           WHERE a.authority_type='SYSTEM' AND a.account_enabled`,
+           JOIN app.responsibilities p ON p.id=u.resp_id
+           WHERE a.account_enabled AND (a.authority_type='SYSTEM' OR (p.code='CUSTOMER_MANAGER' AND u.customer_id=$2))`,
           [
             `새 가입 신청: ${name} (${customer?.name || '고객사'}) · 사용자등록에서 승인해주세요`.slice(
               0,
               300,
             ),
+            customerId,
           ],
         );
       }

@@ -113,6 +113,14 @@ export class Requests {
       throw new ForbiddenException('업체 담당자만 사용할 수 있는 화면입니다.');
     return req.actor!;
   }
+  /**
+   * 요청을 누구에게든 배정·재배정할 수 있는 '업체 관리자'인지. 업체 관리자(WORKSPACE_ADMIN)와 운영 관리자(ADMIN)가 해당한다.
+   * 엔지니어(WORKSPACE_ENGINEER)는 미배정 요청을 자기에게 가져오거나 자기 담당 요청만 처리한다.
+   */
+  private async isManager(c: PoolClient, respId: string) {
+    const r = await c.query('SELECT code FROM app.responsibilities WHERE id=$1', [respId]);
+    return ['WORKSPACE_ADMIN', 'ADMIN'].includes(r.rows[0]?.code);
+  }
   // 고객사 사용자가 볼 수 있는 요청: 같은 고객사이고 요청 부서가 본인 법인·부서 매핑에 포함된 것.
   private readonly scopeSql = `r.customer_id=$1 AND EXISTS(SELECT 1 FROM app.user_scopes s
     WHERE s.user_id=$2 AND s.corporation_id=r.corporation_id AND s.department_id=r.department_id)`;
@@ -381,7 +389,12 @@ export class Requests {
            WHERE x.authority_type='SYSTEM' AND x.account_enabled ORDER BY u.display_name`,
         )
       ).rows;
-      return { items, assignees };
+      // me: 화면이 '내 담당인지·관리자인지'에 따라 변경 칸을 잠그거나 담당자 선택지를 줄이는 데 쓴다(최종 판단은 deskUpdate).
+      return {
+        items,
+        assignees,
+        me: { id: String(a.id), manager: await this.isManager(c, a.resp_id) },
+      };
     });
   }
   async deskDetail(req: AppRequest, id: string) {
@@ -415,12 +428,34 @@ export class Requests {
         );
         if (!ok.rowCount) throw new BadRequestException('담당자로 지정할 수 없는 계정입니다.');
       }
+      let finalAssignee = assignee;
       const priority = body.priority && body.priority !== r.priority ? body.priority : null;
       const comment = body.comment?.trim();
       if (!status && assignee === undefined && !priority && !comment)
         throw new BadRequestException('변경된 내용이 없습니다.');
       if (['CLOSED', 'CANCELLED'].includes(r.status))
         throw new ConflictException('종료된 요청입니다.');
+      // 담당 규칙: 여러 엔지니어가 같은 요청의 상태·담당을 서로 바꾸지 않도록 변경 권한을 담당자에게 모은다.
+      // - 담당자가 있으면: 담당자 본인과 업체 관리자만 상태·담당자·우선순위를 바꾼다(다른 직원은 댓글·내부 메모만).
+      // - 담당자가 없으면: 엔지니어는 자기 자신에게만 배정할 수 있고, 다른 사람 배정·배정 해제는 업체 관리자만 한다.
+      const manager = await this.isManager(c, a.resp_id);
+      const me = String(a.id);
+      const owner = r.assignee_id ? String(r.assignee_id) : null;
+      const changing = Boolean(status || assignee !== undefined || priority);
+      if (changing && !manager) {
+        if (owner && owner !== me)
+          throw new ForbiddenException(
+            '담당자 또는 업체 관리자만 상태·담당자·우선순위를 바꿀 수 있습니다. 댓글과 내부 메모는 남길 수 있습니다.',
+          );
+        if (assignee !== undefined && assignee !== me)
+          throw new ForbiddenException(
+            '다른 사람에게 배정하거나 배정을 해제하는 것은 업체 관리자만 할 수 있습니다.',
+          );
+      }
+      // 처리 시작·처리 완료로 바꾸는데 담당자가 없으면 처리한 사람을 담당자로 정한다(담당 없는 진행 요청이 생기지 않게).
+      const resultingOwner = assignee !== undefined ? assignee : owner;
+      if (status && ['IN_PROGRESS', 'RESOLVED'].includes(status) && !resultingOwner)
+        finalAssignee = me;
       await c.query(
         `UPDATE app.service_requests SET status=coalesce($2,status),
          assignee_id=CASE WHEN $3 THEN $4::bigint ELSE assignee_id END,priority=coalesce($5,priority),updated_at=now(),
@@ -431,8 +466,8 @@ export class Requests {
         [
           id,
           status,
-          assignee !== undefined,
-          assignee,
+          finalAssignee !== undefined,
+          finalAssignee,
           priority,
           Boolean(status || (comment && !body.internal)),
         ],
@@ -446,15 +481,15 @@ export class Requests {
             : `상태가 '${STATUS_LABEL[status]}'(으)로 바뀌었습니다`,
         );
       }
-      if (assignee !== undefined) {
+      if (finalAssignee !== undefined) {
         await this.event(c, id, a.id, 'ASSIGN', {
           from: r.assignee_id ? String(r.assignee_id) : null,
-          to: assignee,
+          to: finalAssignee,
         });
-        if (assignee)
+        if (finalAssignee && finalAssignee !== me)
           await this.notify(
             c,
-            [assignee],
+            [finalAssignee],
             a.id,
             id,
             `#${r.request_no} 담당자로 지정되었습니다: ${r.title}`,

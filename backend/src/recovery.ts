@@ -134,8 +134,8 @@ export class Recovery {
   /** 한 트랜잭션 안에서 만료·용도·현재 이메일을 검사하고 소비한다. 동시 요청 중 하나만 성공한다. */
   async redeem(req: AppRequest, body: RedeemDto) {
     await this.limit(req, 'token:' + digest(body.token));
-    if (body.purpose === 'PASSWORD' && body.password.length < 15)
-      throw new BadRequestException('비밀번호는 15~128자로 입력해주세요.');
+    if (body.purpose === 'PASSWORD' && body.password.length < 8)
+      throw new BadRequestException('비밀번호는 8~128자로 입력해주세요.');
     const hash = body.purpose === 'PASSWORD' ? await argon2.hash(body.password) : null;
     // 토큰 해시로 워크스페이스만 찾고, 이 공개 요청의 이후 DB 작업(감사 기록 포함)을 그 범위로 지정한다.
     const workspaceId: string | null = (

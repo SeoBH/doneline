@@ -89,7 +89,7 @@ export function SignupScreen({
                 type="password"
                 value={confirm}
                 required
-                minLength={15}
+                minLength={8}
                 maxLength={128}
                 autoComplete="new-password"
                 disabled={busy}

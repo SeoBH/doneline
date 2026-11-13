@@ -13,7 +13,7 @@ const { Db } = require('../dist/db');
 const { settings } = require('../dist/config');
 const prefix = 'sr_' + crypto.randomBytes(4).toString('hex');
 const password = 'Request test password 123!';
-let app, db, ws, admin, engineer, u1, u2, platformAdmin, srId, version;
+let app, db, ws, admin, engineer, engineer2, u1, u2, platformAdmin, srId, version;
 
 const post = (who, url, data, menu = who.menu) =>
   who.agent
@@ -80,6 +80,7 @@ before(async () => {
       ).rows[0].id;
     await add('admin', 'WORKSPACE_ADMIN', null);
     await add('engineer', 'WORKSPACE_ENGINEER', null);
+    await add('engineer2', 'WORKSPACE_ENGINEER', null);
     for (const [name, d] of [
       ['u1', d1],
       ['u2', d2],
@@ -101,6 +102,7 @@ before(async () => {
   );
   admin = await login(prefix + '_admin', 'SR_DESK');
   engineer = await login(prefix + '_engineer', 'SR_DESK');
+  engineer2 = await login(prefix + '_engineer2', 'SR_DESK');
   u1 = await login(prefix + '_u1', 'SR_PORTAL');
   u2 = await login(prefix + '_u2', 'SR_PORTAL');
   platformAdmin = await login(prefix + '_platform', 'SR_DESK');
@@ -179,6 +181,61 @@ test('engineer assigns, answers, keeps internal memo private, and versions guard
   assert.ok(!view.events.some((e) => e.internal || e.body === '고객사 방화벽 정책 확인 필요'));
   const n = (await u1.agent.get('/api/notifications').expect(200)).body;
   assert.ok(n.items.some((i) => i.message.includes('답변')));
+});
+
+test('only the assignee or a manager changes an assigned request', async () => {
+  // 위 테스트에서 engineer가 자기에게 배정했다. 다른 엔지니어는 상태·담당을 못 바꾸고 댓글만 남긴다.
+  let v = (await get(engineer2, 'requests/desk/' + srId).expect(200)).body.item.version;
+  await post(engineer2, 'requests/desk/' + srId, { version: v, priority: 'URGENT' }).expect(403);
+  await post(engineer2, 'requests/desk/' + srId, {
+    version: v,
+    assigneeId: String(await user('engineer2')),
+  }).expect(403);
+  await post(engineer2, 'requests/desk/' + srId, {
+    version: v,
+    comment: '참고: 지난달 같은 증상',
+    internal: true,
+  }).expect(201);
+  // 업체 관리자는 다른 사람에게 재배정할 수 있고, 다시 원래 담당자로 돌려놓는다.
+  v = (await get(admin, 'requests/desk/' + srId).expect(200)).body.item.version;
+  await post(admin, 'requests/desk/' + srId, {
+    version: v,
+    assigneeId: String(await user('engineer2')),
+  }).expect(201);
+  v = (await get(admin, 'requests/desk/' + srId).expect(200)).body.item.version;
+  await post(admin, 'requests/desk/' + srId, {
+    version: v,
+    assigneeId: String(await user('engineer')),
+  }).expect(201);
+  const list = (await get(engineer2, 'requests/desk').expect(200)).body;
+  assert.equal(list.me.manager, false);
+  assert.equal((await get(admin, 'requests/desk').expect(200)).body.me.manager, true);
+});
+
+test('starting work on an unassigned request assigns the person who started it', async () => {
+  const scope = (await get(u1, 'requests/portal').expect(200)).body.scopes[0];
+  const created = (
+    await post(u1, 'requests/portal', {
+      title: '프린터 드라이버 설치',
+      body: '새 PC에 설치 부탁드립니다.',
+      category: 'REQUEST',
+      priority: 'LOW',
+      corporationId: String(scope.corporation_id),
+      departmentId: String(scope.department_id),
+    }).expect(201)
+  ).body;
+  const v = (await get(engineer2, 'requests/desk/' + created.id).expect(200)).body.item.version;
+  // 엔지니어는 미배정 요청을 다른 사람에게 배정할 수 없다.
+  await post(engineer2, 'requests/desk/' + created.id, {
+    version: v,
+    assigneeId: String(await user('engineer')),
+  }).expect(403);
+  await post(engineer2, 'requests/desk/' + created.id, {
+    version: v,
+    status: 'IN_PROGRESS',
+  }).expect(201);
+  const item = (await get(engineer2, 'requests/desk/' + created.id).expect(200)).body.item;
+  assert.equal(String(item.assignee_id), String(await user('engineer2')));
 });
 
 test('customer confirms a resolved request and closed requests reject changes', async () => {
@@ -278,11 +335,12 @@ test('monthly report summarizes the current month and exports Excel', async () =
   await get(u1, 'reports/monthly?month=' + month).expect(403);
   const report = (await get(admin, 'reports/monthly?month=' + month).expect(200)).body;
   const row = report.rows.find((x) => x.customer_name === prefix);
-  assert.equal(row.created, 2);
+  // 등록 3건: 확인까지 끝난 1건, 미처리 1건, 담당 규칙 테스트에서 처리 중으로 둔 1건
+  assert.equal(row.created, 3);
   assert.equal(row.resolved, 1);
   assert.equal(row.closed, 1);
   assert.equal(row.resolveRate, 100);
-  assert.equal(row.open_now, 1);
+  assert.equal(row.open_now, 2);
   assert.equal(report.total.created, row.created);
   // 다른 업체의 고객사는 리포트에 나오지 않는다.
   const platformReport = (await get(platformAdmin, 'reports/monthly?month=' + month).expect(200))
@@ -304,6 +362,6 @@ test('monthly report summarizes the current month and exports Excel', async () =
     ['요약', '요청 목록'],
   );
   const list = wb.getWorksheet('요청 목록');
-  assert.equal(list.rowCount, 1 + 2);
+  assert.equal(list.rowCount, 1 + 3);
   assert.equal(list.getRow(2).getCell(5).value, 'VPN 접속 불가');
 });

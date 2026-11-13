@@ -268,7 +268,10 @@ export const AccountsScreen = forwardRef<
         '';
       setQuick(row);
       setQuickResp(String(defaultResp));
-      setQuickDepts((row.scopes || []).map((x: any) => String(x.department_id)));
+      // 이미 지정된 부서가 있으면 그대로, 없고 고객사 부서가 하나뿐이면 그 부서를 미리 체크한다(고를 것이 없는 클릭을 줄임).
+      const saved = (row.scopes || []).map((x: any) => String(x.department_id));
+      const only = customer?.departments.length === 1 ? [String(customer.departments[0].id)] : [];
+      setQuickDepts(saved.length ? saved : only);
       return;
     }
     if (action === 'approve' && selected.some((r) => !r.resp_id)) {

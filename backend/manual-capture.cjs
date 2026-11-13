@@ -433,7 +433,7 @@ const overlayScript = () => {
   ]);
   await click(park2, toolbarBtn(park2, '저장'));
   await park2.waitForTimeout(1000);
-  await field(card, '상태').selectOption({ label: '확인 대기' });
+  await field(card, '상태').selectOption({ label: '처리 완료 (고객 확인 대기)' });
   await type(park2, field(card, '답변 / 메모'), 'HDMI 케이블 교체 후 정상 출력됩니다.');
   await click(park2, toolbarBtn(park2, '저장'));
   await park2.waitForTimeout(1200);

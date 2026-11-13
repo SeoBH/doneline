@@ -16,6 +16,7 @@ import {
   eventText,
   priorityLabel,
   statusLabel,
+  deskStatusLabel,
 } from './srLabels';
 
 // 처리 폼의 초기값. status·assigneeId·priority는 선택한 요청의 현재 값으로 채운다.
@@ -34,6 +35,8 @@ export const SrDeskScreen = forwardRef<
   const [filters, setFilters] = useState({ status: '', filter: 'all' }),
     [items, setItems] = useState<any[]>([]),
     [assignees, setAssignees] = useState<any[]>([]),
+    // 나(로그인한 직원)와 업체 관리자 여부. 서버 deskList가 알려 주며 변경 칸 잠금·담당자 선택지에 쓴다.
+    [me, setMe] = useState<{ id: string; manager: boolean }>({ id: '', manager: false }),
     [selected, setSelected] = useState<string | null>(null),
     [detail, setDetail] = useState<any>(null),
     [form, setForm] = useState(emptyForm),
@@ -78,6 +81,7 @@ export const SrDeskScreen = forwardRef<
     const r = await call('?status=' + f.status + '&filter=' + f.filter);
     setItems(r.items);
     setAssignees(r.assignees);
+    setMe(r.me);
     if (keep) fill(await call('/' + keep));
     else {
       setDetail(null);
@@ -163,6 +167,11 @@ export const SrDeskScreen = forwardRef<
     due: (r.overdue ? '⚠ ' : '') + dateTime(r.due_at),
   }));
   const closed = detail && ['CLOSED', 'CANCELLED'].includes(detail.item.status);
+  // 담당 규칙(서버 requests.ts deskUpdate와 같음): 남의 담당 요청은 관리자가 아니면 상태·담당·우선순위를 바꿀 수 없다.
+  const owner = detail?.item.assignee_id ? String(detail.item.assignee_id) : '';
+  const locked = Boolean(detail && owner && owner !== me.id && !me.manager);
+  // 엔지니어는 미배정 요청을 자기에게만 가져올 수 있으므로 담당자 선택지를 '미배정·나'로 줄인다.
+  const assigneeChoices = me.manager ? assignees : assignees.filter((a) => String(a.id) === me.id);
   return (
     <div className="sr-screen sr-desk">
       <section className="sr-list">
@@ -252,28 +261,43 @@ export const SrDeskScreen = forwardRef<
               {dateTime(detail.item.due_at)}
             </p>
             <p className="sr-body">{detail.item.body}</p>
+            {locked && (
+              <p className="sr-notice">
+                {detail.item.assignee_name}님이 담당하는 요청입니다. 상태·담당자는 담당자나 업체
+                관리자만 바꿀 수 있고, 아래에 댓글·내부 메모는 남길 수 있습니다.
+              </p>
+            )}
             <fieldset className="account-fields field-grid" disabled={busy || closed}>
               <label>
                 상태
                 <select
                   value={form.status}
+                  disabled={locked}
                   onChange={(e) => setForm({ ...form, status: e.target.value })}
                 >
                   {[detail.item.status, ...deskTransitions[detail.item.status]].map((s) => (
                     <option key={s} value={s}>
-                      {statusLabel[s]}
+                      {deskStatusLabel[s] || statusLabel[s]}
                     </option>
                   ))}
                 </select>
+                <small className="field-hint">
+                  완료는 고객이 결과를 확인하면 자동으로 바뀝니다.
+                </small>
               </label>
               <label>
                 담당자
                 <select
                   value={form.assigneeId}
+                  disabled={locked}
                   onChange={(e) => setForm({ ...form, assigneeId: e.target.value })}
                 >
                   <option value="">미배정</option>
-                  {assignees.map((a) => (
+                  {/* 현재 담당자는 선택지가 줄어도 이름이 보이도록 남겨 둔다 */}
+                  {owner && !assigneeChoices.some((a) => String(a.id) === owner) && (
+                    <option value={owner}>{detail.item.assignee_name}</option>
+                  )}
+                  {assigneeChoices.map((a) => (
                     <option key={a.id} value={String(a.id)}>
                       {a.display_name}
                     </option>
@@ -284,6 +308,7 @@ export const SrDeskScreen = forwardRef<
                 우선순위
                 <select
                   value={form.priority}
+                  disabled={locked}
                   onChange={(e) => setForm({ ...form, priority: e.target.value })}
                 >
                   {Object.entries(priorityLabel).map(([k, v]) => (

@@ -26,7 +26,7 @@ const fields: [keyof typeof empty, string, string, string?][] = [
   ['loginId', '아이디', 'text'],
   ['email', '이메일', 'email'],
   ['mobile', '휴대전화', 'tel'],
-  ['password', '비밀번호', 'password', '15~128자'],
+  ['password', '비밀번호', 'password', '8~128자'],
   ['passwordConfirm', '비밀번호 확인', 'password'],
 ];
 // 업체 코드는 영문 소문자·숫자·하이픈만 허용하므로 입력하는 동안 대문자는 소문자로, 공백은 하이픈으로 바꾼다.

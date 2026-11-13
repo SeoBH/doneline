@@ -69,11 +69,11 @@ export function AccountForm({
               value={value.password}
               onChange={(e) => set('password', e.target.value)}
               required
-              minLength={15}
+              minLength={8}
               maxLength={128}
               autoComplete="new-password"
             />
-            <small>15~128자</small>
+            <small>8~128자</small>
           </label>
         )}
         <label>

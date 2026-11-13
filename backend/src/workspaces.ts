@@ -32,7 +32,7 @@ class WorkspaceSignupDto {
   @IsString() @Length(1, 120) name!: string;
   @IsEmail() @Length(3, 254) email!: string;
   @IsString() @Matches(/^[+0-9() -]{7,30}$/) mobile!: string;
-  @IsString() @Length(15, 128) password!: string;
+  @IsString() @Length(8, 128) password!: string;
 }
 
 @Injectable()

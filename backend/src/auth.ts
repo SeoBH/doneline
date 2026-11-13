@@ -27,7 +27,7 @@ class LoginDto {
 }
 class PasswordDto {
   @IsString() @Length(1, 128) currentPassword!: string;
-  @IsString() @Length(15, 128) newPassword!: string;
+  @IsString() @Length(8, 128) newPassword!: string;
 }
 @Injectable()
 export class AuthService {
