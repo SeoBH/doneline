@@ -67,6 +67,12 @@ DB 관리 접속 정보는 Git에서 제외된 `.env.db-admin`에 저장합니�
 
 새 환경에서는 관리자가 앱 로그인 역할과 두 DB를 먼저 준비합니다. `database/create-dev-db.sql`은 psql 전용 개발 DB 생성 보조 파일이며 테스트 DB와 앱 역할은 별도로 준비해야 합니다. 각 DB에 아래 마이그레이션을 번호순으로 적용하고 `database/grant-app.sql`로 권한을 부여합니다. 앱 연결 설정 후 빌드와 seed를 각 DB에 실행해 기본 관리 데이터를 준비합니다. 기존 DB에서는 적용 이력을 확인하고 미적용 단계만 실행합니다.
 
+마이그레이션은 `node backend/migrate.cjs`로 적용합니다. `public.schema_migrations`에 없는 번호만 순서대로 실행하고 마지막에 `grant-app.sql`을 다시 적용합니다. 로컬은 루트 `.env.db-admin`의 관리 계정을, CI·서버는 `PG*` 환경변수를 씁니다. `--dry-run`은 적용할 목록만 보여줍니다. 다른 DB는 `PGDATABASE`를 지정합니다(예: 테스트 DB).
+
+```powershell
+node backend/migrate.cjs --dry-run
+```
+
 | SQL                            | 역할                                                                          |
 | ------------------------------ | ----------------------------------------------------------------------------- |
 | `001_initial.sql`              | 업무·권한·감사 기본 테이블과 메뉴 순환 방지.                                  |
@@ -190,6 +196,10 @@ powershell -ExecutionPolicy Bypass -File scripts/demo.ps1
 
 `deploy/pages/functions/api/[[path]].js`는 나중에 화면을 Cloudflare Pages(`doneline.pages.dev`)에 두고 API만 이 서버로 보내고 싶을 때 쓰는 선택 구성입니다(Pages 환경변수 `BACKEND_ORIGIN`=서버 주소, `TRUST_PROXY`는 경유 프록시 수에 맞춤).
 
+## 자동 검증(GitHub Actions)
+
+`.github/workflows/ci.yml`이 main push와 PR마다 실행됩니다. `test` 작업은 임시 PostgreSQL 18에 앱 계정·테스트 DB를 만들고 `migrate.cjs` → 빌드 → seed → `npm test`를 실행하고, `docker` 작업은 `Dockerfile` 이미지 빌드를 확인합니다. 브라우저 테스트는 Edge가 필요해 로컬에서만 실행합니다. 결과는 GitHub 저장소의 Actions 탭에서 봅니다.
+
 ## 실제 배포(Docker)
 
-`Dockerfile`은 서버와 화면을 한 이미지로 만듭니다(실행 사용자 node, 포트 3100). DB는 관리형 PostgreSQL을 쓰고, 배포 전에 관리 계정으로 `database/001~` 미적용 번호를 순서대로 적용한 뒤 `grant-app.sql`을 실행합니다. 컨테이너 환경변수는 `PGHOST`·`PGPORT`·`PGDATABASE`·`PGUSER`·`PGPASSWORD`·`SESSION_SECRET`(32자 이상)·`APP_ORIGIN`(https)이 필수이고, 로드밸런서 뒤라면 `TRUST_PROXY`(프록시 수)와 `PROXY_ONLY_INGRESS=1`(로드밸런서 경유로만 접속 가능할 때)을 함께 둡니다. 최초 관리자는 `node backend/dist/seed.js`로 만듭니다. 이 PC에는 Docker가 없어 이미지 빌드는 아직 검증하지 않았습니다.
+`Dockerfile`은 서버와 화면을 한 이미지로 만듭니다(실행 사용자 node, 포트 3100). DB는 관리형 PostgreSQL을 쓰고, 배포 전에 관리 계정 환경변수로 `node backend/migrate.cjs`를 실행해 미적용 마이그레이션과 권한을 적용합니다. 컨테이너 환경변수는 `PGHOST`·`PGPORT`·`PGDATABASE`·`PGUSER`·`PGPASSWORD`·`SESSION_SECRET`(32자 이상)·`APP_ORIGIN`(https)이 필수이고, 로드밸런서 뒤라면 `TRUST_PROXY`(프록시 수)와 `PROXY_ONLY_INGRESS=1`(로드밸런서 경유로만 접속 가능할 때)을 함께 둡니다. 최초 관리자는 `node backend/dist/seed.js`로 만듭니다. 이미지 빌드는 CI의 `docker` 작업이 매번 확인합니다.
