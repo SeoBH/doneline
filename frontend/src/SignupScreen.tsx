@@ -72,7 +72,7 @@ export function SignupScreen({
         {done ? (
           <p role="status">
             가입 신청이 완료되었습니다. {customer?.workspaceName || '업체'} 관리자가 승인하고 소속
-            부서를 지정하면 로그인할 수 있습니다. 급하면 담당 업체에 승인을 요청해주세요.
+            부서를 지정하면 로그인할 수 있습니다. 급하면 담당 업체에 승인을 요청해 주세요.
           </p>
         ) : customer ? (
           <>
@@ -101,7 +101,7 @@ export function SignupScreen({
             </button>
           </>
         ) : (
-          <p>{busy ? '불러오는 중…' : '가입 링크를 확인해주세요.'}</p>
+          <p>{busy ? '불러오는 중…' : '가입 링크를 확인해 주세요.'}</p>
         )}
         <button type="button" disabled={busy} onClick={onBack}>
           로그인으로 돌아가기

@@ -23,7 +23,7 @@ export function RecoveryScreen({
     [done, setDone] = useState(false),
     // 링크 주인의 이름·업체명. 남의 링크를 받았거나 어느 계정인지 헷갈리지 않게 화면 위에 보여 준다.
     [owner, setOwner] = useState<{ name: string; workspaceName: string } | null>(null),
-    // 서버의 메일 발송 설정 여부(auth/csrf 응답). 켜져 있으면 '메일을 확인해주세요', 꺼져 있으면 '관리자에게 문의' 안내를 보인다.
+    // 서버의 메일 발송 설정 여부(auth/csrf 응답). 켜져 있으면 '메일을 확인해 주세요', 꺼져 있으면 '관리자에게 문의' 안내를 보인다.
     [mailEnabled, setMailEnabled] = useState(false);
   useEffect(() => {
     if (link) return;
@@ -106,8 +106,8 @@ export function RecoveryScreen({
             {link
               ? '처리를 완료했습니다. 승인·소속 부서 지정이 끝나면 로그인할 수 있습니다.'
               : mailEnabled
-                ? '요청을 처리했습니다. 입력한 정보와 일치하는 계정이 있으면 안내 메일을 보냅니다. 받은편지함과 스팸함을 확인해주세요.'
-                : '요청을 처리했습니다. 현재 이메일 실제 발송은 보류되어 있으므로 관리자에게 문의해주세요.'}
+                ? '요청을 처리했습니다. 입력한 정보와 일치하는 계정이 있으면 안내 메일을 보냅니다. 받은편지함과 스팸함을 확인해 주세요.'
+                : '요청을 처리했습니다. 메일을 받지 못하면 소속 업체(또는 고객사) 관리자에게 비밀번호 설정 링크를 요청해 주세요.'}
           </p>
         ) : (
           <>
@@ -115,9 +115,8 @@ export function RecoveryScreen({
               <>
                 <p>
                   {mailEnabled
-                    ? '인증된 이메일로 계정을 찾아 안내 메일을 보냅니다.'
-                    : '현재 이메일 실제 발송은 연결되지 않았습니다. 인증된 이메일로 계정을 찾으며,'}{' '}
-                  연락처를 사용할 수 없으면 관리자에게 문의해주세요.
+                    ? '인증된 이메일로 계정을 찾아 안내 메일을 보냅니다. 메일을 받을 수 없으면 소속 업체(또는 고객사) 관리자에게 비밀번호 설정 링크를 요청해 주세요.'
+                    : '메일을 받을 수 없으면 소속 업체(또는 고객사) 관리자에게 비밀번호 설정 링크를 요청해 주세요. 관리자는 사용자등록 화면에서 바로 만들어 줄 수 있습니다.'}
                 </p>
                 <label>
                   요청 종류
@@ -181,7 +180,9 @@ export function RecoveryScreen({
                 <small>8~128자. 설정을 완료하면 기존 로그인 세션이 종료됩니다.</small>
               </>
             )}
-            {link?.purpose === 'VERIFY' && <p>아래 버튼을 눌러 이메일 소유 확인을 완료해주세요.</p>}
+            {link?.purpose === 'VERIFY' && (
+              <p>아래 버튼을 눌러 이메일 소유 확인을 완료해 주세요.</p>
+            )}
             <button className="primary" disabled={busy}>
               {busy ? '처리 중…' : link ? '완료' : '안내 메일 요청'}
             </button>

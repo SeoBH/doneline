@@ -91,9 +91,9 @@ export const RegistrationScreen = forwardRef<ScreenHandle, Props>(function Regis
     setMFilter(['', '']);
     setSFilter(['', '']);
   }
-  function reset() {
+  async function reset() {
     // ?.는 그리드가 연결되어 있을 때만 호출한다. 입력 중인 셀을 확정한 뒤 목록을 비운다.
-    leftGrid.current?.stop();
+    await leftGrid.current?.stop();
     updateRows([]);
     setCode('');
     setName('');
@@ -101,7 +101,7 @@ export const RegistrationScreen = forwardRef<ScreenHandle, Props>(function Regis
     clearRight();
   }
   async function query() {
-    leftGrid.current?.stop();
+    await leftGrid.current?.stop();
     setBusy(true);
     clearRight();
     setSelected('');
@@ -129,7 +129,7 @@ export const RegistrationScreen = forwardRef<ScreenHandle, Props>(function Regis
       if (row) await pick(row);
     } catch (e) {
       notify(
-        '변경은 완료됐지만 재조회하지 못했습니다. 조회 버튼으로 확인해주세요. ' + errorMessage(e),
+        '변경은 완료됐지만 재조회하지 못했습니다. 조회 버튼으로 확인해 주세요. ' + errorMessage(e),
         'error',
       );
     }
@@ -159,8 +159,8 @@ export const RegistrationScreen = forwardRef<ScreenHandle, Props>(function Regis
       if (ticket === epoch.current) notify(errorMessage(e), 'error');
     }
   }
-  function addRow() {
-    leftGrid.current?.stop();
+  async function addRow() {
+    await leftGrid.current?.stop();
     updateRows([
       ...rowRef.current,
       {
@@ -173,8 +173,8 @@ export const RegistrationScreen = forwardRef<ScreenHandle, Props>(function Regis
       },
     ]);
   }
-  function dropNew() {
-    leftGrid.current?.stop();
+  async function dropNew() {
+    await leftGrid.current?.stop();
     const removing = rowRef.current.filter((r) => !r.id && r._checked);
     updateRows(rowRef.current.filter((r) => r.id || !r._checked));
     if (removing.some((r) => r._key === selected)) {
@@ -184,10 +184,10 @@ export const RegistrationScreen = forwardRef<ScreenHandle, Props>(function Regis
   }
   // 편집을 확정한 뒤 체크 행을 전송한다. clientKey로 응답·오류를 원래 UI 행과 연결한다.
   async function batch(remove = false) {
-    leftGrid.current?.stop();
+    await leftGrid.current?.stop();
     const chosen = rowRef.current.filter((r) => r._checked);
     if (!chosen.length) {
-      notify('첫 열에서 처리할 행을 체크해주세요.');
+      notify('첫 열에서 처리할 행을 체크해 주세요.');
       return false;
     }
     if (!window.confirm(chosen.length + '개 행을 ' + (remove ? '삭제' : '저장') + '할까요?'))
@@ -313,7 +313,7 @@ export const RegistrationScreen = forwardRef<ScreenHandle, Props>(function Regis
     }
   }
   // 후보를 로컬 구성에 추가한다. 실제 DB 변경은 적용 버튼을 누를 때 수행한다.
-  function addLinks(type: 'M' | 'F') {
+  async function addLinks(type: 'M' | 'F') {
     const from =
         type === 'M' ? candidates(menus, mFilter, type) : candidates(screens, sFilter, type),
       picked = from.filter((r) => r._checked);
@@ -347,7 +347,7 @@ export const RegistrationScreen = forwardRef<ScreenHandle, Props>(function Regis
     }
   }
   // 선택한 연결과 이웃 행을 교환한다. 서버가 배열 순서를 sort_order로 저장한다.
-  function move(direction: number) {
+  async function move(direction: number) {
     const i = links.findIndex((r) => r._key === linkActive),
       j = i + direction;
     if (i < 0 || j < 0 || j >= links.length) return;
@@ -357,10 +357,10 @@ export const RegistrationScreen = forwardRef<ScreenHandle, Props>(function Regis
   }
   // 전체 구성 또는 RESP 시작 메뉴를 부모 버전과 함께 전송하고 새 버전을 왼쪽 목록에도 반영한다.
   async function apply() {
-    rightGrid.current?.stop();
+    await rightGrid.current?.stop();
     if (!parent || kind === 'screens') return;
     if (kind === 'responsibilities' && !chosenMenu) {
-      notify('연결할 메뉴를 선택해주세요.');
+      notify('연결할 메뉴를 선택해 주세요.');
       return;
     }
     if (

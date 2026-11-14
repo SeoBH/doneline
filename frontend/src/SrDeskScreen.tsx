@@ -4,7 +4,7 @@
  * 서버: backend/src/requests.ts(desk). 저장 시 version을 보내 다른 담당자와 동시에 바꾼 경우 충돌로 거절된다.
  * 저장 성공 후 현재 필터로 다시 조회하고, 실패하면 입력을 유지한다.
  */
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { Attachments } from './Attachments';
 import { ImageText, PastePreview, usePastedImages } from './PastedImages';
 import { api } from './api';
@@ -95,7 +95,7 @@ export const SrDeskScreen = forwardRef<
   }
   async function save() {
     if (!detail || !original) {
-      notify('처리할 요청을 선택해주세요.');
+      notify('처리할 요청을 선택해 주세요.');
       return false;
     }
     if (!dirty) {
@@ -140,7 +140,7 @@ export const SrDeskScreen = forwardRef<
     if ((action === 'REVERT' || action === 'CANCEL') && !reason) {
       notify(
         (action === 'REVERT' ? '되돌리는' : '취소하는') +
-          ' 사유를 답변/메모 칸에 적은 뒤 다시 눌러주세요.',
+          ' 사유를 답변/메모 칸에 적은 뒤 다시 눌러 주세요.',
         'error',
       );
       return;
@@ -202,6 +202,35 @@ export const SrDeskScreen = forwardRef<
   }));
   useEffect(() => {
     void load(null).catch((e) => notify((e as Error).message, 'error'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // 현재 필터를 ref에도 둔다. 주기 새로고침(setInterval)은 처음 만든 함수를 계속 쓰므로 최신 필터를 ref로 읽는다.
+  const filterRef = useRef(filters);
+  filterRef.current = filters;
+  const refreshing = useRef(false);
+  /** 목록만 조용히 새로 읽는다. 열어 둔 상세와 입력 중인 답변은 건드리지 않는다(실패는 다음 주기에 재시도). */
+  async function refreshList() {
+    if (refreshing.current) return;
+    refreshing.current = true;
+    try {
+      const f = filterRef.current;
+      const r = await call('?status=' + f.status + '&filter=' + f.filter);
+      setItems(r.items);
+    } catch {
+      // 다음 주기에 다시 시도한다.
+    } finally {
+      refreshing.current = false;
+    }
+  }
+  // 새 요청이 들어오면 [조회]를 누르지 않아도 1분 안에, 또는 창으로 돌아올 때 목록에 나타나게 한다.
+  useEffect(() => {
+    const timer = window.setInterval(() => void refreshList(), 60000);
+    const onFocus = () => void refreshList();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const rows = items.map((r) => ({
@@ -292,7 +321,7 @@ export const SrDeskScreen = forwardRef<
               field: 'priorityText',
               header: '우선순위',
               width: 100,
-              // 점 색으로 긴급도를 먼저 보이게 하고 글자도 함께 둔다(색만으로 구분하지 않기 위해).
+              // 점 색으로 우선순위를 먼저 보이게 하고 글자도 함께 둔다(색만으로 구분하지 않기 위해).
               render: (r) => (
                 <span className={'priority-dot priority-' + r.priority}>{r.priorityText}</span>
               ),
@@ -441,7 +470,7 @@ export const SrDeskScreen = forwardRef<
                   rows={3}
                   value={form.comment}
                   maxLength={10000}
-                  placeholder="되돌리기·요청 취소 때는 이 칸에 사유를 적어주세요. 화면 캡처는 바로 붙여 넣을 수 있습니다(Ctrl+V)."
+                  placeholder="되돌리기·요청 취소 때는 이 칸에 사유를 적어 주세요. 화면 캡처는 바로 붙여 넣을 수 있습니다(Ctrl+V)."
                   onChange={(e) => setForm({ ...form, comment: e.target.value })}
                   onPaste={memoImgs.onPaste}
                   onDrop={memoImgs.onDrop}
@@ -514,7 +543,12 @@ export const SrDeskScreen = forwardRef<
             </ol>
           </div>
         ) : (
-          <div className="empty">목록에서 요청을 선택하세요.</div>
+          // 목록이 비었을 때는 같은 '없음' 문구를 두 번 보여 주지 않고, 끝난 요청을 찾는 방법을 알려 준다(QA DL-022).
+          <div className="empty">
+            {items.length
+              ? '목록에서 요청을 선택하세요.'
+              : '지금 조건에 맞는 요청이 없습니다. 처리가 끝난 요청은 위의 상태에서 [완료]나 [확인 대기]를 고르면 볼 수 있습니다.'}
+          </div>
         )}
       </section>
     </div>

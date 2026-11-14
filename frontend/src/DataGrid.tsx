@@ -23,7 +23,9 @@ const gridTheme = themeQuartz.withParams({
 export type GridRow = Record<string, any> & { _key: string; _checked?: boolean; _error?: string };
 // Record는 이름으로 값을 찾는 객체 타입, &는 타입 결합, 속성 뒤 ?는 생략 가능을 뜻한다.
 // 업무 컬럼은 화면마다 다르지만 모든 행에는 UI 식별자인 _key가 있어야 한다.
-export type GridHandle = { stop: () => void };
+// stop: 편집 중인 셀을 확정한다. 그리드는 편집 결과를 '다음 순간'에 알려 주므로(비동기 이벤트),
+// 돌려주는 Promise를 기다린 뒤에 행 데이터를 읽어야 마지막 입력이 빠지지 않는다(QA DL-003).
+export type GridHandle = { stop: () => Promise<void> };
 export type Column = {
   field: string;
   header: string;
@@ -142,7 +144,13 @@ export const DataGrid = forwardRef<
     onChange?.(next);
   }
   // 부모가 저장 직전에 편집 중인 셀을 확정할 수 있도록 stop만 공개한다.
-  useImperativeHandle(ref, () => ({ stop: () => grid.current?.api?.stopEditing() }));
+  useImperativeHandle(ref, () => ({
+    stop: () => {
+      grid.current?.api?.stopEditing();
+      // setTimeout 0: 그리드가 대기열에 넣은 편집 이벤트(onCellEditRequest)가 먼저 처리된 뒤에 이어 가게 한다.
+      return new Promise<void>((resolve) => setTimeout(resolve, 0));
+    },
+  }));
   // 행추가로 생긴 저장 전 행(id 없음)이 목록 아래쪽 화면 밖에 붙으면 사용자는 추가된 줄 모른다.
   // 처음 보는 신규 행을 기억해 두었다가, 그리드가 새 데이터를 반영한 직후(onRowDataUpdated) 그 행으로 스크롤한다.
   // 자식인 AgGridReact가 부모 effect보다 먼저 데이터를 반영할 수 있어 effect가 아닌 렌더 단계(useMemo)에서 계산한다.

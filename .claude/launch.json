@@ -30,6 +30,22 @@
         "SMTP_HOST": "",
         "NODE_USE_SYSTEM_CA": "1"
       }
+    },
+    {
+      "name": "app-walkthrough",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "backend/dist/main.js"
+      ],
+      "port": 3104,
+      "env": {
+        "PORT": "3104",
+        "APP_ORIGIN": "http://127.0.0.1:3104",
+        "PGDATABASE": "doneline_test",
+        "SLACK_WEBHOOK_URL": "",
+        "SMTP_HOST": "",
+        "NODE_USE_SYSTEM_CA": "1"
+      }
     }
   ]
 }

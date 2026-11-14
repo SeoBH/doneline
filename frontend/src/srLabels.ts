@@ -21,7 +21,14 @@ export const categoryLabel: Record<string, string> = {
   QUESTION: '문의',
 };
 export const dateTime = (v: string) =>
-  new Date(v).toLocaleString('ko-KR', { dateStyle: 'short', timeStyle: 'short' });
+  // 연도를 네 자리로 보여 준다(예: 2026. 11. 15. 오후 5:58). 두 자리 연도는 날짜로 읽기 어렵다는 QA 의견(DL-027).
+  new Date(v).toLocaleString('ko-KR', {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 // 이력 한 줄 설명. 담당자 변경은 ID 대신 이름을 쓰도록 이름 사전을 받는다.
 export function eventText(e: any, names: Record<string, string> = {}) {
   if (e.kind === 'CREATED') return '요청을 등록했습니다.';

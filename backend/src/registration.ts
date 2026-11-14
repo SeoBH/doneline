@@ -38,7 +38,7 @@ function kind(k: string) {
 // bigint ID는 문자열로 검증해 숫자 변환 시 정밀도 손실을 피한다.
 function ident(v: any) {
   if (typeof v !== 'string' || !/^\d{1,18}$/.test(v))
-    throw new BadRequestException('저장된 대상을 선택해주세요.');
+    throw new BadRequestException('저장된 대상을 선택해 주세요.');
   return v;
 }
 // 클라이언트가 조회한 버전이 최신 버전과 다르면 덮어쓰기 대신 충돌을 반환한다.
@@ -48,7 +48,7 @@ function version(v: any) {
 }
 function text(v: any, max = 120) {
   if (typeof v !== 'string' || !v.trim() || v.length > max)
-    throw new BadRequestException('필수 입력값과 길이를 확인해주세요.');
+    throw new BadRequestException('필수 입력값과 길이를 확인해 주세요.');
   return v.trim();
 }
 // 8개 동작의 불리언 값을 빠짐없이 받아 누락된 권한을 암묵적으로 허용하지 않는다.
@@ -60,7 +60,7 @@ function flags(v: any) {
     Object.keys(v).length !== 8 ||
     A.some((a) => typeof v[a] !== 'boolean')
   )
-    throw new BadRequestException('8개 버튼 설정을 확인해주세요.');
+    throw new BadRequestException('8개 버튼 설정을 확인해 주세요.');
   return v;
 }
 // DB 제약 위반을 사용자용 설명으로 바꾸고 원본 SQL 오류는 숨긴다.
@@ -151,7 +151,7 @@ export class RegistrationService {
         )
       ).rows;
       if (rows.length > 2000)
-        throw new BadRequestException('조회조건을 좁혀주세요. 최대 2000행입니다.');
+        throw new BadRequestException('조회조건을 좁혀 주세요. 최대 2000행입니다.');
       if (k === 'screens') {
         const b = (
           await c.query(
@@ -182,7 +182,7 @@ export class RegistrationService {
       body.rows.length > 500 ||
       Object.keys(body).some((x) => x !== 'rows')
     )
-      throw new BadRequestException('1~500개의 체크 행을 선택해주세요.');
+      throw new BadRequestException('1~500개의 체크 행을 선택해 주세요.');
     return this.db.tx(async (c) => {
       await this.lock(c, req, registerCodes[k], remove ? 'DELETE' : 'SAVE');
       const results = [],
@@ -212,17 +212,17 @@ export class RegistrationService {
           const before = key ? await this.row(c, k, key) : null;
           if (key && (!before || before.version !== version(r.version)))
             throw new ConflictException(
-              '다른 작업에서 변경 또는 삭제되었습니다. 다시 조회해주세요.',
+              '다른 작업에서 변경 또는 삭제되었습니다. 다시 조회해 주세요.',
             );
           let savedId = key;
           if (remove) {
-            if (!key) throw new BadRequestException('신규 행은 행삭제 버튼으로 제거해주세요.');
+            if (!key) throw new BadRequestException('신규 행은 행삭제 버튼으로 제거해 주세요.');
             if (
               k === 'responsibilities' &&
               (await c.query('SELECT 1 FROM app.users WHERE resp_id=$1 LIMIT 1', [key])).rowCount
             )
               throw new ConflictException(
-                '사용자에게 부여된 RESP입니다. 사용자 RESP를 먼저 변경해주세요.',
+                '사용자에게 부여된 RESP입니다. 사용자 RESP를 먼저 변경해 주세요.',
               );
             if (k === 'screens')
               await c.query('DELETE FROM app.screen_buttons WHERE screen_id=$1', [key]);
@@ -231,7 +231,7 @@ export class RegistrationService {
             const code = text(r.code),
               name = text(r.name);
             if (!/^[A-Za-z0-9_.-]+$/.test(code))
-              throw new BadRequestException('코드에는 영문·숫자·밑줄·점·하이픈만 입력해주세요.');
+              throw new BadRequestException('코드에는 영문·숫자·밑줄·점·하이픈만 입력해 주세요.');
             if (before && before.code !== code)
               throw new BadRequestException('저장된 코드는 수정할 수 없습니다.');
             const fields = ['code', 'name'],
@@ -359,12 +359,12 @@ export class RegistrationService {
       body.rows.length > 500 ||
       Object.keys(body).some((k) => !['version', 'rows'].includes(k))
     )
-      throw new BadRequestException('매핑 입력을 확인해주세요.');
+      throw new BadRequestException('매핑 입력을 확인해 주세요.');
     return this.db.tx(async (c) => {
       await this.lock(c, req, 'MENU_REGISTER', 'SAVE');
       const parent = await this.row(c, 'menus', id);
       if (!parent || parent.version !== body.version)
-        throw new ConflictException('메뉴가 변경되었습니다. 다시 선택해주세요.');
+        throw new ConflictException('메뉴가 변경되었습니다. 다시 선택해 주세요.');
       const before = await this.layout(c, id),
         keys = new Set<string>();
       // Validate first, then change only this parent's links.
@@ -376,7 +376,7 @@ export class RegistrationService {
             typeof r.hidden !== 'boolean' ||
             Object.keys(r).some((k) => !['kind', 'target_id', 'hidden', 'buttons'].includes(k))
           )
-            throw new BadRequestException('연결 형식을 확인해주세요.');
+            throw new BadRequestException('연결 형식을 확인해 주세요.');
           ident(r.target_id);
           const key = r.kind + ':' + r.target_id;
           if (keys.has(key)) throw new BadRequestException('중복 연결입니다.');
@@ -471,12 +471,12 @@ export class RegistrationService {
     ident(body?.menuId);
     version(body?.version);
     if (Object.keys(body).some((k) => !['menuId', 'version'].includes(k)))
-      throw new BadRequestException('적용 입력을 확인해주세요.');
+      throw new BadRequestException('적용 입력을 확인해 주세요.');
     return this.db.tx(async (c) => {
       await this.lock(c, req, 'RESP_REGISTER', 'SAVE');
       const before = await this.row(c, 'responsibilities', id);
       if (!before || before.version !== body.version)
-        throw new ConflictException('RESP가 변경되었습니다. 다시 선택해주세요.');
+        throw new ConflictException('RESP가 변경되었습니다. 다시 선택해 주세요.');
       if (!(await c.query('SELECT 1 FROM app.menus WHERE id=$1', [body.menuId])).rowCount)
         throw new BadRequestException('메뉴가 없습니다.');
       await c.query('UPDATE app.responsibilities SET root_menu_id=$2 WHERE id=$1', [

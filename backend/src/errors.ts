@@ -23,7 +23,7 @@ export class ErrorFilter implements ExceptionFilter {
     // 413: 파일 업로드 라이브러리가 크기 제한(10MB)을 넘은 파일을 영문 문구로 거절한 경우를 한국어로 바꾼다.
     const message =
       status === 413
-        ? '파일이 너무 큽니다. 10MB 이하로 올려주세요.'
+        ? '파일이 너무 큽니다. 10MB 이하로 올려 주세요.'
         : error instanceof HttpException
           ? error.message
           : '서버 처리 중 오류가 발생했습니다.';
@@ -41,7 +41,7 @@ export class ErrorFilter implements ExceptionFilter {
       );
       this.notifier.alert(
         'error:' + action,
-        `서버 오류가 발생했습니다: ${action} (요청 ID ${req.requestId}). 서버 로그와 감사 기록을 확인해주세요.`,
+        `서버 오류가 발생했습니다: ${action} (요청 ID ${req.requestId}). 서버 로그와 감사 기록을 확인해 주세요.`,
       );
     }
     await this.audit.failure({

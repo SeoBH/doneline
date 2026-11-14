@@ -19,7 +19,7 @@ import { settings } from './config';
 import { AppRequest, Public } from './security';
 export function emailAddress(value: unknown): string {
   if (typeof value !== 'string' || value.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value))
-    throw new BadRequestException('이메일 주소를 확인해주세요.');
+    throw new BadRequestException('이메일 주소를 확인해 주세요.');
   return value.trim().toLowerCase();
 }
 class RequestDto {
@@ -64,7 +64,7 @@ export class Recovery {
       }
       return blocked;
     });
-    if (denied) throw new HttpException('요청이 많습니다. 잠시 후 다시 시도해주세요.', 429);
+    if (denied) throw new HttpException('요청이 많습니다. 잠시 후 다시 시도해 주세요.', 429);
   }
   /**
    * 호출자는 사용자 행을 잠근다. 최신 링크 하나만 유효하며 발급 자체로 기존 비밀번호는 바뀌지 않는다.
@@ -72,7 +72,7 @@ export class Recovery {
    * hours: 유효 시간. 본인이 요청한 복구 링크는 30분, 관리자가 전달하는 링크는 전달 시간을 고려해 24시간.
    */
   async issue(c: PoolClient, user: any, purpose: 'VERIFY' | 'PASSWORD', hours = 0.5) {
-    if (!user.email) throw new BadRequestException('사용자정보에 이메일을 먼저 저장해주세요.');
+    if (!user.email) throw new BadRequestException('사용자정보에 이메일을 먼저 저장해 주세요.');
     await c.query('DELETE FROM app.account_tokens WHERE user_id=$1', [user.id]);
     // 이전 링크 메일만 취소한다. 같은 사용자의 고객 요청 업무 메일(kind=REQUEST)은 그대로 보낸다.
     await c.query(
@@ -92,7 +92,7 @@ export class Recovery {
       {
         to: user.email,
         subject: purpose === 'VERIFY' ? '이메일 인증 안내' : '비밀번호 설정 안내',
-        text: `${user.display_name}님, 아래 링크에서 ${purpose === 'VERIFY' ? '이메일을 인증' : '비밀번호를 설정'}해주세요. 링크는 ${hours >= 1 ? hours + '시간' : Math.round(hours * 60) + '분'} 동안 한 번만 사용할 수 있습니다.\n${link}`,
+        text: `${user.display_name}님, 아래 링크에서 ${purpose === 'VERIFY' ? '이메일을 인증' : '비밀번호를 설정'}해 주세요. 링크는 ${hours >= 1 ? hours + '시간' : Math.round(hours * 60) + '분'} 동안 한 번만 사용할 수 있습니다.\n${link}`,
       },
       // 링크가 유효한 동안만 발송을 시도한다(만료된 링크를 늦게 보내지 않음).
       { minutes: Math.round(hours * 60) },
@@ -111,7 +111,7 @@ export class Recovery {
     // 외부 발송 미연결 상태를 숨기지 않는다. 계정 일치 여부와 무관하게 같은 메시지를 반환한다.
     return {
       message:
-        '정보가 일치하면 안내를 준비합니다. 메일 자동 발송은 준비 중이므로, 소속 업체 관리자에게 비밀번호 설정 링크를 요청해주세요.',
+        '정보가 일치하면 안내를 준비합니다. 메일 자동 발송은 준비 중이므로, 소속 업체 관리자에게 비밀번호 설정 링크를 요청해 주세요.',
     };
   }
   /** 한 워크스페이스 안에서 조건에 맞는 계정에 아이디 안내 또는 일회용 링크를 준비한다. */
@@ -142,14 +142,14 @@ export class Recovery {
   async redeem(req: AppRequest, body: RedeemDto) {
     await this.limit(req, 'token:' + digest(body.token));
     if (body.purpose === 'PASSWORD' && body.password.length < 8)
-      throw new BadRequestException('비밀번호는 8~128자로 입력해주세요.');
+      throw new BadRequestException('비밀번호는 8~128자로 입력해 주세요.');
     const hash = body.purpose === 'PASSWORD' ? await argon2.hash(body.password) : null;
     // 토큰 해시로 워크스페이스만 찾고, 이 공개 요청의 이후 DB 작업(감사 기록 포함)을 그 범위로 지정한다.
     const workspaceId: string | null = (
       await this.db.query('SELECT app.token_workspace($1) AS id', [digest(body.token)])
     ).rows[0].id;
     if (!workspaceId)
-      throw new BadRequestException('사용할 수 없거나 만료된 링크입니다. 다시 요청해주세요.');
+      throw new BadRequestException('사용할 수 없거나 만료된 링크입니다. 다시 요청해 주세요.');
     useWorkspace(workspaceId);
     const loginId: string = await this.db.tx(async (c) => {
       await c.query('SELECT pg_advisory_xact_lock(720260910)');
@@ -163,7 +163,7 @@ export class Recovery {
         )
       ).rows[0];
       if (!u)
-        throw new BadRequestException('사용할 수 없거나 만료된 링크입니다. 다시 요청해주세요.');
+        throw new BadRequestException('사용할 수 없거나 만료된 링크입니다. 다시 요청해 주세요.');
       await c.query('DELETE FROM app.account_tokens WHERE user_id=$1', [u.id]);
       await c.query(
         "UPDATE app.mail_outbox SET status='CANCELLED',payload='' WHERE user_id=$1 AND status='HELD' AND kind='ACCOUNT'",
@@ -205,13 +205,13 @@ export class Recovery {
    * 토큰을 소비하지 않는다(메일 검사기의 GET 요청 등으로 링크가 사라지지 않게).
    */
   async info(token: string) {
-    if (!/^[a-f0-9]{64}$/.test(token)) throw new BadRequestException('링크를 확인해주세요.');
+    if (!/^[a-f0-9]{64}$/.test(token)) throw new BadRequestException('링크를 확인해 주세요.');
     const workspaceId: string | null = (
       await this.db.query('SELECT app.token_workspace($1) AS id', [digest(token)])
     ).rows[0].id;
     if (!workspaceId)
       throw new BadRequestException(
-        '사용할 수 없거나 만료된 링크입니다. 관리자에게 새 링크를 요청해주세요.',
+        '사용할 수 없거나 만료된 링크입니다. 관리자에게 새 링크를 요청해 주세요.',
       );
     const row = (
       await this.db.query(
@@ -223,7 +223,7 @@ export class Recovery {
     ).rows[0];
     if (!row)
       throw new BadRequestException(
-        '사용할 수 없거나 만료된 링크입니다. 관리자에게 새 링크를 요청해주세요.',
+        '사용할 수 없거나 만료된 링크입니다. 관리자에게 새 링크를 요청해 주세요.',
       );
     return { name: row.display_name, workspaceName: row.workspace_name };
   }

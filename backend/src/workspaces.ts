@@ -57,7 +57,7 @@ export class Workspaces {
       [bucket],
     );
     if (limit.rows[0].attempts > 5)
-      throw new HttpException('가입 요청이 많습니다. 잠시 후 다시 시도해주세요.', 429);
+      throw new HttpException('가입 요청이 많습니다. 잠시 후 다시 시도해 주세요.', 429);
     const email = emailAddress(body.email);
     const hash = await argon2.hash(body.password);
     let workspaceId: string;

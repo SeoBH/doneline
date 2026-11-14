@@ -34,12 +34,12 @@ const catalogCodes: Record<string, string> = {
 const CatalogPermission = (action: string) => SetMetadata('catalogPermission', action);
 const id = (v: unknown) => {
   if (typeof v !== 'string' || !/^\d{1,18}$/.test(v))
-    throw new BadRequestException('선택값을 확인해주세요.');
+    throw new BadRequestException('선택값을 확인해 주세요.');
   return v;
 };
 const text = (v: unknown, max: number, optional = false) => {
   if (typeof v !== 'string' || v.length > max || (!optional && !v.trim()))
-    throw new BadRequestException('필수 입력과 길이를 확인해주세요.');
+    throw new BadRequestException('필수 입력과 길이를 확인해 주세요.');
   return v.trim();
 };
 function fields(body: any, allowed: string[]) {
@@ -107,7 +107,7 @@ export class Accounts {
       )
     ).rows[0];
     if (!r || (!systemAllowed && r.authority_type === 'SYSTEM'))
-      throw new BadRequestException('지정할 수 있는 역할을 선택해주세요.');
+      throw new BadRequestException('지정할 수 있는 역할을 선택해 주세요.');
     return r;
   }
   private async log(
@@ -139,7 +139,7 @@ export class Accounts {
       if (e instanceof HttpException) throw e;
       if (e.code === '23505') throw new ConflictException('이미 사용 중인 아이디 또는 코드입니다.');
       if (e.code?.startsWith('23'))
-        throw new BadRequestException('연결된 데이터와 입력값을 확인해주세요.');
+        throw new BadRequestException('연결된 데이터와 입력값을 확인해 주세요.');
       throw e;
     }
   }
@@ -179,7 +179,7 @@ export class Accounts {
     if (!Object.hasOwn(catalogCodes, kind)) throw new NotFoundException('등록 화면이 없습니다.');
     fields(body, ['customerId', 'corporationId', 'rows']);
     if (!Array.isArray(body.rows) || !body.rows.length || body.rows.length > 500)
-      throw new BadRequestException('1~500개 행을 선택해주세요.');
+      throw new BadRequestException('1~500개 행을 선택해 주세요.');
     return this.change(async (c) => {
       const actor = await this.actor(c, req, remove ? 'DELETE' : 'SAVE', catalogCodes[kind]);
       if (kind !== 'customers') {
@@ -195,7 +195,7 @@ export class Accounts {
           ])
         ).rowCount
       )
-        throw new BadRequestException('해당 고객사의 법인을 선택해주세요.');
+        throw new BadRequestException('해당 고객사의 법인을 선택해 주세요.');
       const items = [],
         seen = new Set();
       for (const r of body.rows) {
@@ -207,7 +207,7 @@ export class Accounts {
               .rows[0]
           : null;
         if (r.id && (!before || before.version !== r.version))
-          throw new ConflictException('다른 작업에서 변경했습니다. 다시 조회해주세요.');
+          throw new ConflictException('다른 작업에서 변경했습니다. 다시 조회해 주세요.');
         if (
           before &&
           kind !== 'customers' &&
@@ -217,13 +217,13 @@ export class Accounts {
           throw new ForbiddenException('선택한 상위 코드와 다른 행입니다.');
         let after = null;
         if (remove) {
-          if (!before) throw new BadRequestException('신규 행은 행삭제로 제거해주세요.');
+          if (!before) throw new BadRequestException('신규 행은 행삭제로 제거해 주세요.');
           await c.query('DELETE FROM app.' + kind + ' WHERE id=$1', [r.id]);
         } else {
           const code = text(r.code, 40),
             name = text(r.name, 120);
           if (!/^[A-Za-z0-9_-]+$/.test(code))
-            throw new BadRequestException('코드는 영문·숫자·밑줄·하이픈으로 입력해주세요.');
+            throw new BadRequestException('코드는 영문·숫자·밑줄·하이픈으로 입력해 주세요.');
           if (before && before.code !== code)
             throw new BadRequestException('저장된 코드는 변경할 수 없습니다.');
           const columns = ['code', 'name'],
@@ -300,7 +300,10 @@ export class Accounts {
     const t = /^[a-f0-9]{64}$/.test(token)
       ? (await this.db.query('SELECT * FROM app.signup_target($1)', [token])).rows[0]
       : undefined;
-    if (!t) throw new NotFoundException('유효한 고객사 가입 링크가 아닙니다.');
+    if (!t)
+      throw new NotFoundException(
+        '가입 링크가 올바르지 않거나 사용이 중지되었습니다. 링크를 보내 준 업체 담당자에게 새 링크를 요청해 주세요.',
+      );
     useWorkspace(t.workspace_id);
     return String(t.customer_id);
   }
@@ -334,7 +337,7 @@ export class Accounts {
           body.password.length < 8 ||
           body.password.length > 128))
     )
-      throw new BadRequestException('아이디·휴대전화·비밀번호(8~128자)를 확인해주세요.');
+      throw new BadRequestException('아이디·휴대전화·비밀번호(8~128자)를 확인해 주세요.');
     if (signupToken) {
       // 공개 가입의 비싼 비밀번호 해시 계산 전에 IP별 요청 수를 제한한다.
       const bucket =
@@ -349,7 +352,7 @@ export class Accounts {
         [bucket],
       );
       if (limit.rows[0].attempts > 10)
-        throw new HttpException('가입 요청이 많습니다. 잠시 후 다시 시도해주세요.', 429);
+        throw new HttpException('가입 요청이 많습니다. 잠시 후 다시 시도해 주세요.', 429);
     }
     const signupCustomer = signupToken ? await this.signupTarget(signupToken) : null;
     const hash = signupToken ? await argon2.hash(body.password) : null;
@@ -362,7 +365,10 @@ export class Accounts {
         const t = (
           await c.query('SELECT id FROM app.customers WHERE id=$1 AND is_active', [signupCustomer])
         ).rows[0];
-        if (!t) throw new NotFoundException('유효한 고객사 가입 링크가 아닙니다.');
+        if (!t)
+          throw new NotFoundException(
+            '가입 링크가 올바르지 않거나 사용이 중지되었습니다. 링크를 보내 준 업체 담당자에게 새 링크를 요청해 주세요.',
+          );
         customerId = t.id;
       } else {
         actor = await this.actor(c, req, 'SAVE');
@@ -373,7 +379,7 @@ export class Accounts {
         ? await this.resp(c, body.respId, actor.authority_type === 'SYSTEM')
         : null;
       if (resp?.authority_type === 'CUSTOMER' && !customerId)
-        throw new BadRequestException('고객사를 선택해주세요.');
+        throw new BadRequestException('고객사를 선택해 주세요.');
       if (resp?.authority_type === 'SYSTEM' && customerId)
         throw new BadRequestException('업체 직원 역할은 고객사를 지정하지 않습니다.');
       const user = (
@@ -423,7 +429,7 @@ export class Accounts {
            JOIN app.responsibilities p ON p.id=u.resp_id
            WHERE a.account_enabled AND (a.authority_type='SYSTEM' OR (p.code='CUSTOMER_MANAGER' AND u.customer_id=$2))`,
           [
-            `새 가입 신청: ${name} (${customer?.name || '고객사'}) · 사용자등록에서 승인해주세요`.slice(
+            `새 가입 신청: ${name} (${customer?.name || '고객사'}) · 사용자등록에서 승인해 주세요`.slice(
               0,
               300,
             ),
@@ -435,8 +441,8 @@ export class Accounts {
         ? {
             message:
               (mailed
-                ? '등록했습니다. 비밀번호 설정 링크를 직원 이메일로 보냈습니다(24시간 유효). 메일이 오지 않으면 아래 링크를 직접 전달해주세요.'
-                : '등록했습니다. 비밀번호 설정 링크를 직원에게 전달해주세요(24시간 유효).') +
+                ? '등록했습니다. 비밀번호 설정 링크를 직원 이메일로 보냈습니다(24시간 유효). 메일이 오지 않으면 아래 링크를 직접 전달해 주세요.'
+                : '등록했습니다. 비밀번호 설정 링크를 직원에게 전달해 주세요(24시간 유효).') +
               ' 고객사 사용자는 소속 부서 지정 후 로그인할 수 있습니다.',
             link,
             mailed,
@@ -472,14 +478,14 @@ export class Accounts {
       if (actor.authority_type !== 'SYSTEM' && u.authority_type === 'SYSTEM')
         throw new ForbiddenException('SYSTEM 계정은 변경할 수 없습니다.');
       if (u.version !== body.version)
-        throw new ConflictException('다른 작업에서 변경했습니다. 다시 조회해주세요.');
+        throw new ConflictException('다른 작업에서 변경했습니다. 다시 조회해 주세요.');
       if (u.id === actor.id)
-        throw new BadRequestException('자신의 계정은 다른 운영담당자에게 변경을 요청해주세요.');
+        throw new BadRequestException('자신의 계정은 다른 운영담당자에게 변경을 요청해 주세요.');
       const customerId = body.customerId ? (await this.customer(c, body.customerId)).id : null;
       this.tenant(actor, customerId);
       const r = await this.resp(c, body.respId, actor.authority_type === 'SYSTEM');
       if ((r.authority_type === 'SYSTEM') !== !customerId)
-        throw new BadRequestException('SYSTEM은 고객사 없음, CUSTOMER는 고객사를 선택해주세요.');
+        throw new BadRequestException('SYSTEM은 고객사 없음, CUSTOMER는 고객사를 선택해 주세요.');
       // 승인 대기에서 SYSTEM으로 변경하면 공개 신청의 권한 제한이 우회되므로 금지한다.
       if (u.account_status === 'PENDING' && r.authority_type === 'SYSTEM')
         throw new BadRequestException('가입 신청에는 CUSTOMER RESP만 배정할 수 있습니다.');
@@ -488,7 +494,7 @@ export class Accounts {
         address = text(body.address, 500, true),
         email = body.email === undefined ? u.email : emailAddress(body.email);
       if (!/^[+0-9() -]{7,30}$/.test(mobile))
-        throw new BadRequestException('휴대전화번호를 확인해주세요.');
+        throw new BadRequestException('휴대전화번호를 확인해 주세요.');
       if (u.customer_id !== customerId) {
         await c.query('DELETE FROM app.user_scopes WHERE user_id=$1', [u.id]);
         await c.query('DELETE FROM app.user_corporations WHERE user_id=$1', [u.id]);
@@ -523,9 +529,9 @@ export class Accounts {
       this.tenant(actor, u.customer_id);
       if (actor.authority_type !== 'SYSTEM' && u.authority_type === 'SYSTEM')
         throw new ForbiddenException('SYSTEM 계정은 변경할 수 없습니다.');
-      if (u.version !== body.version) throw new ConflictException('다시 조회해주세요.');
+      if (u.version !== body.version) throw new ConflictException('다시 조회해 주세요.');
       if (['REJECTED', 'SUSPENDED'].includes(u.account_status))
-        throw new BadRequestException('반려·정지 계정은 재승인 후 처리해주세요.');
+        throw new BadRequestException('반려·정지 계정은 재승인 후 처리해 주세요.');
       const link = await this.recovery.issue(c, u, 'PASSWORD', 24);
       const event = await this.audit.write(
         {
@@ -543,8 +549,8 @@ export class Accounts {
       return {
         message:
           (mailed
-            ? '비밀번호 설정 링크를 사용자 이메일로 보냈습니다(24시간 유효). 메일이 오지 않으면 아래 링크를 직접 전달해주세요.'
-            : '비밀번호 설정 링크를 만들었습니다. 사용자에게 전달해주세요(24시간 유효).') +
+            ? '비밀번호 설정 링크를 사용자 이메일로 보냈습니다(24시간 유효). 메일이 오지 않으면 아래 링크를 직접 전달해 주세요.'
+            : '비밀번호 설정 링크를 만들었습니다. 사용자에게 전달해 주세요(24시간 유효).') +
           ' 기존 비밀번호는 링크를 쓰기 전까지 유지됩니다.',
         link,
         mailed,
@@ -587,12 +593,12 @@ export class Accounts {
       if (u.authority_type === 'SYSTEM')
         throw new BadRequestException('SYSTEM 계정은 매핑하지 않습니다.');
       if (u.account_status !== 'ACTIVE')
-        throw new BadRequestException('승인 완료된 사용자를 선택해주세요.');
+        throw new BadRequestException('승인 완료된 사용자를 선택해 주세요.');
       if (u.version !== body.version)
-        throw new ConflictException('다른 작업에서 변경했습니다. 다시 조회해주세요.');
+        throw new ConflictException('다른 작업에서 변경했습니다. 다시 조회해 주세요.');
       const ids = (v: any) => {
         if (!Array.isArray(v) || v.length > 500 || new Set(v).size !== v.length)
-          throw new BadRequestException('중복 없는 0~500개 항목을 선택해주세요.');
+          throw new BadRequestException('중복 없는 0~500개 항목을 선택해 주세요.');
         return v.map(id);
       };
       const corporations = ids(body.corporationIds),
@@ -610,7 +616,7 @@ export class Accounts {
         )
       ).rows;
       if (co.length !== corporations.length || ds.length !== departments.length)
-        throw new BadRequestException('고객사·법인·부서 조합을 확인해주세요.');
+        throw new BadRequestException('고객사·법인·부서 조합을 확인해 주세요.');
       const before = {
         corporations: (
           await c.query('SELECT corporation_id FROM app.user_corporations WHERE user_id=$1', [u.id])
@@ -646,7 +652,7 @@ export class Accounts {
   async remove(req: AppRequest, body: any) {
     fields(body, ['rows']);
     if (!Array.isArray(body.rows) || !body.rows.length || body.rows.length > 100)
-      throw new BadRequestException('1~100개 행을 선택해주세요.');
+      throw new BadRequestException('1~100개 행을 선택해 주세요.');
     return this.change(async (c) => {
       const actor = await this.actor(c, req, 'DELETE'),
         seen = new Set<string>();
@@ -661,13 +667,13 @@ export class Accounts {
             [key],
           )
         ).rows[0];
-        if (!u) throw new ConflictException('이미 삭제된 사용자입니다. 다시 조회해주세요.');
+        if (!u) throw new ConflictException('이미 삭제된 사용자입니다. 다시 조회해 주세요.');
         this.tenant(actor, u.customer_id);
         if (u.id === actor.id) throw new ForbiddenException('본인 계정은 삭제할 수 없습니다.');
         if (actor.authority_type !== 'SYSTEM' && u.authority_type === 'SYSTEM')
           throw new ForbiddenException('SYSTEM 계정은 삭제할 수 없습니다.');
         if (u.version !== row.version)
-          throw new ConflictException('다른 작업에서 변경했습니다. 다시 조회해주세요.');
+          throw new ConflictException('다른 작업에서 변경했습니다. 다시 조회해 주세요.');
         // 감사 원본은 삭제하지 않는다. 단순 가입/인증/조회 이력은 계정 삭제를 막지 않으며 숫자 ID로 보존한다.
         const history = await c.query(
           `SELECT 1 FROM app.users WHERE reviewed_by=$1
@@ -678,7 +684,7 @@ export class Accounts {
         );
         if (history.rowCount)
           throw new ConflictException(
-            '승인 또는 업무 처리 이력이 있는 계정은 삭제할 수 없습니다. 정지를 사용해주세요.',
+            '승인 또는 업무 처리 이력이 있는 계정은 삭제할 수 없습니다. 정지를 사용해 주세요.',
           );
         await c.query('DELETE FROM app.user_scopes WHERE user_id=$1', [u.id]);
         await c.query('DELETE FROM app.user_corporations WHERE user_id=$1', [u.id]);
@@ -703,7 +709,7 @@ export class Accounts {
         } catch (e: any) {
           if (e.code === '23503')
             throw new ConflictException(
-              '연결된 업무 데이터가 있어 삭제할 수 없습니다. 정지를 사용해주세요.',
+              '연결된 업무 데이터가 있어 삭제할 수 없습니다. 정지를 사용해 주세요.',
             );
           throw e;
         }
@@ -714,7 +720,7 @@ export class Accounts {
   async review(req: AppRequest, body: any, action: 'approve' | 'reject' | 'suspend') {
     fields(body, ['customerId', 'rows', 'note']);
     if (!Array.isArray(body.rows) || !body.rows.length || body.rows.length > 100)
-      throw new BadRequestException('1~100개 체크 행을 선택해주세요.');
+      throw new BadRequestException('1~100개 체크 행을 선택해 주세요.');
     const note = text(body.note, 500, action === 'approve');
     return this.change(async (c) => {
       const actor = await this.actor(
@@ -741,7 +747,7 @@ export class Accounts {
         if (u.id === actor.id || u.authority_type === 'SYSTEM')
           throw new ForbiddenException('자신 또는 운영자는 처리할 수 없습니다.');
         if (u.version !== r.version)
-          throw new ConflictException('다른 작업에서 변경했습니다. 다시 조회해주세요.');
+          throw new ConflictException('다른 작업에서 변경했습니다. 다시 조회해 주세요.');
         if (
           action === 'approve'
             ? !['PENDING', 'REJECTED', 'SUSPENDED'].includes(u.account_status)
@@ -753,10 +759,10 @@ export class Accounts {
         // 승인은 저장된 RESP만 사용한다. 승인 권한으로 RESP 수정 권한을 우회하지 못하게 한다.
         const respId = u.resp_id;
         if (action === 'approve') {
-          if (!respId) throw new BadRequestException('역할을 먼저 지정해주세요.');
+          if (!respId) throw new BadRequestException('역할을 먼저 지정해 주세요.');
           await this.resp(c, respId);
           if (u.account_status !== 'PENDING' && !note)
-            throw new BadRequestException('재승인 사유를 입력해주세요.');
+            throw new BadRequestException('재승인 사유를 입력해 주세요.');
         }
         const status = { approve: 'ACTIVE', reject: 'REJECTED', suspend: 'SUSPENDED' }[action];
         await c.query(

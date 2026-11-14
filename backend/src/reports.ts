@@ -93,9 +93,9 @@ export class Reports {
   private check(req: AppRequest, month: string, customerId: string) {
     if (req.actor!.authority_type !== 'SYSTEM')
       throw new ForbiddenException('업체 계정만 사용할 수 있습니다.');
-    if (!MONTH.test(month)) throw new BadRequestException('조회 월(YYYY-MM)을 확인해주세요.');
+    if (!MONTH.test(month)) throw new BadRequestException('조회 월(YYYY-MM)을 확인해 주세요.');
     if (customerId && !/^\d{1,18}$/.test(customerId))
-      throw new BadRequestException('고객사를 확인해주세요.');
+      throw new BadRequestException('고객사를 확인해 주세요.');
   }
   private async summary(c: PoolClient, month: string, customerId: string) {
     const rows = (await c.query(SUMMARY_SQL, [month, customerId])).rows.map((r) => ({

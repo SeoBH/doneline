@@ -53,7 +53,7 @@ export class Feedback {
         ['feedback:' + a.id],
       );
       if (limit.rows[0].attempts > 10)
-        throw new HttpException('개선 요청이 많습니다. 잠시 후 다시 보내주세요.', 429);
+        throw new HttpException('개선 요청이 많습니다. 잠시 후 다시 보내 주세요.', 429);
       const w = (await c.query('SELECT code,name FROM app.workspaces')).rows[0];
       await c.query(
         'INSERT INTO app.feedback(user_id,workspace_name,user_name,kind,title,body,page) VALUES($1,$2,$3,$4,$5,$6,$7)',
@@ -95,7 +95,7 @@ export class Feedback {
         [id, body.status, body.version],
       );
       if (!r.rowCount)
-        throw new ConflictException('다른 사용자가 먼저 변경했습니다. 다시 조회해주세요.');
+        throw new ConflictException('다른 사용자가 먼저 변경했습니다. 다시 조회해 주세요.');
       await this.audit.write(
         {
           requestId: req.requestId,
@@ -126,7 +126,7 @@ export class FeedbackController {
     @Param('id') id: string,
     @Body() body: StatusDto,
   ) {
-    if (!/^\d{1,18}$/.test(id)) throw new ConflictException('대상을 확인해주세요.');
+    if (!/^\d{1,18}$/.test(id)) throw new ConflictException('대상을 확인해 주세요.');
     return this.feedback.setStatus(req, id, body);
   }
 }

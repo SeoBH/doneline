@@ -97,7 +97,7 @@ export function WorkspaceSignupScreen({
                   value={draft[key]}
                   required
                   autoComplete={key.startsWith('password') ? 'new-password' : undefined}
-                  minLength={key.startsWith('password') ? 15 : undefined}
+                  minLength={key.startsWith('password') ? 8 : undefined}
                   maxLength={key.startsWith('password') ? 128 : 254}
                   onChange={(e) =>
                     setDraft({

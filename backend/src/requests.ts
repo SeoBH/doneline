@@ -248,7 +248,7 @@ export class Requests implements OnModuleDestroy {
             '',
             `요청 #${r.request_no} "${r.title}" — ${what}.`,
             ...(hint ? [hint] : []),
-            '아래 주소에서 내용을 확인해주세요.',
+            '아래 주소에서 내용을 확인해 주세요.',
             link,
             '',
             '이 메일은 Doneline에서 자동으로 보낸 알림입니다. 회신하셔도 확인되지 않습니다.',
@@ -371,7 +371,7 @@ export class Requests implements OnModuleDestroy {
         [a.id, a.customer_id, body.corporationId, body.departmentId],
       );
       if (!scope.rowCount)
-        throw new BadRequestException('본인에게 매핑된 법인·부서를 선택해주세요.');
+        throw new BadRequestException('본인에게 매핑된 법인·부서를 선택해 주세요.');
       // 워크스페이스별 요청 번호는 최대값+1로 매긴다. 동시 등록이 같은 번호를 받지 않도록 워크스페이스 단위로 잠근다.
       await c.query(
         "SELECT pg_advisory_xact_lock(hashtext('service_request:' || current_setting('app.workspace_id')))",
@@ -415,7 +415,7 @@ export class Requests implements OnModuleDestroy {
         { ...row, title: body.title.trim(), customer_id: a.customer_id },
         '새 요청이 등록되었습니다',
         true,
-        '요청 작업함에서 담당자를 정해주세요.',
+        '요청 작업함에서 담당자를 정해 주세요.',
       );
       await this.auditWrite(c, req, 'SR_CREATE');
       return {
@@ -463,11 +463,11 @@ export class Requests implements OnModuleDestroy {
       ).rows[0];
       if (!r) throw new NotFoundException('요청을 찾을 수 없습니다.');
       if (r.version !== body.version)
-        throw new ConflictException('다른 사용자가 먼저 변경했습니다. 다시 조회해주세요.');
+        throw new ConflictException('다른 사용자가 먼저 변경했습니다. 다시 조회해 주세요.');
       if (r.status !== 'RESOLVED')
         throw new ConflictException('처리 완료된 요청만 확인할 수 있습니다.');
       const reason = body.reason?.trim();
-      if (!accept && !reason) throw new BadRequestException('재처리가 필요한 이유를 적어주세요.');
+      if (!accept && !reason) throw new BadRequestException('재처리가 필요한 이유를 적어 주세요.');
       const to = accept ? 'CLOSED' : 'IN_PROGRESS';
       await c.query(
         `UPDATE app.service_requests SET status=$2,updated_at=now(),
@@ -504,7 +504,7 @@ export class Requests implements OnModuleDestroy {
   async deskList(req: AppRequest, status = '', filter = 'all') {
     const a = this.staffActor(req);
     if (status && !(STATUSES as readonly string[]).includes(status))
-      throw new BadRequestException('상태 값을 확인해주세요.');
+      throw new BadRequestException('상태 값을 확인해 주세요.');
     return this.db.tx(async (c) => {
       // filter: all=전체, mine=내 담당, none=미배정. status 빈 값은 종료되지 않은 요청(OPEN·IN_PROGRESS·RESOLVED).
       const items = (
@@ -546,7 +546,7 @@ export class Requests implements OnModuleDestroy {
         .rows[0];
       if (!r) throw new NotFoundException('요청을 찾을 수 없습니다.');
       if (r.version !== body.version)
-        throw new ConflictException('다른 사용자가 먼저 변경했습니다. 다시 조회해주세요.');
+        throw new ConflictException('다른 사용자가 먼저 변경했습니다. 다시 조회해 주세요.');
       if (['CLOSED', 'CANCELLED'].includes(r.status))
         throw new ConflictException('종료된 요청입니다.');
       const manager = await this.isManager(c, a.resp_id);
@@ -575,11 +575,11 @@ export class Requests implements OnModuleDestroy {
         const flow = DESK_FLOW[action];
         if (!flow.from.includes(r.status))
           throw new BadRequestException(
-            `현재 상태(${STATUS_LABEL[r.status]})에서는 할 수 없는 동작입니다. 다시 조회해주세요.`,
+            `현재 상태(${STATUS_LABEL[r.status]})에서는 할 수 없는 동작입니다. 다시 조회해 주세요.`,
           );
         if (['REVERT', 'CANCEL'].includes(action) && !comment)
           throw new BadRequestException(
-            `${action === 'REVERT' ? '되돌리는' : '취소하는'} 사유를 답변/메모 칸에 적어주세요.`,
+            `${action === 'REVERT' ? '되돌리는' : '취소하는'} 사유를 답변/메모 칸에 적어 주세요.`,
           );
         status = flow.to;
         if (action === 'START') {
@@ -683,7 +683,7 @@ export class Requests implements OnModuleDestroy {
           r,
           '처리가 완료되었습니다',
           false,
-          '결과를 확인하고 [완료 확인]을 눌러주세요. 다시 처리가 필요하면 [재처리 요청]을 누를 수 있습니다.',
+          '결과를 확인하고 [완료 확인]을 눌러 주세요. 다시 처리가 필요하면 [재처리 요청]을 누를 수 있습니다.',
         );
       if (action === 'CANCEL')
         await this.mailTo(
@@ -723,7 +723,7 @@ export class Requests implements OnModuleDestroy {
     internal = false,
   ) {
     const a = side === 'portal' ? this.customerActor(req) : this.staffActor(req);
-    if (!file || !file.size) throw new BadRequestException('첨부할 파일을 선택해주세요.');
+    if (!file || !file.size) throw new BadRequestException('첨부할 파일을 선택해 주세요.');
     // 경로·제어문자를 지운 파일 이름만 남긴다(내려받을 때 다른 경로로 저장되지 않게).
     const name = (file.originalname || '')
       .split(/[\\/]/)
@@ -731,10 +731,10 @@ export class Requests implements OnModuleDestroy {
       .replace(/[\u0000-\u001f\u007f]/g, '')
       .trim()
       .slice(-200);
-    if (!name) throw new BadRequestException('파일 이름을 확인해주세요.');
+    if (!name) throw new BadRequestException('파일 이름을 확인해 주세요.');
     if (BLOCKED_EXT.test(name))
       throw new BadRequestException(
-        '실행 파일·스크립트는 첨부할 수 없습니다. 압축하거나 다른 형식으로 올려주세요.',
+        '실행 파일·스크립트는 첨부할 수 없습니다. 압축하거나 다른 형식으로 올려 주세요.',
       );
     const hidden = side === 'desk' && internal;
     return this.db.tx(async (c) => {
@@ -923,7 +923,7 @@ export class Requests implements OnModuleDestroy {
 export class RequestsController {
   constructor(private readonly requests: Requests) {}
   private id(id: string) {
-    if (!ID.test(id)) throw new BadRequestException('요청 번호를 확인해주세요.');
+    if (!ID.test(id)) throw new BadRequestException('요청 번호를 확인해 주세요.');
     return id;
   }
   @Get('requests/portal') @Permission('SR_PORTAL', 'QUERY') portalList(@Req() req: AppRequest) {

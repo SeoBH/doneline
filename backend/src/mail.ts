@@ -60,7 +60,7 @@ export class Mail implements OnModuleDestroy {
     private readonly db: Db,
     private readonly notifier: Notifier,
   ) {}
-  /** 실제 발송 여부. 화면 안내 문구(메일로 보냈습니다/링크를 전달해주세요)를 고르는 데 쓴다. */
+  /** 실제 발송 여부. 화면 안내 문구(메일로 보냈습니다/링크를 전달해 주세요)를 고르는 데 쓴다. */
   get enabled() {
     return Boolean(this.transport);
   }
@@ -143,7 +143,7 @@ export class Mail implements OnModuleDestroy {
     if (failed)
       this.notifier.alert(
         'mail-failed',
-        `메일 ${failed}건을 ${MAX_ATTEMPTS}회 시도했지만 보내지 못했습니다. .env의 SMTP 설정과 서버 로그(MAIL_SEND_FAILED)를 확인해주세요.`,
+        `메일 ${failed}건을 ${MAX_ATTEMPTS}회 시도했지만 보내지 못했습니다. .env의 SMTP 설정과 서버 로그(MAIL_SEND_FAILED)를 확인해 주세요.`,
       );
     return sent;
   }

@@ -93,7 +93,7 @@ export class Sla {
             [row.priority, row.responseHours, row.resolveHours, row.version],
           );
           if (!r.rowCount)
-            throw new ConflictException('다른 사용자가 먼저 변경했습니다. 다시 조회해주세요.');
+            throw new ConflictException('다른 사용자가 먼저 변경했습니다. 다시 조회해 주세요.');
         } else {
           // 기본값을 쓰던 우선순위의 첫 저장. 동시에 다른 사람이 먼저 저장했다면 충돌로 거절한다.
           const r = await c.query(
@@ -101,7 +101,7 @@ export class Sla {
             [row.priority, row.responseHours, row.resolveHours],
           );
           if (!r.rowCount)
-            throw new ConflictException('다른 사용자가 먼저 변경했습니다. 다시 조회해주세요.');
+            throw new ConflictException('다른 사용자가 먼저 변경했습니다. 다시 조회해 주세요.');
         }
       }
       await this.audit.write(

@@ -252,12 +252,12 @@ export const AccountsScreen = forwardRef<
   }
   async function review(action: 'approve' | 'reject' | 'suspend') {
     if (tab !== 'basic') {
-      notify('기본정보·승인 탭에서 처리해주세요.');
+      notify('기본정보·승인 탭에서 처리해 주세요.');
       return;
     }
     const selected = rows.filter((r) => r._checked);
     if (!selected.length) {
-      notify('처리할 행을 체크해주세요.');
+      notify('처리할 행을 체크해 주세요.');
       return;
     }
     // 가입 신청 1건 승인은 역할·소속 부서를 함께 고르는 창으로 한 번에 처리한다.
@@ -268,7 +268,9 @@ export const AccountsScreen = forwardRef<
       selected[0].customer_id
     ) {
       const row = selected[0];
+      // 같은 행을 사용자정보에서 열어 역할을 바꿔 두었으면(저장 전) 그 값을 먼저 쓴다(QA DL-015).
       const defaultResp =
+        (editing?.id === row.id && draft.respId) ||
         row.resp_id ||
         options.responsibilities.find((r: any) => r.code === 'CUSTOMER_USER')?.id ||
         '';
@@ -281,12 +283,12 @@ export const AccountsScreen = forwardRef<
       return;
     }
     if (action === 'approve' && selected.some((r) => !r.resp_id)) {
-      notify('사용자정보에서 역할을 먼저 지정하고 저장해주세요.');
+      notify('사용자정보에서 역할을 먼저 지정하고 저장해 주세요.');
       return;
     }
     const reapprove = action === 'approve' && selected.some((r) => r.account_status !== 'PENDING');
     if (reapprove && !note.trim()) {
-      notify('재승인 사유를 입력해주세요.');
+      notify('재승인 사유를 입력해 주세요.');
       return;
     }
     const label = { approve: '승인', reject: '반려', suspend: '정지' }[action];
@@ -330,7 +332,7 @@ export const AccountsScreen = forwardRef<
   async function quickApprove() {
     if (!quick || !customer) return;
     if (!quickResp || !quickDepts.length) {
-      notify('역할과 소속 부서를 하나 이상 선택해주세요.', 'error');
+      notify('역할과 소속 부서를 하나 이상 선택해 주세요.', 'error');
       return;
     }
     setBusy(true);
@@ -435,7 +437,7 @@ export const AccountsScreen = forwardRef<
   }
   async function saveMapping() {
     if (tab !== 'mapping' || !selected) {
-      notify('법인·부서 매핑 탭에서 사용자를 선택해주세요.');
+      notify('법인·부서 매핑 탭에서 사용자를 선택해 주세요.');
       return;
     }
     if (!window.confirm('법인·부서 매핑을 저장할까요? 기존 로그인 세션은 종료됩니다.')) return;
@@ -465,7 +467,7 @@ export const AccountsScreen = forwardRef<
     remove,
     save: async () => {
       if (tab === 'mapping') {
-        notify('매핑 저장 버튼을 사용해주세요.');
+        notify('매핑 저장 버튼을 사용해 주세요.');
         return false;
       }
       return save();
@@ -538,7 +540,7 @@ export const AccountsScreen = forwardRef<
             <fieldset className="account-fields">
               <legend>소속 부서 (하나 이상)</legend>
               {!customer?.departments.length && (
-                <p className="hint">등록된 부서가 없습니다. 부서등록에서 먼저 추가해주세요.</p>
+                <p className="hint">등록된 부서가 없습니다. 부서등록에서 먼저 추가해 주세요.</p>
               )}
               {(customer?.departments || []).map((d: any) => {
                 const corp = customer.corporations.find((c: any) => c.id === d.corporation_id);
@@ -685,8 +687,8 @@ export const AccountsScreen = forwardRef<
                   onClick={() =>
                     navigator.clipboard
                       .writeText(issuedLink.link)
-                      .then(() => notify('링크를 복사했습니다. 직원에게 전달해주세요.', 'success'))
-                      .catch(() => notify('복사하지 못했습니다. 링크를 직접 선택해 복사해주세요.'))
+                      .then(() => notify('링크를 복사했습니다. 직원에게 전달해 주세요.', 'success'))
+                      .catch(() => notify('복사하지 못했습니다. 링크를 직접 선택해 복사해 주세요.'))
                   }
                 >
                   복사
@@ -747,7 +749,7 @@ export const AccountsScreen = forwardRef<
             <p>
               {selected
                 ? selected.login_id + ' · ' + selected.display_name
-                : '왼쪽에서 사용자를 선택해주세요.'}
+                : '왼쪽에서 사용자를 선택해 주세요.'}
             </p>
             <p>
               법인을 체크한 뒤 해당 법인을 클릭하여 아래에서 부서를 선택합니다. 각 법인에 부서가

@@ -48,7 +48,7 @@ export function FeedbackButton({ page, notify }: { page?: string; notify: Notify
         <form onSubmit={submit}>
           <h2>개선 요청</h2>
           <p className="hint">
-            불편한 점이나 바라는 기능을 알려주세요. Doneline 운영팀이 확인합니다.
+            불편한 점이나 바라는 기능을 알려 주세요. Doneline 운영팀이 확인합니다.
             {page ? ` (현재 화면: ${page})` : ''}
           </p>
           <label>

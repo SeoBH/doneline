@@ -1,0 +1,4 @@
+# 앱 화면은 검색 노출 대상이 아니다. 사용 설명서만 검색되게 둔다.
+User-agent: *
+Disallow: /
+Allow: /manual/

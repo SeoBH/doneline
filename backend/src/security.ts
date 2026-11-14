@@ -75,7 +75,7 @@ export class SecurityGuard implements CanActivate {
       req.actor!.must_change_password &&
       !this.reflector.get('allowPasswordChange', ctx.getHandler())
     )
-      throw new ForbiddenException('먼저 비밀번호를 변경해주세요.');
+      throw new ForbiddenException('먼저 비밀번호를 변경해 주세요.');
     let permission = this.reflector.get<{ screen: string; action: string }>(
       'permission',
       ctx.getHandler(),

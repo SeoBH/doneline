@@ -112,10 +112,16 @@ function App() {
   const [signup, setSignup] = useState(false);
   // 업체(워크스페이스) 무료 가입 화면 표시 여부. 링크 없이 로그인 화면에서 바로 연다.
   // 소개 페이지(landing)의 [무료로 시작하기]는 /?start=1로 들어와 이 화면을 바로 연다(로그인 화면을 한 번 더 거치지 않게).
-  const [workspaceSignup, setWorkspaceSignup] = useState(
-    () => new URLSearchParams(window.location.search).get('start') === '1',
-  );
+  const [workspaceSignup, setWorkspaceSignup] = useState(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('start') !== '1') return false;
+    url.searchParams.delete('start');
+    window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+    return true;
+  });
   // 가입 링크의 고객사·업체 이름(로그인 화면 안내용). 토큰이 잘못되었으면 null로 두고 회원가입 화면에서 오류를 보여 준다.
+  // 가입 링크 확인이 끝났는지. 끝났는데 정보가 없으면 잘못된 링크로 보고 안내한다(확인 중에는 안내하지 않음).
+  const [signupChecked, setSignupChecked] = useState(false);
   const [signupInfo, setSignupInfo] = useState<{
     customerName: string;
     workspaceName: string;
@@ -124,7 +130,8 @@ function App() {
     if (!signupToken) return;
     api('signup/' + encodeURIComponent(signupToken))
       .then((r) => setSignupInfo(r))
-      .catch(() => setSignupInfo(null));
+      .catch(() => setSignupInfo(null))
+      .finally(() => setSignupChecked(true));
   }, [signupToken]);
   // 휴대폰 화면에서 사이드 메뉴 펼침 여부.
   const [menuOpen, setMenuOpen] = useState(false);
@@ -343,7 +350,7 @@ function App() {
   function requestClose(keys: string[]) {
     setContext(null);
     if (running || keys.some((k) => states[k]?.busy)) {
-      notify('작업이 완료된 후 닫아주세요.');
+      notify('작업이 완료된 후 닫아 주세요.');
       return;
     }
     discard(keys);
@@ -358,7 +365,7 @@ function App() {
       (states[active]?.visibleActions && !states[active].visibleActions!.includes(code))
     ) {
       notify(
-        '지금은 사용할 수 없습니다. 처리할 행을 체크했는지, 선택한 항목의 상태를 확인해주세요.',
+        '지금은 사용할 수 없습니다. 처리할 행을 체크했는지, 선택한 항목의 상태를 확인해 주세요.',
       );
       return;
     }
@@ -440,14 +447,28 @@ function App() {
               <span className="brand-mark" aria-hidden="true" />
               Doneline
             </div>
-            <h2>
-              고객 요청을
-              <br />
-              접수부터 완료 확인까지
-              <br />
-              <em>한 줄로.</em>
-            </h2>
-            <p>유지보수·IT 서비스 업체를 위한 고객 요청 포털</p>
+            {signupToken ? (
+              <>
+                <h2>
+                  요청은 올리고, <br />
+                  처리 상황은 바로 확인하세요.
+                </h2>
+                <p>
+                  {signupInfo
+                    ? `${signupInfo.workspaceName}에서 운영하는 ${signupInfo.customerName} 전용 요청 창구`
+                    : '담당 업체가 운영하는 고객 요청 창구'}
+                </p>
+              </>
+            ) : (
+              <>
+                <h2>
+                  고객 요청을 <br />
+                  접수부터 완료 확인까지 <br />
+                  <em>한 줄로.</em>
+                </h2>
+                <p>유지보수·IT 서비스 업체를 위한 고객 요청 포털</p>
+              </>
+            )}
             {/* 장식용 미리보기 카드(실제 데이터 아님) */}
             <ul className="login-preview" aria-hidden="true">
               <li>
@@ -463,6 +484,15 @@ function App() {
           </section>
           <form onSubmit={submit}>
             {/* 고객사 가입 링크로 들어온 경우: 어느 업체·고객사의 포털인지 먼저 보여 주고 회원가입으로 안내한다. */}
+            {!user && signupToken && signupChecked && !signupInfo && (
+              <div className="signup-banner warn" role="alert">
+                <strong>가입 링크를 확인할 수 없습니다</strong>
+                <span>
+                  링크가 바뀌었거나 사용이 중지되었습니다. 링크를 보내 준 업체 담당자에게 새 가입
+                  링크를 요청해 주세요. 이미 계정이 있으면 아래에서 로그인하면 됩니다.
+                </span>
+              </div>
+            )}
             {!user && signupInfo && (
               <div className="signup-banner">
                 <strong>{signupInfo.customerName}</strong> 고객 요청 포털
@@ -472,7 +502,7 @@ function App() {
             <h1>{user ? '비밀번호 변경' : '로그인'}</h1>
             <p>
               {user
-                ? '처음 로그인했습니다. 사용할 비밀번호를 설정해주세요.'
+                ? '처음 로그인했습니다. 사용할 비밀번호를 설정해 주세요.'
                 : signupInfo
                   ? '처음이면 아래 [회원가입]으로 신청하세요. 승인 후 로그인할 수 있습니다.'
                   : '고객 요청 접수부터 처리·월간 리포트까지 한곳에서 관리합니다.'}
@@ -502,7 +532,7 @@ function App() {
                     required
                   />
                 </label>
-                <small>8자 이상 입력해주세요.</small>
+                <small>8자 이상 입력해 주세요.</small>
               </Fragment>
             ) : (
               <Fragment key="login">
@@ -522,7 +552,8 @@ function App() {
                 </label>
               </Fragment>
             )}
-            <button className="primary" disabled={busy}>
+            {/* 고객사 가입 링크로 처음 온 사람의 주 행동은 회원가입이라 로그인 버튼을 보조 모양으로 낮춘다. */}
+            <button className={signupToken && !user ? 'secondary' : 'primary'} disabled={busy}>
               {busy ? '처리 중…' : user ? '변경' : '로그인'}
             </button>
             {!user && (
@@ -537,8 +568,14 @@ function App() {
             )}
             {/* 회원가입은 고객사 가입 링크로 들어온 사람에게만, 업체 가입은 링크 없이 들어온 사람에게만 보여
                 고객이 실수로 업체를 만들거나 링크 없이 회원가입에서 막히지 않게 한다. */}
-            {!user && signupToken && (
-              <button type="button" disabled={busy} onClick={() => setSignup(true)}>
+            {/* 링크가 확인되지 않으면(잘못된 링크) 가입해도 실패하므로 회원가입 버튼을 숨긴다(QA DL-013). */}
+            {!user && signupToken && (signupInfo || !signupChecked) && (
+              <button
+                type="button"
+                className="primary"
+                disabled={busy}
+                onClick={() => setSignup(true)}
+              >
                 회원가입
               </button>
             )}

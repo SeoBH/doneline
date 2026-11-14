@@ -23,12 +23,11 @@ export async function api(path: string, options: RequestInit = {}) {
   });
   const data = await res.json();
   // fetch는 HTTP 400/500 응답만으로 예외를 던지지 않아 상태를 직접 검사한다.
-  if (!res.ok)
-    throw new ApiError(
-      data.message + (data.requestId ? ' · ' + data.requestId : ''),
-      res.status,
-      data.rowErrors || [],
-    );
+  if (!res.ok) {
+    // 요청 번호는 화면에 보이지 않게 하고(사용자에게 의미 없는 긴 문자열), 문의 대응을 위해 콘솔에만 남긴다.
+    if (data.requestId) console.warn('Doneline 요청 번호', data.requestId);
+    throw new ApiError(data.message, res.status, data.rowErrors || []);
+  }
   if (data.csrfToken) csrf = data.csrfToken;
   return data;
 }
@@ -43,8 +42,10 @@ export async function upload(path: string, form: FormData, headers: Record<strin
     headers: { 'X-CSRF-Token': csrf, ...headers },
   });
   const data = await res.json().catch(() => ({ message: '파일을 올리지 못했습니다.' }));
-  if (!res.ok)
-    throw new ApiError(data.message + (data.requestId ? ' · ' + data.requestId : ''), res.status);
+  if (!res.ok) {
+    if (data.requestId) console.warn('Doneline 요청 번호', data.requestId);
+    throw new ApiError(data.message, res.status);
+  }
   return data;
 }
 /**

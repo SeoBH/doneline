@@ -51,8 +51,8 @@ function collect(errors: ValidationError[], out: { unknown: string[]; invalid: s
 export function validationError(errors: ValidationError[]) {
   const { unknown, invalid } = collect(errors, { unknown: [], invalid: [] });
   const parts: string[] = [];
-  if (invalid.length) parts.push('입력값을 확인해주세요: ' + [...new Set(invalid)].join(', '));
+  if (invalid.length) parts.push('입력값을 확인해 주세요: ' + [...new Set(invalid)].join(', '));
   if (unknown.length)
     parts.push('허용되지 않은 항목이 포함되었습니다: ' + [...new Set(unknown)].join(', '));
-  return new BadRequestException(parts.join(' / ') || '입력값을 확인해주세요.');
+  return new BadRequestException(parts.join(' / ') || '입력값을 확인해 주세요.');
 }

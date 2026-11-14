@@ -46,7 +46,7 @@ export const CustomersScreen = forwardRef<
       .map(wrap);
   }
   async function query() {
-    grid.current?.stop();
+    await grid.current?.stop();
     const ticket = ++epoch.current;
     setBusy(true);
     try {
@@ -77,17 +77,17 @@ export const CustomersScreen = forwardRef<
       epoch.current++;
     };
   }, []);
-  function reset() {
+  async function reset() {
     epoch.current++;
-    grid.current?.stop();
+    await grid.current?.stop();
     update([]);
     setCode('');
     setName('');
     setActive('');
     setBusy(false);
   }
-  function pickCustomer(r: GridRow) {
-    grid.current?.stop();
+  async function pickCustomer(r: GridRow) {
+    await grid.current?.stop();
     if (
       latest.current.some((r) => r._checked) &&
       !window.confirm('편집 중인 행을 버리고 고객사를 변경할까요?')
@@ -98,8 +98,8 @@ export const CustomersScreen = forwardRef<
     setActive('');
     update(filtered(data[kind], r.id, ''));
   }
-  function pickCorporation(r: GridRow) {
-    grid.current?.stop();
+  async function pickCorporation(r: GridRow) {
+    await grid.current?.stop();
     if (
       latest.current.some((r) => r._checked) &&
       !window.confirm('편집 중인 행을 버리고 법인을 변경할까요?')
@@ -109,19 +109,38 @@ export const CustomersScreen = forwardRef<
     setActive('');
     update(filtered(data[kind], customerId, r.id));
   }
-  function add() {
-    grid.current?.stop();
+  async function add() {
+    await grid.current?.stop();
     update([...latest.current, { _key: crypto.randomUUID(), _checked: true, code: '', name: '' }]);
   }
-  function drop() {
-    grid.current?.stop();
+  async function drop() {
+    await grid.current?.stop();
     update(latest.current.filter((r) => r.id || !r._checked));
   }
   async function batch(remove = false) {
-    grid.current?.stop();
-    const selected = latest.current.filter((r) => r._checked);
+    await grid.current?.stop();
+    let selected = latest.current.filter((r) => r._checked);
+    if (!remove) {
+      // 행추가만 하고 아무것도 적지 않은 새 행은 실수로 생긴 것으로 보고 저장 대상에서 조용히 뺀다.
+      const blank = selected.filter((r) => !r.id && !r.code?.trim() && !r.name?.trim());
+      if (blank.length) {
+        update(latest.current.filter((r) => !blank.includes(r)));
+        selected = selected.filter((r) => !blank.includes(r));
+      }
+      // 코드나 이름이 빠진 행은 서버에 보내기 전에 표시하고 몇 번째 행인지 알려 준다(QA DL-003·서버의 모호한 오류 대신).
+      const missing = selected.filter((r) => !r.code?.trim() || !r.name?.trim());
+      if (missing.length) {
+        const marked = latest.current.map((r) =>
+          missing.includes(r) ? { ...r, _error: '코드와 이름을 입력해 주세요.' } : r,
+        );
+        update(marked);
+        const nth = marked.findIndex((r) => r._error) + 1;
+        notify(`${nth}번째 행의 코드와 이름을 모두 입력해 주세요.`, 'error');
+        return false;
+      }
+    }
     if (!selected.length) {
-      notify('처리할 행을 체크해주세요.');
+      notify('처리할 행을 체크해 주세요.');
       return false;
     }
     if (!window.confirm(selected.length + '개 행을 ' + (remove ? '삭제' : '저장') + '할까요?'))
@@ -143,18 +162,27 @@ export const CustomersScreen = forwardRef<
         }),
       });
       committed = true;
+      // 저장 뒤에도 보던 고객사의 가입 링크가 계속 보이도록, 선택했던(또는 방금 저장한 1건의) 코드를 기억해 다시 고른다(QA DL-028).
+      const keepCode = remove
+        ? ''
+        : latest.current.find((r) => r._key === active)?.code ||
+          (selected.length === 1 ? selected[0].code : '');
       // 성공 후 전체를 다시 읽는다. 체크하지 않은 신규/수정 행도 DB 상태로 교체한다.
       update([]);
       setActive('');
       const d = await api('catalogs/' + kind, { headers });
       setData(d);
-      update(filtered(d[kind]));
+      const fresh = filtered(d[kind]);
+      update(fresh);
+      const again = keepCode && fresh.find((r) => r.code === keepCode);
+      if (again) setActive(again._key);
       notify((remove ? '삭제' : '저장') + '했습니다.', 'success');
       return true;
     } catch (e) {
       notify(
-        (committed ? '변경은 완료됐지만 재조회하지 못했습니다. 조회 버튼으로 확인해주세요. ' : '') +
-          (e as Error).message,
+        (committed
+          ? '변경은 완료됐지만 재조회하지 못했습니다. 조회 버튼으로 확인해 주세요. '
+          : '') + (e as Error).message,
         'error',
       );
       return committed;
@@ -182,13 +210,25 @@ export const CustomersScreen = forwardRef<
   );
   return (
     <div className="catalog-screen">
-      <div className="query-bar">
+      {/* 위 칸은 '찾기 조건'이다(등록은 아래 목록의 [행추가]). 등록 칸으로 오해하지 않게 이름과 안내를 붙인다(QA DL-028). */}
+      <div className="query-bar" aria-label="조회 조건">
         <label>
-          {title}코드
-          <input value={code} disabled={busy} onChange={(e) => setCode(e.target.value)} />
+          {title}코드로 찾기
+          <input
+            value={code}
+            disabled={busy}
+            placeholder="비우면 전체"
+            onChange={(e) => setCode(e.target.value)}
+          />
         </label>
         <label>
-          {title}명<input value={name} disabled={busy} onChange={(e) => setName(e.target.value)} />
+          {title}명으로 찾기
+          <input
+            value={name}
+            disabled={busy}
+            placeholder="비우면 전체"
+            onChange={(e) => setName(e.target.value)}
+          />
         </label>
       </div>
       <div
@@ -240,6 +280,14 @@ export const CustomersScreen = forwardRef<
               행삭제
             </button>
           </div>
+          {/* 상위 항목을 고르기 전에는 목록이 비고 [행추가]가 잠기므로 이유를 알려 준다(QA DL-007). */}
+          {!parentReady && (
+            <p className="hint parent-hint">
+              {kind === 'departments' && customerId
+                ? '가운데 법인 목록에서 법인을 먼저 눌러 선택하세요. 그다음 [행추가]로 부서를 추가합니다.'
+                : `왼쪽 고객사 목록에서 고객사를 먼저 눌러 선택하세요. 그다음 ${kind === 'departments' ? '법인을 고르고 ' : ''}[행추가]로 ${title}을(를) 추가합니다.`}
+            </p>
+          )}
           <DataGrid
             ref={grid}
             label={title + ' 편집'}
@@ -259,7 +307,7 @@ export const CustomersScreen = forwardRef<
         (customer?.signup_token ? (
           // 링크에는 추측하기 쉬운 고객사 코드 대신 서버가 만든 무작위 가입 토큰을 쓴다.
           <div className="link-box">
-            <strong>{customer.name} 고객 가입 링크</strong>
+            <strong>{customer.name} 가입 링크</strong>
             <code>{window.location.origin + '/?signup=' + customer.signup_token}</code>
             <button
               type="button"
@@ -267,9 +315,9 @@ export const CustomersScreen = forwardRef<
                 navigator.clipboard
                   .writeText(window.location.origin + '/?signup=' + customer.signup_token)
                   .then(() =>
-                    notify('가입 링크를 복사했습니다. 고객 담당자에게 보내주세요.', 'success'),
+                    notify('가입 링크를 복사했습니다. 고객 담당자에게 보내 주세요.', 'success'),
                   )
-                  .catch(() => notify('복사하지 못했습니다. 링크를 직접 선택해 복사해주세요.'))
+                  .catch(() => notify('복사하지 못했습니다. 링크를 직접 선택해 복사해 주세요.'))
               }
             >
               가입 링크 복사

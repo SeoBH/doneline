@@ -59,7 +59,7 @@ export class AuthService {
       }
       return denied;
     });
-    if (blocked) throw new HttpException('로그인 시도가 많습니다. 잠시 후 다시 시도해주세요.', 429);
+    if (blocked) throw new HttpException('로그인 시도가 많습니다. 잠시 후 다시 시도해 주세요.', 429);
     // 로그인 전에는 워크스페이스를 모른다. 로그인 ID로 워크스페이스 ID만 찾은 뒤(DB 함수, RLS 밖)
     // 계정 정보는 그 워크스페이스 범위 안에서 RLS를 적용해 다시 읽는다. 없는 ID면 빈 결과가 된다.
     const workspaceId: string | null = (
@@ -78,7 +78,7 @@ export class AuthService {
     const valid = await argon2.verify(user?.password_hash || (await this.dummy), body.password);
     if (!user || !user.password_hash || !valid || !user.is_active || !user.resp_active) {
       await new Promise((r) => setTimeout(r, 200));
-      throw new UnauthorizedException('아이디 또는 비밀번호를 확인해주세요.');
+      throw new UnauthorizedException('아이디 또는 비밀번호를 확인해 주세요.');
     }
     // 인증 전 세션을 폐기하고 새 ID를 발급해 세션 고정을 방지한다.
     await new Promise<void>((resolve, reject) =>
@@ -118,9 +118,9 @@ export class AuthService {
         req.actor!.id,
       ]);
       if (!rows[0] || !(await argon2.verify(rows[0].password_hash, body.currentPassword)))
-        throw new UnauthorizedException('현재 비밀번호를 확인해주세요.');
+        throw new UnauthorizedException('현재 비밀번호를 확인해 주세요.');
       if (await argon2.verify(rows[0].password_hash, body.newPassword))
-        throw new HttpException('다른 비밀번호를 사용해주세요.', 400);
+        throw new HttpException('다른 비밀번호를 사용해 주세요.', 400);
       await c.query(
         'UPDATE app.users SET password_hash=$2,must_change_password=false,updated_at=now() WHERE id=$1',
         [req.actor!.id, hash],
@@ -138,7 +138,7 @@ export class AuthService {
     await new Promise<void>((resolve, reject) =>
       req.session.destroy((e) => (e ? reject(e) : resolve())),
     );
-    return { message: '비밀번호를 변경했습니다. 다시 로그인해주세요.' };
+    return { message: '비밀번호를 변경했습니다. 다시 로그인해 주세요.' };
   }
 }
 @Controller('api')
@@ -162,7 +162,7 @@ export class AuthController {
       await new Promise<void>((resolve) => req.session.destroy(() => resolve()));
       throw e;
     }
-    // mailEnabled: 로그인 전 화면(계정 찾기)이 '메일을 확인해주세요'와 '관리자에게 문의해주세요' 중 맞는 안내를 고르게 한다.
+    // mailEnabled: 로그인 전 화면(계정 찾기)이 '메일을 확인해 주세요'와 '관리자에게 문의해 주세요' 중 맞는 안내를 고르게 한다.
     return { csrfToken: req.session.csrf, mailEnabled: Boolean(settings.smtp.host) };
   }
   @Post('auth/login')

@@ -4,7 +4,7 @@
  * 공통 툴바: 조회=목록 새로고침, 초기화=선택·입력 비우기, 저장=새 요청 등록 또는 댓글 등록, 완료 확인=ETC1.
  * 저장 성공 후에는 목록과 선택한 요청을 다시 읽어 DB 값만 표시하고, 실패하면 입력을 유지한다.
  */
-import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { api } from './api';
 import { Screen, ScreenHandle, ViewState } from './types';
 import { Notify } from './Toasts';
@@ -58,10 +58,13 @@ export const SrPortalScreen = forwardRef<
     () => onState({ busy, dirty, disabledActions: canConfirm ? [] : ['ETC1'] }),
     [busy, dirty, canConfirm, onState],
   );
+  // 첫 목록을 받기 전에는 '요청 없음' 대신 '불러오는 중'을 보여 준다(QA DL-008: 빈 목록으로 오해).
+  const [loaded, setLoaded] = useState(false);
   async function load(keep = selected) {
     const r = await call('');
     setItems(r.items);
     setScopes(r.scopes);
+    setLoaded(true);
     if (keep) setDetail(await call('/' + keep));
     else setDetail(null);
   }
@@ -102,7 +105,7 @@ export const SrPortalScreen = forwardRef<
     if (creating) {
       const [corporationId, departmentId] = draft.scope.split(':');
       if (!draft.title.trim() || !draft.body.trim() || !corporationId) {
-        notify('제목·내용·법인/부서를 입력해주세요.');
+        notify('제목·내용·법인/부서를 입력해 주세요.');
         return false;
       }
       if (!window.confirm('요청을 등록할까요?')) return false;
@@ -137,14 +140,14 @@ export const SrPortalScreen = forwardRef<
       await load(r.id);
       notify(
         failed
-          ? `${r.message} 파일 ${failed}개는 올리지 못했습니다. 아래에서 다시 첨부해주세요.`
+          ? `${r.message} 파일 ${failed}개는 올리지 못했습니다. 아래에서 다시 첨부해 주세요.`
           : r.message,
         failed ? 'error' : 'success',
       );
       return true;
     }
     if (!selected || !comment.trim()) {
-      notify('새 요청을 작성하거나, 요청을 선택해 댓글을 입력해주세요.');
+      notify('새 요청을 작성하거나, 요청을 선택해 댓글을 입력해 주세요.');
       return false;
     }
     if (!window.confirm('댓글을 등록할까요?')) return false;
@@ -173,7 +176,7 @@ export const SrPortalScreen = forwardRef<
     if (!detail || !canConfirm) return;
     // 재처리 요청은 이유가 있어야 담당자가 무엇을 다시 할지 안다. 아래 댓글 칸에 적은 내용을 사유로 보낸다.
     if (!accept && !comment.trim()) {
-      notify('재처리가 필요한 이유를 아래 댓글 칸에 적은 뒤 [재처리 요청]을 눌러주세요.', 'error');
+      notify('재처리가 필요한 이유를 아래 댓글 칸에 적은 뒤 [재처리 요청]을 눌러 주세요.', 'error');
       document.querySelector<HTMLTextAreaElement>('.sr-detail textarea')?.focus();
       return;
     }
@@ -228,6 +231,35 @@ export const SrPortalScreen = forwardRef<
     void load(null).catch((e) => notify((e as Error).message, 'error'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // 목록만 조용히 새로 읽는다(상세·입력 중인 글은 건드리지 않음). 실패해도 알리지 않고 다음 기회에 다시 읽는다.
+  const refreshing = useRef(false);
+  async function refreshList() {
+    if (refreshing.current) return;
+    refreshing.current = true;
+    try {
+      const r = await call('');
+      setItems(r.items);
+      setLoaded(true);
+    } catch {
+      // 네트워크가 잠깐 끊긴 경우 등. 다음 주기에 다시 시도한다.
+    } finally {
+      refreshing.current = false;
+    }
+  }
+  // 로그인 직후 첫 조회가 비어 보이는 경우(QA DL-008)와 새 요청·상태 변화를 [조회] 없이도 반영한다:
+  // 2초 뒤 한 번 더, 이후 1분마다, 그리고 다른 창에 갔다가 돌아올 때 목록을 새로 읽는다.
+  useEffect(() => {
+    const again = window.setTimeout(() => void refreshList(), 2000);
+    const timer = window.setInterval(() => void refreshList(), 60000);
+    const onFocus = () => void refreshList();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.clearTimeout(again);
+      window.clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   return (
     <div className="sr-screen">
       <section className="sr-list">
@@ -240,7 +272,9 @@ export const SrPortalScreen = forwardRef<
             </button>
           )}
         </div>
-        {!items.length && <p className="hint">등록된 요청이 없습니다.</p>}
+        {!items.length && (
+          <p className="hint">{loaded ? '등록된 요청이 없습니다.' : '불러오는 중…'}</p>
+        )}
         {items.map((r) => (
           <button
             key={r.id}
@@ -286,7 +320,7 @@ export const SrPortalScreen = forwardRef<
                 </select>
               </label>
               <label>
-                긴급도
+                우선순위
                 <select
                   value={draft.priority}
                   onChange={(e) => setDraft({ ...draft, priority: e.target.value })}
@@ -354,7 +388,7 @@ export const SrPortalScreen = forwardRef<
                 {statusLabel[detail.item.status]}
               </span>
               <small>
-                #{detail.item.request_no} · {categoryLabel[detail.item.category]} · 긴급도{' '}
+                #{detail.item.request_no} · {categoryLabel[detail.item.category]} · 우선순위{' '}
                 {priorityLabel[detail.item.priority]}
               </small>
             </div>
@@ -374,7 +408,7 @@ export const SrPortalScreen = forwardRef<
             {canConfirm && (
               <div className="sr-decide">
                 <span>
-                  처리가 완료되었습니다. 결과를 확인해주세요.
+                  처리가 완료되었습니다. 결과를 확인해 주세요.
                   {/* auto_close_at: 서버가 계산한 자동 완료 예정 시각(처리 완료 + 7일). */}
                   {detail.item.auto_close_at &&
                     ` ${dateTime(detail.item.auto_close_at)}까지 확인이 없으면 자동으로 완료됩니다.`}

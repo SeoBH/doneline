@@ -55,7 +55,7 @@ export const SlaSettingsScreen = forwardRef<
     // 입력 중에는 빈칸을 허용하므로(0으로 보관) 저장할 때 범위를 검사한다.
     const valid = (n: number) => Number.isInteger(n) && n >= 1 && n <= 8760;
     if (changed.some((r) => !valid(r.responseHours) || !valid(r.resolveHours))) {
-      notify('기한은 1~8760 사이의 정수(시간)로 입력해주세요.', 'error');
+      notify('기한은 1~8760 사이의 정수(시간)로 입력해 주세요.', 'error');
       return false;
     }
     if (changed.some((r) => r.responseHours > r.resolveHours)) {
