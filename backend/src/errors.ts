@@ -20,8 +20,13 @@ export class ErrorFilter implements ExceptionFilter {
     const req = host.switchToHttp().getRequest<AppRequest>(),
       res = host.switchToHttp().getResponse<Response>();
     const status = error instanceof HttpException ? error.getStatus() : 500;
+    // 413: 파일 업로드 라이브러리가 크기 제한(10MB)을 넘은 파일을 영문 문구로 거절한 경우를 한국어로 바꾼다.
     const message =
-      error instanceof HttpException ? error.message : '서버 처리 중 오류가 발생했습니다.';
+      status === 413
+        ? '파일이 너무 큽니다. 10MB 이하로 올려주세요.'
+        : error instanceof HttpException
+          ? error.message
+          : '서버 처리 중 오류가 발생했습니다.';
     const action = req.route?.path ? req.method + ' ' + req.route.path : 'HTTP_REQUEST';
     // 슬랙에는 요청 경로 형식(:id 같은 자리표시 그대로)과 요청 ID만 보낸다. 사용자·입력값·오류 문장은 넣지 않는다.
     // 자세한 내용은 요청 ID로 서버 로그·감사 기록에서 찾는다.

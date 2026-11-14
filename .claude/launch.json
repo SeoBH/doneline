@@ -4,8 +4,32 @@
     {
       "name": "landing",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "4100", "--bind", "127.0.0.1", "--directory", "landing"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "4100",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "landing"
+      ],
       "port": 4100
+    },
+    {
+      "name": "app-sample",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "backend/dist/main.js"
+      ],
+      "port": 3102,
+      "env": {
+        "PORT": "3102",
+        "APP_ORIGIN": "http://127.0.0.1:3102",
+        "PGDATABASE": "doneline_manual",
+        "SLACK_WEBHOOK_URL": "",
+        "SMTP_HOST": "",
+        "NODE_USE_SYSTEM_CA": "1"
+      }
     }
   ]
 }

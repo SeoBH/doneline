@@ -25,6 +25,7 @@ export const dateTime = (v: string) =>
 // 이력 한 줄 설명. 담당자 변경은 ID 대신 이름을 쓰도록 이름 사전을 받는다.
 export function eventText(e: any, names: Record<string, string> = {}) {
   if (e.kind === 'CREATED') return '요청을 등록했습니다.';
+  if (e.kind === 'ATTACH') return `파일을 첨부했습니다: ${e.body}`;
   if (e.kind === 'STATUS')
     return `상태: ${statusLabel[e.from_value] || e.from_value} → ${statusLabel[e.to_value] || e.to_value}`;
   if (e.kind === 'PRIORITY')

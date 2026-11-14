@@ -1624,7 +1624,8 @@ footer {
   gap: 18px;
   padding: 72px;
   color: #fff;
-  background: radial-gradient(circle at 15% 10%, rgb(96 165 250 / 45%), transparent 50%),
+  background:
+    radial-gradient(circle at 15% 10%, rgb(96 165 250 / 45%), transparent 50%),
     linear-gradient(160deg, #1e3a8a, #2563eb);
 }
 .login-brand .brand {
@@ -1826,4 +1827,36 @@ button.danger-outline {
 }
 button.danger-outline:hover {
   background: var(--color-danger-bg);
+}
+
+/* 고객 요청 첨부 파일 목록(Attachments.tsx). 파일 이름은 눌러서 내려받는 글자 버튼이다. */
+.sr-files {
+  margin: 12px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface-muted);
+}
+.sr-files ul {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+.sr-files li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+  padding: 4px 0;
+}
+.sr-files li small,
+.sr-files-add small {
+  color: var(--color-text-muted);
+}
+.sr-files-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+  margin-top: 10px;
 }

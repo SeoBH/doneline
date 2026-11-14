@@ -461,3 +461,94 @@ test('resolved requests close automatically after the confirmation period', asyn
   );
   assert.ok(row.auto_closed >= 1);
 });
+
+test('attachments respect department scope, internal flag and safe download headers', async () => {
+  const scope = (await get(u1, 'requests/portal').expect(200)).body.scopes[0];
+  const id = (
+    await post(u1, 'requests/portal', {
+      title: '첨부 확인',
+      body: '화면 캡처를 첨부합니다.',
+      category: 'INCIDENT',
+      priority: 'NORMAL',
+      corporationId: String(scope.corporation_id),
+      departmentId: String(scope.department_id),
+    }).expect(201)
+  ).body.id;
+  // 파일 업로드(multipart). post 도우미는 JSON용이라 같은 머리글로 직접 보낸다.
+  const upload = (who, url, file, name, type, fields = {}) => {
+    let r = who.agent
+      .post('/api/' + url)
+      .set('Origin', settings.origin)
+      .set('X-CSRF-Token', who.csrf)
+      .set('X-Menu-ID', who.menu);
+    for (const [k, v] of Object.entries(fields)) r = r.field(k, v);
+    return r.attach('file', file, { filename: name, contentType: type });
+  };
+  const png = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
+  await upload(u1, `requests/portal/${id}/attachments`, png, '화면 캡처.png', 'image/png').expect(
+    201,
+  );
+  // 다른 부서 고객은 올리지도 보지도 못한다.
+  await upload(u2, `requests/portal/${id}/attachments`, png, 'x.png', 'image/png').expect(404);
+  // 실행 파일은 거절하고, 10MB를 넘으면 한국어로 거절한다.
+  await upload(
+    u1,
+    `requests/portal/${id}/attachments`,
+    png,
+    'run.exe',
+    'application/octet-stream',
+  ).expect(400);
+  const big = await upload(
+    u1,
+    `requests/portal/${id}/attachments`,
+    Buffer.alloc(10 * 1024 * 1024 + 1),
+    'big.bin',
+    'application/octet-stream',
+  ).expect(413);
+  assert.match(big.body.message, /10MB/);
+  // 업체 담당자: 내부용 1개, 공개 1개.
+  await upload(
+    engineer,
+    `requests/desk/${id}/attachments`,
+    Buffer.from('memo'),
+    'memo.txt',
+    'text/plain',
+    {
+      internal: 'true',
+    },
+  ).expect(201);
+  await upload(
+    engineer,
+    `requests/desk/${id}/attachments`,
+    Buffer.from('%PDF-1.4'),
+    '결과 보고.pdf',
+    'application/pdf',
+  ).expect(201);
+  const customer = (await get(u1, 'requests/portal/' + id).expect(200)).body;
+  const desk = (await get(engineer, 'requests/desk/' + id).expect(200)).body;
+  assert.deepEqual(
+    customer.attachments.map((f) => f.file_name),
+    ['화면 캡처.png', '결과 보고.pdf'],
+  );
+  assert.equal(desk.attachments.length, 3);
+  assert.ok(customer.events.some((e) => e.kind === 'ATTACH' && e.body === '화면 캡처.png'));
+  assert.ok(!customer.events.some((e) => e.body === 'memo.txt'), 'internal attach event hidden');
+  const [shot, pdf] = customer.attachments;
+  const memo = desk.attachments.find((f) => f.internal);
+  // 이미지만 화면 표시(inline), 나머지는 파일 저장(attachment)·일반 형식으로 내려준다.
+  const img = await get(u1, `requests/portal/${id}/attachments/${shot.id}`)
+    .buffer(true)
+    .expect(200);
+  assert.equal(img.headers['content-type'], 'image/png');
+  assert.match(img.headers['content-disposition'], /^inline; filename\*=UTF-8''/);
+  assert.ok(Buffer.from(img.body).equals(png));
+  const doc = await get(u1, `requests/portal/${id}/attachments/${pdf.id}`).buffer(true).expect(200);
+  assert.equal(doc.headers['content-type'], 'application/octet-stream');
+  assert.ok(doc.headers['content-disposition'].startsWith('attachment; '));
+  assert.ok(doc.headers['content-disposition'].includes(encodeURIComponent('결과 보고.pdf')));
+  // 고객은 내부용 파일을, 다른 부서 고객과 다른 업체는 어떤 파일도 받을 수 없다.
+  await get(u1, `requests/portal/${id}/attachments/${memo.id}`).expect(404);
+  await get(u2, `requests/portal/${id}/attachments/${shot.id}`).expect(404);
+  await get(engineer, `requests/desk/${id}/attachments/${memo.id}`).expect(200);
+  await get(platformAdmin, `requests/desk/${id}/attachments/${shot.id}`).expect(404);
+});

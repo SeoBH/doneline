@@ -4,6 +4,7 @@
  * - 요청 작업함(desk, 화면 SR_DESK): 업체 SYSTEM 계정이 자기 워크스페이스의 모든 요청을 배정·처리한다.
  * 워크스페이스 분리는 DB 행 수준 보안이 맡고(012/014 마이그레이션), 이 파일은 고객사·부서 범위와 상태 규칙을 맡는다.
  * 상태·담당자 변경은 version으로 동시 편집 충돌을 검사하고, 변경과 이력·알림·감사 기록을 한 트랜잭션으로 저장한다.
+ * 첨부 파일: 요청마다 파일을 올리고 내려받는다(021 마이그레이션). 고객은 자기 범위 요청의 공개 파일만, 업체는 전부 본다.
  * 확인 대기 자동 완료: 처리 완료 후 AUTO_CLOSE_DAYS일 동안 고객 확인이 없으면 서버 작업(autoClose)이 완료로 바꾼다(019 마이그레이션).
  */
 import {
@@ -20,7 +21,12 @@ import {
   Post,
   Query,
   Req,
+  Res,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { Response } from 'express';
 import {
   IsArray,
   IsBoolean,
@@ -100,6 +106,19 @@ class ReadDto {
  * 업체별로 다르게 둘 필요가 생기면 SLA 설정처럼 업체 설정으로 옮긴다.
  */
 export const AUTO_CLOSE_DAYS = 7;
+// 첨부 파일 제한: 파일당 10MB, 요청당 20개. 서버 메모리와 DB 크기를 지키는 상한이다.
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_FILES_PER_REQUEST = 20;
+// 실행 파일·스크립트는 받지 않는다(요청 첨부로 악성 파일이 오가는 것을 막는다).
+const BLOCKED_EXT = /\.(exe|com|bat|cmd|scr|msi|dll|ps1|vbs|js|jse|wsf|jar|sh|lnk|hta)$/i;
+// 브라우저 화면에 바로 보여도 안전한 이미지 형식. 그 밖(HTML·SVG·PDF 등)은 항상 '파일 내려받기'로 준다(화면에서 실행되지 않게).
+const INLINE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+/**
+ * FileInterceptor 설정(파일 업로드 처리 라이브러리 multer의 옵션).
+ * memoryStorage(기본): 파일을 디스크에 남기지 않고 메모리에서 바로 DB로 넣는다.
+ * limits: 한 요청에 파일 1개, 10MB까지만 읽는다(넘으면 413). defParamCharset 'utf8': 한글 파일 이름이 깨지지 않게 한다.
+ */
+const UPLOAD = { limits: { fileSize: MAX_FILE_BYTES, files: 1 }, defParamCharset: 'utf8' } as any;
 const LIST_SQL = `SELECT r.id,r.request_no,r.title,r.status,r.priority,r.category,r.due_at,r.updated_at,r.created_at,r.version,
   r.customer_id,c.name AS customer_name,co.name AS corporation_name,d.name AS department_name,
   rq.display_name AS requester_name,r.assignee_id,a.display_name AS assignee_name,
@@ -305,7 +324,16 @@ export class Requests implements OnModuleDestroy {
         [id, includeInternal],
       )
     ).rows;
-    return { item: { ...item, body }, events };
+    // 첨부 목록(내용 제외). 고객 화면에는 업체 내부용 파일을 넣지 않는다.
+    const attachments = (
+      await c.query(
+        `SELECT a.id,a.file_name,a.content_type,a.size_bytes,a.internal,a.created_at,u.display_name AS uploader_name
+         FROM app.request_attachments a JOIN app.users u ON u.id=a.uploaded_by
+         WHERE a.request_id=$1 AND ($2 OR NOT a.internal) ORDER BY a.id`,
+        [id, includeInternal],
+      )
+    ).rows;
+    return { item: { ...item, body }, events, attachments };
   }
 
   // ---------- 고객 요청(portal) ----------
@@ -681,6 +709,123 @@ export class Requests implements OnModuleDestroy {
     });
   }
 
+  // ---------- 첨부 파일 ----------
+  /**
+   * 파일 첨부. side='portal'이면 고객(자기 법인·부서 범위의 요청만), 'desk'면 업체 담당자.
+   * 종료된 요청에는 올릴 수 없다. 첨부·이력(ATTACH)·알림·감사를 한 트랜잭션으로 저장한다.
+   * internal: 업체만 지정할 수 있는 내부용 표시(고객 화면·고객 알림에서 제외).
+   */
+  async attach(
+    req: AppRequest,
+    id: string,
+    file: Express.Multer.File | undefined,
+    side: 'portal' | 'desk',
+    internal = false,
+  ) {
+    const a = side === 'portal' ? this.customerActor(req) : this.staffActor(req);
+    if (!file || !file.size) throw new BadRequestException('첨부할 파일을 선택해주세요.');
+    // 경로·제어문자를 지운 파일 이름만 남긴다(내려받을 때 다른 경로로 저장되지 않게).
+    const name = (file.originalname || '')
+      .split(/[\\/]/)
+      .pop()!
+      .replace(/[\u0000-\u001f\u007f]/g, '')
+      .trim()
+      .slice(-200);
+    if (!name) throw new BadRequestException('파일 이름을 확인해주세요.');
+    if (BLOCKED_EXT.test(name))
+      throw new BadRequestException(
+        '실행 파일·스크립트는 첨부할 수 없습니다. 압축하거나 다른 형식으로 올려주세요.',
+      );
+    const hidden = side === 'desk' && internal;
+    return this.db.tx(async (c) => {
+      const r = (
+        await c.query(
+          side === 'portal'
+            ? `SELECT r.* FROM app.service_requests r WHERE r.id=$3 AND ${this.scopeSql} FOR UPDATE`
+            : 'SELECT * FROM app.service_requests WHERE id=$1 FOR UPDATE',
+          side === 'portal' ? [a.customer_id, a.id, id] : [id],
+        )
+      ).rows[0];
+      if (!r) throw new NotFoundException('요청을 찾을 수 없습니다.');
+      if (['CLOSED', 'CANCELLED'].includes(r.status))
+        throw new ConflictException('종료된 요청에는 파일을 첨부할 수 없습니다.');
+      const count = (
+        await c.query(
+          'SELECT count(*)::int AS n FROM app.request_attachments WHERE request_id=$1',
+          [id],
+        )
+      ).rows[0].n;
+      if (count >= MAX_FILES_PER_REQUEST)
+        throw new BadRequestException(
+          `요청 하나에 파일은 ${MAX_FILES_PER_REQUEST}개까지 첨부할 수 있습니다.`,
+        );
+      await c.query(
+        `INSERT INTO app.request_attachments(request_id,uploaded_by,file_name,content_type,size_bytes,internal,data)
+         VALUES($1,$2,$3,$4,$5,$6,$7)`,
+        [
+          id,
+          a.id,
+          name,
+          (file.mimetype || 'application/octet-stream').slice(0, 200),
+          file.size,
+          hidden,
+          file.buffer,
+        ],
+      );
+      await this.event(c, id, a.id, 'ATTACH', { body: name, internal: hidden });
+      await c.query('UPDATE app.service_requests SET updated_at=now() WHERE id=$1', [id]);
+      // 고객이 올리면 담당자(없으면 업체 직원)에게, 업체가 공개 파일을 올리면 요청자·고객사 관리자에게 알린다.
+      if (side === 'portal')
+        await this.notify(
+          c,
+          await this.staffTargets(c, r.assignee_id),
+          a.id,
+          id,
+          `#${r.request_no} 고객이 파일을 첨부했습니다: ${r.title}`,
+        );
+      else if (!hidden)
+        await this.notify(
+          c,
+          await this.customerTargets(c, r),
+          a.id,
+          id,
+          `#${r.request_no} 담당자가 파일을 첨부했습니다: ${r.title}`,
+        );
+      await this.auditWrite(c, req, 'SR_ATTACH');
+      return { message: '파일을 첨부했습니다.' };
+    });
+  }
+  /** 첨부 내려받기. 고객은 자기 범위 요청의 공개 파일만, 업체 담당자는 자기 업체(RLS) 요청의 모든 파일. */
+  async attachment(req: AppRequest, id: string, attId: string, side: 'portal' | 'desk') {
+    const a = side === 'portal' ? this.customerActor(req) : this.staffActor(req);
+    return this.db.tx(async (c) => {
+      const row = (
+        await c.query(
+          side === 'portal'
+            ? `SELECT f.file_name,f.content_type,f.data FROM app.request_attachments f
+               JOIN app.service_requests r ON r.id=f.request_id
+               WHERE f.id=$4 AND f.request_id=$3 AND NOT f.internal AND ${this.scopeSql}`
+            : 'SELECT file_name,content_type,data FROM app.request_attachments WHERE id=$2 AND request_id=$1',
+          side === 'portal' ? [a.customer_id, a.id, id, attId] : [id, attId],
+        )
+      ).rows[0];
+      if (!row) throw new NotFoundException('파일을 찾을 수 없습니다.');
+      return row as { file_name: string; content_type: string; data: Buffer };
+    });
+  }
+  /** 내려받기 응답 머리글. 안전한 이미지만 화면 표시를 허용하고 나머지는 항상 파일로 저장하게 한다. */
+  static sendFile(res: Response, f: { file_name: string; content_type: string; data: Buffer }) {
+    const inline = INLINE_TYPES.includes(f.content_type);
+    res.setHeader('Content-Type', inline ? f.content_type : 'application/octet-stream');
+    // filename*: 한글 이름을 표준 방식(UTF-8 퍼센트 인코딩)으로 전달한다.
+    res.setHeader(
+      'Content-Disposition',
+      `${inline ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(f.file_name)}`,
+    );
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.send(f.data);
+  }
+
   // ---------- 확인 대기 자동 완료 ----------
   /** 서버 시작 시 main.ts가 호출한다. 시작 직후 한 번, 이후 1시간마다 실행한다. 테스트는 autoClose를 직접 부른다. */
   startAutoClose() {
@@ -802,6 +947,51 @@ export class RequestsController {
     @Body() body: CommentDto,
   ) {
     return this.requests.portalComment(req, this.id(id), body);
+  }
+  // 첨부: 파일 하나를 multipart/form-data의 'file' 칸으로 받는다. 저장 권한(SAVE)이 있어야 올린다.
+  @Post('requests/portal/:id/attachments')
+  @Permission('SR_PORTAL', 'SAVE')
+  @UseInterceptors(FileInterceptor('file', UPLOAD))
+  portalAttach(
+    @Req() req: AppRequest,
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.requests.attach(req, this.id(id), file, 'portal');
+  }
+  @Get('requests/portal/:id/attachments/:attId')
+  @Permission('SR_PORTAL', 'QUERY')
+  async portalFile(
+    @Req() req: AppRequest,
+    @Param('id') id: string,
+    @Param('attId') attId: string,
+    @Res() res: Response,
+  ) {
+    const f = await this.requests.attachment(req, this.id(id), this.id(attId), 'portal');
+    Requests.sendFile(res, f);
+  }
+  @Post('requests/desk/:id/attachments')
+  @Permission('SR_DESK', 'SAVE')
+  @UseInterceptors(FileInterceptor('file', UPLOAD))
+  deskAttach(
+    @Req() req: AppRequest,
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    // multipart의 일반 칸은 문자열로 온다. 'true'일 때만 업체 내부용으로 저장한다.
+    @Body('internal') internal: string,
+  ) {
+    return this.requests.attach(req, this.id(id), file, 'desk', internal === 'true');
+  }
+  @Get('requests/desk/:id/attachments/:attId')
+  @Permission('SR_DESK', 'QUERY')
+  async deskFile(
+    @Req() req: AppRequest,
+    @Param('id') id: string,
+    @Param('attId') attId: string,
+    @Res() res: Response,
+  ) {
+    const f = await this.requests.attachment(req, this.id(id), this.id(attId), 'desk');
+    Requests.sendFile(res, f);
   }
   @Post('requests/portal/:id/confirm') @Permission('SR_PORTAL', 'ETC1') confirm(
     @Req() req: AppRequest,

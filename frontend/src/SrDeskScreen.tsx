@@ -5,6 +5,7 @@
  * 저장 성공 후 현재 필터로 다시 조회하고, 실패하면 입력을 유지한다.
  */
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from 'react';
+import { Attachments } from './Attachments';
 import { api } from './api';
 import { DataGrid } from './DataGrid';
 import { Screen, ScreenHandle, ViewState } from './types';
@@ -435,6 +436,15 @@ export const SrDeskScreen = forwardRef<
                 </button>
               </div>
             )}
+            <Attachments
+              base={'requests/desk/' + detail.item.id}
+              menuId={screen.menu_id}
+              files={detail.attachments || []}
+              canUpload={!closed && canSave}
+              allowInternal
+              onChanged={() => load(String(detail.item.id))}
+              notify={notify}
+            />
             <ol className="sr-timeline">
               {detail.events.map((e: any) => (
                 <li

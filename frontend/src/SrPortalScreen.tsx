@@ -9,6 +9,8 @@ import { api } from './api';
 import { Screen, ScreenHandle, ViewState } from './types';
 import { Notify } from './Toasts';
 import { categoryLabel, dateTime, eventText, priorityLabel, statusLabel } from './srLabels';
+import { Attachments } from './Attachments';
+import { upload } from './api';
 
 const emptyDraft = {
   title: '',
@@ -35,6 +37,8 @@ export const SrPortalScreen = forwardRef<
     [creating, setCreating] = useState(false),
     [draft, setDraft] = useState(emptyDraft),
     [comment, setComment] = useState(''),
+    // 새 요청과 함께 올릴 파일. 요청이 먼저 만들어져야 첨부할 수 있어 등록 직후 차례로 올린다.
+    [newFiles, setNewFiles] = useState<File[]>([]),
     [busy, setBusy] = useState(false);
   // 모든 요청에 메뉴 ID를 붙여 서버가 이 메뉴에서 허용된 버튼인지 검사하게 한다.
   const call = (path: string, body?: unknown) =>
@@ -108,8 +112,23 @@ export const SrPortalScreen = forwardRef<
       setCreating(false);
       setDraft(emptyDraft);
       setSelected(r.id);
+      // 첨부 실패가 요청 등록을 되돌리지는 않는다. 실패한 파일은 상세 화면에서 다시 올리도록 안내한다.
+      let failed = 0;
+      for (const f of newFiles) {
+        const form = new FormData();
+        form.append('file', f);
+        await upload(`requests/portal/${r.id}/attachments`, form, {
+          'X-Menu-ID': screen.menu_id,
+        }).catch(() => failed++);
+      }
+      setNewFiles([]);
       await load(r.id);
-      notify(r.message, 'success');
+      notify(
+        failed
+          ? `${r.message} 파일 ${failed}개는 올리지 못했습니다. 아래에서 다시 첨부해주세요.`
+          : r.message,
+        failed ? 'error' : 'success',
+      );
       return true;
     }
     if (!selected || !comment.trim()) {
@@ -281,6 +300,15 @@ export const SrPortalScreen = forwardRef<
                 onChange={(e) => setDraft({ ...draft, body: e.target.value })}
               />
             </label>
+            <label>
+              첨부 파일(선택)
+              {/* 휴대폰에서는 사진 촬영·앨범 선택도 된다. 파일당 10MB, 실행 파일 불가(서버 검사). */}
+              <input
+                type="file"
+                multiple
+                onChange={(e) => setNewFiles(Array.from(e.target.files || []))}
+              />
+            </label>
             {/* 휴대폰에서 내용을 쓴 뒤 화면 맨 위 툴바까지 올라가지 않도록 폼 아래에도 등록 버튼을 둔다. */}
             <button className="primary" disabled={busy} onClick={() => void submitHere()}>
               요청 등록
@@ -323,6 +351,17 @@ export const SrPortalScreen = forwardRef<
                 )}
               </div>
             )}
+            <Attachments
+              base={'requests/portal/' + detail.item.id}
+              menuId={screen.menu_id}
+              files={detail.attachments || []}
+              canUpload={
+                !['CLOSED', 'CANCELLED'].includes(detail.item.status) &&
+                Boolean(screen.buttons.SAVE?.allowed)
+              }
+              onChanged={() => load(String(detail.item.id))}
+              notify={notify}
+            />
             <ol className="sr-timeline">
               {detail.events.map((e: any) => (
                 <li key={e.id} className={e.kind === 'COMMENT' ? 'comment' : 'change'}>

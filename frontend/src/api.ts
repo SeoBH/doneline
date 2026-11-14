@@ -32,3 +32,40 @@ export async function api(path: string, options: RequestInit = {}) {
   if (data.csrfToken) csrf = data.csrfToken;
   return data;
 }
+/**
+ * 파일 업로드(multipart/form-data). Content-Type은 브라우저가 경계값(boundary)을 넣어 직접 정하므로 지정하지 않는다.
+ * 응답은 api()와 같은 JSON이며 실패 시 ApiError를 던진다.
+ */
+export async function upload(path: string, form: FormData, headers: Record<string, string> = {}) {
+  const res = await fetch('/api/' + path, {
+    method: 'POST',
+    body: form,
+    headers: { 'X-CSRF-Token': csrf, ...headers },
+  });
+  const data = await res.json().catch(() => ({ message: '파일을 올리지 못했습니다.' }));
+  if (!res.ok)
+    throw new ApiError(data.message + (data.requestId ? ' · ' + data.requestId : ''), res.status);
+  return data;
+}
+/**
+ * 파일 내려받기. 화면 권한 확인용 X-Menu-ID 머리글을 붙여야 해서 링크 대신 fetch로 받은 뒤,
+ * 임시 주소(blob URL)를 만들어 브라우저의 '다운로드'로 저장한다.
+ */
+export async function download(
+  path: string,
+  fileName: string,
+  headers: Record<string, string> = {},
+) {
+  const res = await fetch('/api/' + path, { headers });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({ message: '파일을 받지 못했습니다.' }));
+    throw new ApiError(data.message, res.status);
+  }
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  a.click();
+  // 브라우저가 저장을 시작할 시간을 준 뒤 임시 주소를 해제해 메모리를 돌려준다.
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
