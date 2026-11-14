@@ -190,7 +190,11 @@ test('self-service workspace signup creates an isolated workspace with a ready a
     400,
   );
   assert.match(bad.body.message, /업체 코드/);
+  const earlyBefore = (await db.query('SELECT app.early_adopter_count() AS n')).rows[0].n;
   await post(guest, 'workspaces/signup', body).expect(201);
+  // 초기 업체 내부 기록: 기록된 업체가 30곳 미만이었으면 이번 업체가 초기 업체가 되고 수가 1 늘어난다.
+  const earlyAfter = (await db.query('SELECT app.early_adopter_count() AS n')).rows[0].n;
+  assert.equal(earlyAfter, earlyBefore < 30 ? earlyBefore + 1 : earlyBefore);
   // 같은 업체 코드, 같은 아이디는 각각 409로 거절한다.
   await post(guest, 'workspaces/signup', { ...body, loginId: prefix + '_self2' }).expect(409);
   await post(guest, 'workspaces/signup', { ...body, workspaceCode: code + '2' }).expect(409);

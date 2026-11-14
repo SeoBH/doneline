@@ -111,9 +111,18 @@ export class Workspaces {
     }
     // 이후 이 요청의 오류 감사 기록도 새 워크스페이스에 남도록 지정한다.
     useWorkspace(workspaceId);
+    // 초기 업체(처음 30곳, 020 마이그레이션) 여부. 외부에 공개하지 않는 내부 기준이라 운영 알림에만 적는다.
+    const early = (
+      await this.db.query(
+        'SELECT w.early_adopter,app.early_adopter_count() AS n FROM app.workspaces w WHERE w.id=$1',
+        [workspaceId],
+        workspaceId,
+      )
+    ).rows[0];
     // 업체명·코드만 보낸다. 담당자 이름·연락처·이메일 같은 개인정보는 외부 서비스(슬랙)로 보내지 않는다.
     void this.notifier.ops(
-      `🆕 새 업체 가입: ${body.workspaceName.trim()} (${body.workspaceCode}) · 요금제 FREE`,
+      `🆕 새 업체 가입: ${body.workspaceName.trim()} (${body.workspaceCode}) · 요금제 FREE` +
+        (early?.early_adopter ? ` · 초기 업체 ${early.n}/30` : ''),
     );
     return {
       message: '업체 가입을 완료했습니다.',

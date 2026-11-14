@@ -111,7 +111,10 @@ function App() {
   const signupToken = new URLSearchParams(window.location.search).get('signup') || '';
   const [signup, setSignup] = useState(false);
   // 업체(워크스페이스) 무료 가입 화면 표시 여부. 링크 없이 로그인 화면에서 바로 연다.
-  const [workspaceSignup, setWorkspaceSignup] = useState(false);
+  // 소개 페이지(landing)의 [무료로 시작하기]는 /?start=1로 들어와 이 화면을 바로 연다(로그인 화면을 한 번 더 거치지 않게).
+  const [workspaceSignup, setWorkspaceSignup] = useState(
+    () => new URLSearchParams(window.location.search).get('start') === '1',
+  );
   // 가입 링크의 고객사·업체 이름(로그인 화면 안내용). 토큰이 잘못되었으면 null로 두고 회원가입 화면에서 오류를 보여 준다.
   const [signupInfo, setSignupInfo] = useState<{
     customerName: string;
