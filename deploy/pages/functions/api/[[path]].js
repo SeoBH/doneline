@@ -1,5 +1,5 @@
 /**
- * Cloudflare Pages Function: doneline-app.pages.dev/api/* 요청을 이 PC에서 실행 중인 백엔드로 전달한다.
+ * Cloudflare Pages Function: doneline.pages.dev/api/* 요청을 이 PC에서 실행 중인 백엔드로 전달한다.
  * 화면 파일(frontend/dist)은 Pages가 직접 제공하고, API만 이 함수가 대신 보낸다. 브라우저 입장에서는 화면과 API가
  * 같은 pages.dev 주소라서 로그인 쿠키와 서버의 Origin 검사가 그대로 동작한다.
  * 파일명 [[path]]는 /api 아래의 모든 하위 경로를 이 함수 하나로 받는다는 Pages 규칙이다.

@@ -227,8 +227,8 @@ MAIL_FROM=Doneline 알림 <보내는Gmail주소>
 
 | 주소 | 내용 |
 | --- | --- |
-| `https://doneline-app.pages.dev` | 앱. 화면 파일은 Pages가 주고, `/api/*`만 중계 함수(`deploy/pages/functions/api/[[path]].js`)가 이 PC 서버로 전달합니다. |
-| `https://doneline.pages.dev` | 소개 페이지(`landing/`). |
+| `https://doneline.pages.dev` | 앱. 화면 파일은 Pages가 주고, `/api/*`만 중계 함수(`deploy/pages/functions/api/[[path]].js`)가 이 PC 서버로 전달합니다. |
+| `https://doneline-info.pages.dev` | 소개 페이지(`landing/`). |
 | `https://castanets.taile12e316.ts.net` | 서버 입구(Tailscale Funnel). 중계 함수만 쓰며 사람이 직접 들어오면 거절됩니다. |
 
 이렇게 나눈 이유: 고객에게 나가는 가입 링크·메일 링크가 처음부터 바뀌지 않는 주소를 쓰게 하기 위해서입니다. 나중에 도메인을 사서 Pages에 연결해도 `pages.dev` 주소는 계속 동작하고, 서버 입구만 Cloudflare Tunnel로 바꾸면 됩니다(중계 함수의 `BACKEND_ORIGIN`만 변경).
@@ -244,7 +244,7 @@ MAIL_FROM=Doneline 알림 <보내는Gmail주소>
 powershell -ExecutionPolicy Bypass -File scripts/demo.ps1
 ```
 
-`APP_ORIGIN`을 `https://doneline-app.pages.dev`로, `NODE_ENV=production`·`TRUST_PROXY=1`로 실행하고 Funnel을 켭니다. 처음 실행하면 Tailscale이 Funnel 승인 링크를 보여줄 수 있습니다. 예시 데이터(한빛IT서비스·서울메디랩, `hanbit_ceo`·`hanbit_park`·`smlab_lee`, 비밀번호는 `backend/manual-capture.cjs`의 `PW`)로 열려면 `-Sample`, 예전처럼 ts.net 주소로 직접 접속하게 하려면 `-Direct`를 붙입니다. 공개를 완전히 끄려면 `& 'C:\Program Files\Tailscale\tailscale.exe' funnel reset`을 실행합니다.
+`APP_ORIGIN`을 `https://doneline.pages.dev`로, `NODE_ENV=production`·`TRUST_PROXY=1`로 실행하고 Funnel을 켭니다. 처음 실행하면 Tailscale이 Funnel 승인 링크를 보여줄 수 있습니다. 예시 데이터(한빛IT서비스·서울메디랩, `hanbit_ceo`·`hanbit_park`·`smlab_lee`, 비밀번호는 `backend/manual-capture.cjs`의 `PW`)로 열려면 `-Sample`, 예전처럼 ts.net 주소로 직접 접속하게 하려면 `-Direct`를 붙입니다. 공개를 완전히 끄려면 `& 'C:\Program Files\Tailscale\tailscale.exe' funnel reset`을 실행합니다.
 
 Pages 배포(대표님 Cloudflare 계정, 처음 한 번 설정):
 
@@ -256,15 +256,15 @@ npx.cmd --yes wrangler@4 login
 powershell -ExecutionPolicy Bypass -File scripts/deploy-pages.ps1 -Setup
 ```
 
-`login`은 브라우저에서 Cloudflare 로그인과 허용을 묻습니다. **주의:** 최신 wrangler는 `pages project create`를 그대로 실행하면 Workers 자동 설정으로 넘어가 실행한 폴더 전체를 공개 파일로 올립니다(2026-11-14 실제 발생, 즉시 삭제). 프로젝트 생성은 반드시 스크립트(`-Setup`, 빈 폴더 + `--force`)로 하고 저장소 폴더에서 wrangler를 직접 실행하지 않습니다. `-Setup`은 Pages 프로젝트 2개(`doneline-app`, `doneline`)를 만들고, `.env`의 `PROXY_SECRET`과 이 PC의 Funnel 주소를 앱 프로젝트 비밀값으로 등록한 뒤 앱만 배포합니다(값은 화면에 표시하지 않음). 소개 페이지는 공개 시점을 정한 뒤 `-Landing`으로 올립니다. 이후 화면이나 소개 페이지를 고치면 `scripts/deploy-pages.ps1`(둘 다), `-App`, `-Landing`으로 다시 배포합니다. 프로젝트 이름이 이미 쓰이고 있으면 Cloudflare가 다른 주소를 주므로, 그 주소에 맞춰 `scripts/demo.ps1`의 출처와 `landing/index.html`의 링크를 바꿉니다.
+`login`은 브라우저에서 Cloudflare 로그인과 허용을 묻습니다. **주의:** 최신 wrangler는 `pages project create`를 그대로 실행하면 Workers 자동 설정으로 넘어가 실행한 폴더 전체를 공개 파일로 올립니다(2026-11-14 실제 발생, 즉시 삭제). 프로젝트 생성은 반드시 스크립트(`-Setup`, 빈 폴더 + `--force`)로 하고 저장소 폴더에서 wrangler를 직접 실행하지 않습니다. `-Setup`은 Pages 프로젝트 2개(`doneline`=앱, `doneline-info`=소개 페이지)를 만들고, `.env`의 `PROXY_SECRET`과 이 PC의 Funnel 주소를 앱 프로젝트 비밀값으로 등록한 뒤 앱만 배포합니다(값은 화면에 표시하지 않음). 소개 페이지는 공개 시점을 정한 뒤 `-Landing`으로 올립니다. 이후 화면이나 소개 페이지를 고치면 `scripts/deploy-pages.ps1`(둘 다), `-App`, `-Landing`으로 다시 배포합니다. 프로젝트 이름이 이미 쓰이고 있으면 Cloudflare가 다른 주소를 주므로, 그 주소에 맞춰 `scripts/demo.ps1`의 출처와 `landing/index.html`의 링크를 바꿉니다.
 
 데모는 개발 DB(`doneline_dev`)를 사용하며 방문자는 **업체 무료 가입**으로 자기 업체를 만들어 체험합니다. 업체 가입·개선 요청·서버 시작·서버 오류·메일 발송 실패는 운영 슬랙으로 알립니다. 회사 PC·회사망에서는 실행하지 않습니다.
 
 ## 소개 페이지(랜딩)
 
-`landing/`(index.html·landing.css)은 영업용 소개 페이지이며 `https://doneline.pages.dev`에 올립니다(위 배포 스크립트). 도메인을 사면 소개 페이지는 `doneline.○○`, 앱은 `app.doneline.○○`처럼 나눕니다.
+`landing/`(index.html·landing.css)은 영업용 소개 페이지이며 `https://doneline-info.pages.dev`에 올립니다(위 배포 스크립트). 도메인을 사면 소개 페이지는 `doneline.○○`, 앱은 `app.doneline.○○`처럼 나눕니다.
 
-- [무료로 시작하기]는 `https://doneline-app.pages.dev/?start=1`로 이동해 업체 가입 화면을 바로 엽니다. [로그인]·[사용 설명서 보기]도 앱 주소로 갑니다. 앱 주소가 바뀌면 `landing/index.html`의 주소를 모두 바꿉니다.
+- [무료로 시작하기]는 `https://doneline.pages.dev/?start=1`로 이동해 업체 가입 화면을 바로 엽니다. [로그인]·[사용 설명서 보기]도 앱 주소로 갑니다. 앱 주소가 바뀌면 `landing/index.html`의 주소를 모두 바꿉니다.
 - 문의 메일은 `doneline.team@gmail.com`입니다(계정이 만들어져야 메일을 받습니다).
 - 화면 그림은 실제 화면을 단순화한 HTML 예시이고, 숫자는 예시 값입니다. 스크립트는 쓰지 않습니다.
 - 요금은 "현재 모든 기능 무료"만 알리고 카드·요금제·혜택 내용은 넣지 않습니다(실제 과금을 시작할 때 페이지를 새로 만듭니다). 자주 묻는 질문에는 요금제가 생기면 30일 전에 알리고 동의한 경우에만 적용한다는 원칙만 둡니다. 셀프 가입 처음 30곳은 앱 내부에 초기 업체로 기록하며(020 마이그레이션) 외부에는 공개하지 않습니다. 운영 슬랙의 가입 알림에만 `초기 업체 n/30`이 붙습니다.

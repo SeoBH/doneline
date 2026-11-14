@@ -1,6 +1,6 @@
 ﻿# Doneline 외부 데모 실행 스크립트.
 # 이 PC의 Doneline 서버(127.0.0.1:3100)를 Tailscale Funnel로 공개하고 데모 설정으로 서버를 실행한다.
-# 기본(Pages 중계 모드): 사용자는 https://doneline-app.pages.dev 로 접속하고, Pages 중계 함수만 Funnel 주소로 서버에 들어온다.
+# 기본(Pages 중계 모드): 사용자는 https://doneline.pages.dev 로 접속하고, Pages 중계 함수만 Funnel 주소로 서버에 들어온다.
 #   서버는 .env의 PROXY_SECRET 표식이 붙은 요청만 받으므로 ts.net 주소로 직접 들어오면 거절된다(scripts/deploy-pages.ps1 참고).
 # -Direct: 예전처럼 https://<이 PC의 Tailscale 이름>.ts.net 으로 직접 접속하게 한다(중계 표식 검사 끔).
 # 창을 닫거나 Ctrl+C로 서버를 멈추면 접속이 끊긴다.
@@ -20,7 +20,7 @@ if ($Direct) {
   # 직접 접속 모드에서는 중계 표식 검사를 끈다(.env 값보다 이 창의 환경변수가 우선한다).
   $env:PROXY_SECRET = ''
 } else {
-  $origin = 'https://doneline-app.pages.dev'
+  $origin = 'https://doneline.pages.dev'
 }
 
 # NODE_ENV=production: HTTPS 출처 필수, 보안 쿠키 발급, 로컬 메일 미리보기 차단.

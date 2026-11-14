@@ -9,7 +9,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const ORIGIN = 'https://doneline-app.pages.dev';
+const ORIGIN = 'https://doneline.pages.dev';
 const SECRET = crypto.randomBytes(32).toString('hex');
 let app, db, base, relay;
 
@@ -43,7 +43,7 @@ before(async () => {
 });
 after(async () => app?.close());
 
-// 브라우저가 doneline-app.pages.dev에 보낸 요청을 중계 함수로 처리한다. ip는 Cloudflare가 알려 주는 접속자 IP 역할.
+// 브라우저가 doneline.pages.dev에 보낸 요청을 중계 함수로 처리한다. ip는 Cloudflare가 알려 주는 접속자 IP 역할.
 const viaPages = (p, { ip = '203.0.113.10', env, ...init } = {}) =>
   relay.onRequest({
     request: new Request(ORIGIN + p, {

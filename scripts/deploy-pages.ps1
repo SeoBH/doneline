@@ -1,6 +1,6 @@
 ﻿# Doneline Cloudflare Pages 배포 스크립트(대표님 Cloudflare 계정으로 실행).
-# - 앱(doneline-app.pages.dev): 화면 파일(frontend/dist) + 보안 헤더(deploy/pages/_headers) + API 중계 함수(deploy/pages/functions)
-# - 소개 페이지(doneline.pages.dev): landing 폴더
+# - 앱(doneline.pages.dev): 화면 파일(frontend/dist) + 보안 헤더(deploy/pages/_headers) + API 중계 함수(deploy/pages/functions)
+# - 소개 페이지(doneline-info.pages.dev): landing 폴더
 # 처음 한 번: npx.cmd wrangler login (브라우저에서 Cloudflare 로그인·허용) 후 -Setup으로 프로젝트와 비밀값을 만든다.
 # 실행(프로젝트 루트에서):
 #   powershell -ExecutionPolicy Bypass -File scripts/deploy-pages.ps1 -Setup   # 처음 한 번: 프로젝트 생성 + 비밀값 등록 + 앱 배포
@@ -24,7 +24,7 @@ if ($Setup) {
   Push-Location $empty
   try {
     # 이미 있는 프로젝트면 생성 오류를 무시하고 넘어간다.
-    foreach ($p in 'doneline-app', 'doneline') {
+    foreach ($p in 'doneline', 'doneline-info') {
       & npx.cmd --yes wrangler@4 pages project create $p --production-branch main --force
     }
   } finally { Pop-Location }
@@ -35,8 +35,8 @@ if ($Setup) {
   # 파이프로 값을 넘겨 화면에 표시하지 않는다. 설정 파일이 없는 빈 폴더에서 실행한다.
   Push-Location $empty
   try {
-    $secret | npx.cmd --yes wrangler@4 pages secret put PROXY_SECRET --project-name doneline-app
-    $backend | npx.cmd --yes wrangler@4 pages secret put BACKEND_ORIGIN --project-name doneline-app
+    $secret | npx.cmd --yes wrangler@4 pages secret put PROXY_SECRET --project-name doneline
+    $backend | npx.cmd --yes wrangler@4 pages secret put BACKEND_ORIGIN --project-name doneline
   } finally { Pop-Location; Remove-Item -Recurse -Force $empty }
   # 소개 페이지는 외부 공개 시점을 따로 정하므로 -Setup만으로는 앱만 배포한다(필요하면 -Landing을 함께 붙인다).
   Write-Host '프로젝트와 비밀값을 준비했습니다. 이어서 앱을 배포합니다.'
@@ -52,13 +52,13 @@ if ($App) {
   Copy-Item (Join-Path $root 'deploy/pages/_headers') $out
   # wrangler는 실행 위치의 functions 폴더를 함께 올리므로 deploy/pages에서 실행한다.
   Push-Location (Join-Path $root 'deploy/pages')
-  try { Wrangler pages deploy dist-app --project-name doneline-app --branch main --commit-dirty=true }
+  try { Wrangler pages deploy dist-app --project-name doneline --branch main --commit-dirty=true }
   finally { Pop-Location }
 }
 
 if ($Landing) {
   # 소개 페이지에는 중계 함수가 붙지 않도록 landing 폴더 안에서 실행한다.
   Push-Location (Join-Path $root 'landing')
-  try { Wrangler pages deploy . --project-name doneline --branch main --commit-dirty=true }
+  try { Wrangler pages deploy . --project-name doneline-info --branch main --commit-dirty=true }
   finally { Pop-Location }
 }
