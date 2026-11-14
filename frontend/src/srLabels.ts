@@ -38,6 +38,8 @@ export function eventText(e: any, names: Record<string, string> = {}) {
   if (e.kind === 'PRIORITY')
     return `우선순위: ${priorityLabel[e.from_value]} → ${priorityLabel[e.to_value]}`;
   if (e.kind === 'ASSIGN')
-    return e.to_value ? `담당자: ${names[e.to_value] || '지정'}` : '담당자 지정을 해제했습니다.';
+    return e.to_value
+      ? `담당자: ${names[e.to_value] || e.to_name || '지정'}`
+      : '담당자 지정을 해제했습니다.';
   return e.body;
 }

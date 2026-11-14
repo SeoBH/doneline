@@ -6,6 +6,12 @@ import { Screen, ScreenHandle, ViewState } from './types';
 import { Notify } from './Toasts';
 import { confirmAction } from './ConfirmDialog';
 const wrap = (r: any): GridRow => ({ ...r, _key: r.id, _checked: false });
+/**
+ * 고객사·법인·부서를 저장·삭제했음을 같은 브라우저 창의 다른 화면(탭)에 알리는 이벤트 이름.
+ * 화면들은 처음 열 때만 목록을 읽으므로, 이 신호를 받으면 편집 중이 아닐 때 목록을 다시 읽는다(QA DLV2-002).
+ * CustomEvent: 브라우저가 제공하는 '내가 이름 붙인 이벤트'. detail에 바뀐 종류(customers 등)를 담는다.
+ */
+export const CATALOG_CHANGED = 'doneline:catalog-changed';
 export const CustomersScreen = forwardRef<
   ScreenHandle,
   { screen: Screen; notify: Notify; onState: (s: ViewState) => void }
@@ -54,9 +60,13 @@ export const CustomersScreen = forwardRef<
       const d = await api('catalogs/' + kind, { headers });
       if (ticket !== epoch.current) return;
       setData(d);
+      // 상위 고객사는 사용자가 직접 고른 것만 유지한다. 예전에는 첫 고객사를 자동으로 골라
+      // 고객사를 누르지 않고 저장한 법인이 첫 고객사에 들어갔다(QA DLV2-003). 고객사가 1곳뿐이면 그곳을 고른다.
       const customer = d.customers.some((r: any) => r.id === customerId)
         ? customerId
-        : d.customers[0]?.id || '';
+        : d.customers.length === 1
+          ? d.customers[0].id
+          : '';
       const corporation = d.corporations.some(
         (r: any) => r.id === corporationId && r.customer_id === customer,
       )
@@ -78,6 +88,19 @@ export const CustomersScreen = forwardRef<
       epoch.current++;
     };
   }, []);
+  // 다른 화면에서 고객사·법인·부서가 바뀌면 다시 읽는다. 편집 중(체크한 행이 있음)이면 입력을 지키려고 건너뛴다.
+  // queryRef: 이벤트 함수는 처음 만든 것이 계속 쓰이므로 최신 query 함수를 ref로 읽는다.
+  const queryRef = useRef(query);
+  queryRef.current = query;
+  useEffect(() => {
+    const onChanged = (e: Event) => {
+      const changed = (e as CustomEvent).detail;
+      if (changed === kind || latest.current.some((r) => r._checked)) return;
+      void queryRef.current();
+    };
+    window.addEventListener(CATALOG_CHANGED, onChanged);
+    return () => window.removeEventListener(CATALOG_CHANGED, onChanged);
+  }, [kind]);
   async function reset() {
     epoch.current++;
     await grid.current?.stop();
@@ -144,8 +167,16 @@ export const CustomersScreen = forwardRef<
       notify('처리할 행을 체크해 주세요.');
       return false;
     }
+    // 확인 창에 어느 고객사(·법인)에 저장하는지 함께 보여 준다(QA DLV2-003).
+    const parentName = [
+      kind !== 'customers' && data.customers.find((r: any) => r.id === customerId)?.name,
+      kind === 'departments' && data.corporations.find((r: any) => r.id === corporationId)?.name,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    const target = parentName ? `${parentName}에 ${title} ` : `${title} `;
     if (
-      !(await confirmAction(selected.length + '개 행을 ' + (remove ? '삭제' : '저장') + '할까요?'))
+      !(await confirmAction(`${target}${selected.length}개를 ${remove ? '삭제' : '저장'}할까요?`))
     )
       return false;
     let committed = false;
@@ -171,7 +202,7 @@ export const CustomersScreen = forwardRef<
         : latest.current.find((r) => r._key === active)?.code ||
           (selected.length === 1 ? selected[0].code : '');
       // 성공 후 전체를 다시 읽는다. 체크하지 않은 신규/수정 행도 DB 상태로 교체한다.
-      update([]);
+      // 다시 읽는 동안 표를 비우지 않는다(비우면 '데이터 없음'이 잠깐 보여 저장이 날아간 것처럼 보임, QA R1).
       setActive('');
       const d = await api('catalogs/' + kind, { headers });
       setData(d);
@@ -179,6 +210,8 @@ export const CustomersScreen = forwardRef<
       update(fresh);
       const again = keepCode && fresh.find((r) => r.code === keepCode);
       if (again) setActive(again._key);
+      // 다른 탭에 열려 있는 고객사·법인·부서·사용자 화면도 새 목록을 읽게 알린다(QA DLV2-002).
+      window.dispatchEvent(new CustomEvent(CATALOG_CHANGED, { detail: kind }));
       notify((remove ? '삭제' : '저장') + '했습니다.', 'success');
       return true;
     } catch (e) {
@@ -189,6 +222,39 @@ export const CustomersScreen = forwardRef<
         'error',
       );
       return committed;
+    } finally {
+      setBusy(false);
+    }
+  }
+  /**
+   * 가입 링크 교체. 링크가 엉뚱한 곳에 전달됐을 때 새 링크를 만들어 예전 링크로는 가입하지 못하게 한다.
+   * 성공하면 목록을 다시 읽어 새 링크를 보여 준다. 이미 가입한 사용자에게는 영향이 없다.
+   */
+  async function rotateLink(customer: any) {
+    if (
+      !(await confirmAction({
+        title: '가입 링크를 새로 만들까요?',
+        message: `${customer.name}에 보낸 예전 가입 링크는 더 이상 쓸 수 없습니다. 이미 가입한 사용자는 그대로 로그인할 수 있습니다.`,
+        confirmLabel: '새 링크 만들기',
+        danger: true,
+      }))
+    )
+      return;
+    setBusy(true);
+    try {
+      const r = await api('catalogs/customers/' + customer.id + '/signup-link', {
+        method: 'POST',
+        headers,
+        body: '{}',
+      });
+      const d = await api('catalogs/' + kind, { headers });
+      setData(d);
+      const fresh = filtered(d[kind]);
+      update(fresh);
+      setActive(fresh.find((x) => x.id === customer.id)?._key || '');
+      notify(r.message, 'success');
+    } catch (e) {
+      notify((e as Error).message, 'error');
     } finally {
       setBusy(false);
     }
@@ -324,6 +390,13 @@ export const CustomersScreen = forwardRef<
               }
             >
               가입 링크 복사
+            </button>
+            <button
+              type="button"
+              disabled={busy || !screen.buttons.SAVE?.allowed}
+              onClick={() => void rotateLink(customer)}
+            >
+              새 링크로 바꾸기
             </button>
           </div>
         ) : (

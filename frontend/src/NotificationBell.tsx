@@ -12,6 +12,8 @@ import { Icon } from './Icon';
 export function NotificationBell({ onOpen }: { onOpen: (n: any) => void }) {
   const [data, setData] = useState<{ items: any[]; unread: number }>({ items: [], unread: 0 }),
     [open, setOpen] = useState(false),
+    // 첫 응답을 받기 전에는 개수를 모른다. '0건'으로 그렸다가 '3건'으로 바뀌어 보이지 않게 구분한다(QA DL-008).
+    [loaded, setLoaded] = useState(false),
     box = useRef<HTMLDivElement>(null);
   // 패널이 열려 있을 때 바깥을 누르면 닫는다(휴대폰에서 패널이 화면을 덮어 다른 곳을 누를 수 없게 되는 문제 방지).
   useEffect(() => {
@@ -26,7 +28,10 @@ export function NotificationBell({ onOpen }: { onOpen: (n: any) => void }) {
   const load = useCallback(() => {
     // 알림은 보조 기능이므로 실패해도 화면에 오류를 띄우지 않고 다음 주기에 다시 시도한다.
     api('notifications')
-      .then(setData)
+      .then((d) => {
+        setData(d);
+        setLoaded(true);
+      })
       .catch(() => {});
   }, []);
   useEffect(() => {
@@ -47,7 +52,7 @@ export function NotificationBell({ onOpen }: { onOpen: (n: any) => void }) {
   return (
     <div className="bell" ref={box}>
       <button
-        aria-label={'알림 ' + data.unread + '건'}
+        aria-label={loaded ? '알림 ' + data.unread + '건' : '알림 불러오는 중'}
         aria-expanded={open}
         onClick={(e) => {
           // 바깥 클릭으로 닫히는 우클릭 메뉴 처리와 겹치지 않도록 이벤트 전파를 막는다.
@@ -57,7 +62,7 @@ export function NotificationBell({ onOpen }: { onOpen: (n: any) => void }) {
         }}
       >
         <Icon name="bell" />
-        {data.unread > 0 && <span className="bell-count">{data.unread}</span>}
+        {loaded && data.unread > 0 && <span className="bell-count">{data.unread}</span>}
       </button>
       {open && (
         <div className="bell-panel" onClick={(e) => e.stopPropagation()}>

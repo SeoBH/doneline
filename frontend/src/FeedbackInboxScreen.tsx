@@ -39,11 +39,12 @@ export const FeedbackInboxScreen = forwardRef<
     setItems((await api('feedback', { headers })).items);
     setEdits({});
   }
-  async function query() {
+  // quiet: 화면을 열 때 자동으로 읽는 경우는 '조회했습니다' 알림을 띄우지 않는다(누르지 않은 동작, QA DLV2-017).
+  async function query(quiet = false) {
     setBusy(true);
     try {
       await load();
-      notify('조회했습니다.', 'success');
+      if (!quiet) notify('조회했습니다.', 'success');
     } catch (e) {
       notify((e as Error).message, 'error');
     } finally {

@@ -2,3 +2,4 @@
 User-agent: *
 Disallow: /
 Allow: /manual/
+Sitemap: https://doneline.pages.dev/sitemap.xml

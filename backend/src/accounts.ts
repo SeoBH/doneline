@@ -53,6 +53,17 @@ function fields(body: any, allowed: string[]) {
 }
 // 메일 발송(SMTP) 설정 여부. 링크를 메일로 보냈는지에 따라 관리자 안내 문구가 달라진다.
 const mailed = Boolean(settings.smtp.host);
+/**
+ * 감사 기록에 남길 값에서 비밀값을 뺀다(QA DLV2-001).
+ * 고객사 행의 signup_token(가입 링크 토큰)은 아는 사람 누구나 그 고객사로 가입할 수 있는 열쇠라서
+ * 감사 로그를 볼 수 있는 사람에게도 보이면 안 된다. 기록에는 '바뀌었는지'만 남긴다.
+ */
+function auditValues(row: any) {
+  if (!row || typeof row !== 'object' || !('signup_token' in row)) return row;
+  const { signup_token: _token, ...rest } = row;
+  return rest;
+}
+
 @Injectable()
 export class Accounts {
   constructor(
@@ -117,19 +128,27 @@ export class Accounts {
     key: string,
     before: any,
     after: any,
+    action = kind.toUpperCase() + '_SAVE',
   ) {
     const event = await this.audit.write(
       {
         requestId: req.requestId,
         userId: req.actor!.id,
-        action: kind.toUpperCase() + '_SAVE',
+        action,
         outcome: 'SUCCESS',
       },
       c,
     );
     await c.query(
       'INSERT INTO audit.audit_changes(event_id,entity_type,entity_key,change_type,before_values,after_values) VALUES($1,$2,$3,$4,$5,$6)',
-      [event, kind, key, !after ? 'DELETE' : !before ? 'INSERT' : 'UPDATE', before, after],
+      [
+        event,
+        kind,
+        key,
+        !after ? 'DELETE' : !before ? 'INSERT' : 'UPDATE',
+        auditValues(before),
+        auditValues(after),
+      ],
     );
   }
   private async change<T>(fn: (c: PoolClient) => Promise<T>) {
@@ -257,6 +276,39 @@ export class Accounts {
       return { items };
     });
   }
+  /**
+   * 고객사 가입 링크 교체(QA DLV2-001 후속). 링크가 밖으로 퍼졌을 때 새 토큰을 만들어 예전 링크를 바로 무효로 한다.
+   * 이미 가입한 사용자에게는 영향이 없고, 새 링크를 받은 사람만 이후 가입할 수 있다.
+   * 감사 기록에는 토큰 값 없이 '교체했다'는 사실만 남긴다. 반환: 새 토큰과 버전(화면의 동시 편집 검사용).
+   */
+  async rotateSignupLink(req: AppRequest, customerId: string) {
+    return this.change(async (c) => {
+      const actor = await this.actor(c, req, 'SAVE', catalogCodes.customers);
+      await this.customer(c, customerId);
+      this.tenant(actor, customerId);
+      // 기본값과 같은 방식(무작위 UUID 2개 = 64자 16진수)으로 새 토큰을 만든다.
+      const row = (
+        await c.query(
+          "UPDATE app.customers SET signup_token=replace(gen_random_uuid()::text,'-','')||replace(gen_random_uuid()::text,'-','') WHERE id=$1 RETURNING id,signup_token,version",
+          [id(customerId)],
+        )
+      ).rows[0];
+      await this.log(
+        c,
+        req,
+        'customers',
+        row.id,
+        { signupLink: '이전 링크' },
+        { signupLink: '새 링크로 교체' },
+        'SIGNUP_LINK_ROTATE',
+      );
+      return {
+        signupToken: row.signup_token,
+        version: row.version,
+        message: '가입 링크를 새로 만들었습니다. 예전 링크는 더 이상 쓸 수 없습니다.',
+      };
+    });
+  }
   async options(req: AppRequest) {
     return this.db.tx(async (c) => {
       const actor = await this.actor(c, req, 'QUERY');
@@ -267,13 +319,30 @@ export class Accounts {
         )
       ).rows;
       for (const t of customers) Object.assign(t, await this.selection(c, t.id));
+      // 고객사별 사용자 수·승인 대기 수. 화면의 고객사 고르기 칸에 함께 보여, 다른 고객사에 승인할 사람이
+      // 있는데도 '없다'고 오해하지 않게 한다(QA DLV2-005). customer_id가 NULL인 줄은 우리 업체 직원이다.
+      const counts = (
+        await c.query(
+          `SELECT customer_id, count(*)::int AS users, (count(*) FILTER (WHERE account_status='PENDING'))::int AS pending
+           FROM app.users WHERE ($1 OR customer_id=$2) GROUP BY customer_id`,
+          [actor.authority_type === 'SYSTEM', actor.customer_id],
+        )
+      ).rows;
+      const countOf = (key: string | null) =>
+        counts.find((r) => r.customer_id === key) || { users: 0, pending: 0 };
+      for (const t of customers) Object.assign(t, { counts: countOf(t.id) });
       const responsibilities = (
         await c.query(
           "SELECT id,code,name,authority_type,level FROM app.responsibilities WHERE is_active AND ($1 OR authority_type='CUSTOMER') ORDER BY code",
           [actor.authority_type === 'SYSTEM'],
         )
       ).rows;
-      return { operator: actor.authority_type === 'SYSTEM', customers, responsibilities };
+      return {
+        operator: actor.authority_type === 'SYSTEM',
+        customers,
+        responsibilities,
+        staffCounts: actor.authority_type === 'SYSTEM' ? countOf(null) : undefined,
+      };
     });
   }
   private async selection(c: PoolClient, customerId: string) {
@@ -827,6 +896,15 @@ export class AccountsController {
     @Body() body: any,
   ) {
     return this.accounts.saveCatalog(req, kind, body);
+  }
+  // :kind는 권한 검사(CatalogPermission)가 화면을 고르는 데 쓰므로 customers만 허용한다.
+  @Post('catalogs/:kind/:id/signup-link') @CatalogPermission('SAVE') rotateSignupLink(
+    @Req() req: AppRequest,
+    @Param('kind') kind: string,
+    @Param('id') customerId: string,
+  ) {
+    if (kind !== 'customers') throw new NotFoundException('등록 화면이 없습니다.');
+    return this.accounts.rotateSignupLink(req, customerId);
   }
   @Post('catalogs/:kind/delete') @CatalogPermission('DELETE') deleteCatalog(
     @Req() req: AppRequest,

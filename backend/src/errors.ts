@@ -56,6 +56,12 @@ export class ErrorFilter implements ExceptionFilter {
       typeof detail === 'object' && detail && 'rowErrors' in detail
         ? (detail as any).rowErrors
         : undefined;
-    if (!res.headersSent) res.status(status).json({ message, requestId: req.requestId, rowErrors });
+    // code: 화면이 오류 종류를 구분해야 할 때만 붙이는 짧은 표식(예: CSRF). 사용자에게 보이지 않는다.
+    const code =
+      typeof detail === 'object' && detail && typeof (detail as any).code === 'string'
+        ? (detail as any).code
+        : undefined;
+    if (!res.headersSent)
+      res.status(status).json({ message, requestId: req.requestId, rowErrors, code });
   }
 }

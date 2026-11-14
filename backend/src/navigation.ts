@@ -104,7 +104,9 @@ export class NavigationController {
   @Permission('AUDIT', 'QUERY')
   /**
    * 감사 목록(최신순 50건씩). 화면이 읽기 쉽도록 사용자 이름·아이디와 '변경 상세가 있는지'를 함께 돌려준다(QA DL-014).
-   * 거르기: from/to(YYYY-MM-DD, 한국 날짜), action(기능 코드 일부), user(이름·아이디 일부), outcome(SUCCESS 등).
+   * 거르기: from/to(YYYY-MM-DD, 한국 날짜), action(기능 코드 일부), user(이름·아이디 일부), outcome(SUCCESS 등),
+   * reads(1이면 메뉴 불러오기·감사 로그 조회 같은 '보기만 한' 기록도 포함. 기본은 빼서 실제 작업 기록이 먼저 보이게 한다, QA DL-014).
+   * error_code(실패 시 HTTP 상태 번호)도 돌려줘 화면이 '권한 없음'처럼 이유를 한국어로 보여 준다.
    * 업체 분리는 뷰·사용자 표의 RLS가 맡는다. 다음 쪽이 있는지는 51건을 읽어 판단한다.
    */
   async events(
@@ -115,12 +117,13 @@ export class NavigationController {
     @Query('action') action = '',
     @Query('user') user = '',
     @Query('outcome') outcome = '',
+    @Query('reads') reads = '',
   ) {
     const index = /^\d{1,5}$/.test(page) ? Math.max(1, Number(page)) : 1;
     const day = (v: string) => (/^\d{4}-\d{2}-\d{2}$/.test(v) ? v : '');
     const text = (v: string) => String(v || '').slice(0, 60);
     const result = await this.db.query(
-      `SELECT e.event_id,e.request_id,e.occurred_at,e.action,e.outcome,e.user_id,
+      `SELECT e.event_id,e.request_id,e.occurred_at,e.action,e.outcome,e.error_code,e.user_id,
          u.display_name AS user_name,u.login_id AS user_login,
          EXISTS(SELECT 1 FROM audit.config_changes c WHERE c.event_id=e.event_id) AS has_changes
        FROM audit.event_summary e LEFT JOIN app.users u ON u.id=e.user_id
@@ -129,8 +132,17 @@ export class NavigationController {
          AND ($4='' OR e.action ILIKE '%'||$4||'%')
          AND ($5='' OR u.display_name ILIKE '%'||$5||'%' OR u.login_id ILIKE '%'||$5||'%')
          AND ($6='' OR e.outcome=$6)
+         AND ($7 OR $4<>'' OR e.action NOT IN ('NAVIGATION','AUDIT_QUERY','AUDIT_DETAIL','MENU_LAYOUT_QUERY','REGISTER_QUERY','RESP_LINK_QUERY','USER_QUERY'))
        ORDER BY e.occurred_at DESC,e.event_id DESC LIMIT 51 OFFSET $1`,
-      [(index - 1) * 50, day(from), day(to), text(action), text(user), text(outcome)],
+      [
+        (index - 1) * 50,
+        day(from),
+        day(to),
+        text(action),
+        text(user),
+        text(outcome),
+        reads === '1',
+      ],
     );
     await this.audit.write({
       requestId: req.requestId,

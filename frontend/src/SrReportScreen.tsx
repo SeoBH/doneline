@@ -31,11 +31,12 @@ export const SrReportScreen = forwardRef<
   useEffect(() => onState({ busy, dirty: false }), [busy, onState]);
   const qs = () =>
     '?month=' + encodeURIComponent(month) + '&customerId=' + encodeURIComponent(customerId);
-  async function query() {
+  // quiet: 화면을 열 때 자동으로 읽는 경우는 '조회했습니다' 알림을 띄우지 않는다(누르지 않은 동작, QA DLV2-017).
+  async function query(quiet = false) {
     setBusy(true);
     try {
       setData(await api('reports/monthly' + qs(), { headers: { 'X-Menu-ID': screen.menu_id } }));
-      notify('조회했습니다.', 'success');
+      if (!quiet) notify('조회했습니다.', 'success');
     } catch (e) {
       notify((e as Error).message, 'error');
     } finally {
@@ -54,9 +55,13 @@ export const SrReportScreen = forwardRef<
       const url = URL.createObjectURL(await res.blob());
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Doneline_월간리포트_${month}.xlsx`;
+      // 내려받은 시각을 파일 이름에 붙인다. 같은 이름이면 브라우저가 '-2'를 붙여 어느 것이 최신인지 헷갈렸다(QA DLV2-011).
+      const now = new Date();
+      const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+      a.download = `Doneline_월간리포트_${month}_${stamp}.xlsx`;
       a.click();
-      URL.revokeObjectURL(url);
+      // 브라우저가 저장을 시작할 시간을 준 뒤 임시 주소를 해제한다(바로 해제하면 일부 브라우저에서 저장이 실패한다).
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
       notify('엑셀 파일을 내려받았습니다.', 'success');
     } catch (e) {
       notify((e as Error).message, 'error');
@@ -75,7 +80,7 @@ export const SrReportScreen = forwardRef<
     },
   }));
   useEffect(() => {
-    void query();
+    void query(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const rows = data ? [...data.rows, { customer_name: '합계', ...data.total, total: true }] : [];

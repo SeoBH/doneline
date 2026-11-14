@@ -402,6 +402,9 @@ test('monthly report summarizes the current month and exports Excel', async () =
   const list = wb.getWorksheet('요청 목록');
   assert.equal(list.rowCount, 1 + 3);
   assert.equal(list.getRow(2).getCell(5).value, 'VPN 접속 불가');
+  // 등록 시각은 글자가 아니라 엑셀 날짜로 들어가야 정렬·필터가 된다(QA DLV2-011).
+  assert.ok(list.getRow(2).getCell(11).value instanceof Date);
+  assert.equal(wb.getWorksheet('요약').getRow(4).getCell(9).value, '평균 처리 시간(분)');
 });
 
 test('resolved requests close automatically after the confirmation period', async () => {

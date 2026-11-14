@@ -56,7 +56,12 @@ export class SecurityGuard implements CanActivate {
         Buffer.byteLength(expected) !== Buffer.byteLength(supplied) ||
         !timingSafeEqual(Buffer.from(expected), Buffer.from(supplied))
       )
-        throw new ForbiddenException('요청 인증 정보가 올바르지 않습니다.');
+        // code: 'CSRF' — 화면(api.ts)이 이 경우만 골라 새 토큰을 받아 한 번 다시 보낸다(QA DLV2-018).
+        // 다른 탭에서 로그인·로그아웃하면 토큰이 바뀌어, 사용자는 잘못한 것이 없는데 이 오류를 볼 수 있기 때문이다.
+        throw new ForbiddenException({
+          message: '요청 인증 정보가 올바르지 않습니다.',
+          code: 'CSRF',
+        });
     }
     if (this.reflector.get('public', ctx.getHandler())) return true;
     if (!req.session?.userId || !req.session.workspaceId)

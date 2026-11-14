@@ -17,7 +17,8 @@ export type Attachment = {
   uploader_name: string;
 };
 // 파일 크기를 읽기 쉬운 단위로 바꾼다(예: 1536 → 1.5KB).
-const sizeText = (n: number) =>
+// 요청 등록 화면(SrPortalScreen)의 '함께 올릴 파일' 목록도 같은 표기를 쓰도록 내보낸다(QA DLV2-014: 68바이트가 0KB로 보임).
+export const sizeText = (n: number) =>
   n < 1024 ? n + 'B' : n < 1048576 ? (n / 1024).toFixed(1) + 'KB' : (n / 1048576).toFixed(1) + 'MB';
 
 /**

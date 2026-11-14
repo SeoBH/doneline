@@ -27,6 +27,8 @@ export function AccountForm({
   signup = false,
   disabled = false,
   editing = false,
+  confirm,
+  onConfirm,
 }: {
   value: AccountDraft;
   onChange: (v: AccountDraft) => void;
@@ -34,6 +36,9 @@ export function AccountForm({
   signup?: boolean;
   disabled?: boolean;
   editing?: boolean;
+  // 가입 폼의 '비밀번호 확인' 값. 주면 비밀번호 바로 옆에 확인 칸을 둔다(멀리 떨어져 오타 대조가 어려웠다, QA DLV2-023).
+  confirm?: string;
+  onConfirm?: (v: string) => void;
 }) {
   const set = (key: keyof AccountDraft, v: any) => onChange({ ...value, [key]: v });
   return (
@@ -74,6 +79,22 @@ export function AccountForm({
               autoComplete="new-password"
             />
             <small>8~128자</small>
+          </label>
+        )}
+        {signup && onConfirm && (
+          <label>
+            비밀번호 확인
+            <input
+              type="password"
+              aria-label="비밀번호 확인"
+              value={confirm || ''}
+              required
+              minLength={8}
+              maxLength={128}
+              autoComplete="new-password"
+              onChange={(e) => onConfirm(e.target.value)}
+            />
+            <small>같은 비밀번호를 한 번 더</small>
           </label>
         )}
         <label>

@@ -10,6 +10,7 @@ import { Screen, ScreenHandle, ViewState } from './types';
 import { Notify } from './Toasts';
 import { confirmAction } from './ConfirmDialog';
 import { checkForm, clearInvalid } from './formCheck';
+import { CATALOG_CHANGED } from './CustomersScreen';
 export const AccountsScreen = forwardRef<
   ScreenHandle,
   { screen: Screen; notify: Notify; onState: (s: ViewState) => void }
@@ -58,7 +59,9 @@ export const AccountsScreen = forwardRef<
           editCustomer !== (editing.customer_id || 'system')
       : Object.values(draft).some(Boolean),
   );
-  const dirty = formDirty || mappingDirty || rows.some((r) => r._checked);
+  // 목록의 체크는 승인·정지 대상을 고르는 것일 뿐 편집 내용이 아니다(이 화면의 표는 고칠 수 없음).
+  // 체크만 해도 탭에 '저장 안 한 변경(*)'이 붙어 혼란스러웠으므로 입력 폼·매핑만 변경으로 본다(QA R3·DLV2-013).
+  const dirty = formDirty || mappingDirty;
   const checked = rows.filter((r) => r._checked);
   const visibleActions =
     tab === 'basic'
@@ -83,19 +86,26 @@ export const AccountsScreen = forwardRef<
     () => onState({ busy, dirty, visibleActions, disabledActions }),
     [busy, dirty, tab, selected, rows, onState],
   );
-  async function query() {
+  /**
+   * 고객사 목록(사용자 수 포함)과 고른 고객사의 사용자 목록을 읽는다. want: 새로 고를 고객사(없으면 지금 값 유지).
+   * 처음 열 때는 승인 대기가 있는 고객사를 먼저 고르고, 없으면 우리 업체 직원을 보여 준다.
+   * 예전에는 첫 고객사를 골라 다른 고객사의 승인 대기·직원이 '없는 것처럼' 보였다(QA DLV2-005).
+   */
+  async function query(want = customerId) {
     const ticket = ++epoch.current;
     setBusy(true);
     try {
       const o = await api('accounts/options', { headers });
       if (ticket !== epoch.current) return;
       setOptions(o);
-
-      const key = o.customers.some((c: any) => c.id === customerId)
-        ? customerId
-        : customerId === 'system' && o.operator
+      const waiting = o.customers.find((c: any) => c.counts?.pending > 0)?.id;
+      const key = o.customers.some((c: any) => c.id === want)
+        ? want
+        : want === 'system' && o.operator
           ? 'system'
-          : o.customers[0]?.id || (o.operator ? 'system' : '');
+          : o.operator && o.staffCounts?.pending > 0
+            ? 'system'
+            : waiting || (o.operator ? 'system' : o.customers[0]?.id || '');
       setCustomerId(key);
       const data = key ? await api('accounts/' + key, { headers }) : { items: [] };
       if (ticket === epoch.current) {
@@ -119,6 +129,17 @@ export const AccountsScreen = forwardRef<
       epoch.current++;
     };
   }, []);
+  // 다른 탭에서 고객사·법인·부서를 저장하면 고르기 칸과 부서 목록을 새로 읽는다(QA DLV2-002).
+  // 입력 중이면 입력을 지키려고 건너뛴다. queryRef: 이벤트 함수 안에서 최신 query·dirty를 읽기 위한 보관함.
+  const queryRef = useRef({ query, dirty });
+  queryRef.current = { query, dirty };
+  useEffect(() => {
+    const onChanged = () => {
+      if (!queryRef.current.dirty) void queryRef.current.query();
+    };
+    window.addEventListener(CATALOG_CHANGED, onChanged);
+    return () => window.removeEventListener(CATALOG_CHANGED, onChanged);
+  }, []);
   function reset() {
     if (tab === 'mapping') {
       restoreMapping(selected);
@@ -136,18 +157,18 @@ export const AccountsScreen = forwardRef<
     setStatus('');
     setBusy(false);
   }
+  // 고객사를 바꾸면 바로 그 고객사의 사용자를 읽는다. 예전에는 목록만 비우고 [조회]를 기다려
+  // '사용자가 없다'와 '아직 안 읽었다'를 구분할 수 없었다(QA DLV2-004).
   async function chooseCustomer(id: string) {
     if (dirty && !(await confirmAction('입력 중인 내용을 버리고 고객사를 변경할까요?'))) return;
-    epoch.current++;
-    setCustomerId(id);
     setSelected(null);
     setMappingDirty(false);
     setCorporationIds([]);
     setDepartmentIds([]);
     setActiveCorp('');
-    setRows([]);
     newAccount();
     setNote('');
+    await query(id);
   }
   async function save() {
     const bad = checkForm(form.current);
@@ -229,7 +250,8 @@ export const AccountsScreen = forwardRef<
     }
   }
   async function updateAccount() {
-    if (!editing || !(await confirmAction('선택한 사용자의 기본정보를 변경할까요?'))) return false;
+    // 기본정보 수정은 다시 고칠 수 있는 동작이라 확인 창 없이 바로 저장한다(QA DLV2-009: 확인 창이 너무 많음).
+    if (!editing) return false;
     setBusy(true);
     try {
       await api('accounts/update', {
@@ -494,6 +516,15 @@ export const AccountsScreen = forwardRef<
     REJECTED: '반려',
     SUSPENDED: '정지',
   };
+  // 고르기 칸 옆에 붙일 사용자 수. 예: " (3명 · 승인 대기 1)"
+  const countLabel = (n?: { users: number; pending: number }) =>
+    n ? ` (${n.users}명${n.pending ? ` · 승인 대기 ${n.pending}` : ''})` : '';
+  // 지금 보고 있지 않은 고객사의 승인 대기 합계. 있으면 목록 위에 알려 준다.
+  const otherPending =
+    options.customers
+      .filter((c: any) => c.id !== customerId)
+      .reduce((sum: number, c: any) => sum + (c.counts?.pending || 0), 0) +
+    (customerId !== 'system' ? options.staffCounts?.pending || 0 : 0);
   function scopeName(scopes: any[]) {
     return scopes
       .map((s) => {
@@ -593,11 +624,14 @@ export const AccountsScreen = forwardRef<
                 disabled={busy || !options.operator}
                 onChange={(e) => chooseCustomer(e.target.value)}
               >
-                <option value="">선택</option>
-                {options.operator && <option value="system">우리 업체 직원 (고객사 없음)</option>}
+                {!customerId && <option value="">선택</option>}
+                {options.operator && (
+                  <option value="system">우리 업체 직원{countLabel(options.staffCounts)}</option>
+                )}
                 {options.customers.map((c: any) => (
                   <option key={c.id} value={c.id}>
                     {c.code} · {c.name}
+                    {countLabel(c.counts)}
                   </option>
                 ))}
               </select>
@@ -622,6 +656,11 @@ export const AccountsScreen = forwardRef<
               </select>
             </label>
           </div>
+          {otherPending > 0 && (
+            <p className="hint">
+              다른 고객사에 승인 대기 {otherPending}명이 있습니다. 위 고객사 칸에서 골라 확인하세요.
+            </p>
+          )}
           <DataGrid
             label="사용자 목록"
             onPick={pickUser}
@@ -629,19 +668,21 @@ export const AccountsScreen = forwardRef<
             checks={tab === 'basic'}
             rows={rows.filter((r) => !status || r.account_status === status)}
             columns={[
-              { field: 'login_id', header: '아이디', width: 140 },
-              { field: 'display_name', header: '이름', width: 100 },
-              { field: 'account_status', header: '상태', format: (v) => names[v] },
-              { field: 'resp_name', header: '역할', width: 150 },
-              { field: 'email', header: '이메일', width: 220 },
+              // 자주 보는 칸을 앞에, 폭을 줄여 오른쪽 정보 패널이 있어도 한눈에 보이게 한다(QA DLV2-013).
+              // 주소는 오른쪽 사용자정보에서 보므로 목록에서는 뺐다.
+              { field: 'login_id', header: '아이디', width: 120 },
+              { field: 'display_name', header: '이름', width: 90 },
+              { field: 'account_status', header: '상태', width: 90, format: (v) => names[v] },
               {
                 field: 'mapping_ready',
-                header: '매핑 상태',
+                header: '매핑',
+                width: 90,
                 format: (v) => (v ? '완료' : '매핑 필요'),
               },
-              { field: 'mobile', header: '휴대전화', width: 140 },
-              { field: 'address', header: '주소', width: 200 },
-              { field: 'scopes', header: '법인/부서 범위', width: 260, format: scopeName },
+              { field: 'resp_name', header: '역할', width: 130 },
+              { field: 'email', header: '이메일', width: 170 },
+              { field: 'mobile', header: '휴대전화', width: 120 },
+              { field: 'scopes', header: '법인/부서 범위', width: 200, format: scopeName },
               {
                 field: 'registration_source',
                 header: '등록 경로',

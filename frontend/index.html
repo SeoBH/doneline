@@ -17,6 +17,14 @@
       property="og:description"
       content="요청을 올리고 처리 상황을 바로 확인하세요. 유지보수·IT 서비스 업체와 고객사가 함께 쓰는 요청 창구입니다."
     />
+    <!-- 공유 미리보기 그림(1200×630, public/og.png). 메신저는 전체 주소만 읽으므로 앱 주소를 붙여 쓴다(QA DL-017).
+         twitter:card summary_large_image: 큰 그림 카드로 보이게 하는 표준 표식(슬랙 등도 읽는다). -->
+    <meta property="og:url" content="https://doneline.pages.dev/" />
+    <meta property="og:image" content="https://doneline.pages.dev/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Doneline · 고객 요청을 접수부터 완료 확인까지" />
+    <meta name="twitter:card" content="summary_large_image" />
     <!-- 본문 글꼴 Pretendard(무료 오픈 라이선스): 한글·영문·숫자 모양이 고르고 작은 크기에서도 잘 읽힌다.
          사용하는 글자만 나눠 내려받는 버전(dynamic subset)이라 첫 화면 부담이 적다. 실패하면 맑은 고딕으로 표시된다. -->
     <link

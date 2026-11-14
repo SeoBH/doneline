@@ -12,7 +12,7 @@ import { DataGrid } from './DataGrid';
 import { Screen, ScreenHandle, ViewState } from './types';
 import { Notify } from './Toasts';
 import { categoryLabel, dateTime, eventText, priorityLabel, statusLabel } from './srLabels';
-import { confirmAction } from './ConfirmDialog';
+import { askText, confirmAction } from './ConfirmDialog';
 
 // 처리 폼의 초기값. priority는 선택한 요청의 현재 값, assigneeId는 맡길 사람(관리자의 배정·재배정 선택)이다.
 const emptyForm = { assigneeId: '', priority: '', comment: '', internal: false };
@@ -63,11 +63,13 @@ export const SrDeskScreen = forwardRef<
       priority: d.item.priority,
     });
   }
-  async function load(keep = selected, f = filters) {
+  // listOnly: 목록·담당자만 읽고 열어 둔 상세는 건드리지 않는다(첫 조회용, QA DLV2-006 — 고객 요청 화면과 같은 이유).
+  async function load(keep = selected, f = filters, listOnly = false) {
     const r = await call('?status=' + f.status + '&filter=' + f.filter);
     setItems(r.items);
     setAssignees(r.assignees);
     setMe(r.me);
+    if (listOnly) return;
     if (keep) fill(await call('/' + keep));
     else {
       setDetail(null);
@@ -103,7 +105,13 @@ export const SrDeskScreen = forwardRef<
       notify('변경된 내용이 없습니다.');
       return false;
     }
-    if (!(await confirmAction('변경 내용을 저장할까요?'))) return false;
+    // 고객에게 보이는 답변만 확인한다(보내면 되돌릴 수 없음). 내부 메모·우선순위는 바로 저장한다(QA DLV2-009).
+    const publicReply = Boolean(form.comment.trim()) && !form.internal && !closed;
+    if (
+      publicReply &&
+      !(await confirmAction('답변을 저장할까요? 고객에게 바로 보이고 알림이 갑니다.'))
+    )
+      return false;
     // 답변/메모의 캡처를 먼저 첨부로 올린다. 내부 메모면 이미지도 내부용(고객에게 안 보임)으로 올린다.
     const pasted = memoImgs.tokens();
     await memoImgs.uploadAll(
@@ -135,32 +143,53 @@ export const SrDeskScreen = forwardRef<
       setBusy(false);
     }
   }
-  // 진행 동작: 처리 시작(START)·처리 완료(RESOLVE)·되돌리기(REVERT)·요청 취소(CANCEL).
-  // 되돌리기·취소는 답변/메모 칸의 내용을 사유로 보낸다. 우선순위 변경은 함께 보내지 않고 [저장]으로 따로 한다.
+  // 진행 동작: 처리 시작(START)·처리 완료(RESOLVE)·되돌리기(REVERT)·요청 취소(CANCEL)·완료 취소(UNRESOLVE).
+  // 되돌리기·취소·완료 취소는 확인 창에서 사유를 바로 받는다(QA DL-016·DLV2-007과 같은 방식).
+  // 답변/메모 칸에 적어 둔 글이 있으면 사유 칸에 미리 채운다. 우선순위 변경은 함께 보내지 않고 [저장]으로 따로 한다.
   async function act(action: 'START' | 'RESOLVE' | 'REVERT' | 'CANCEL' | 'UNRESOLVE') {
     if (!detail) return;
-    const reason = form.comment.trim();
-    if ((action === 'REVERT' || action === 'CANCEL' || action === 'UNRESOLVE') && !reason) {
-      notify(
-        { REVERT: '되돌리는', CANCEL: '취소하는', UNRESOLVE: '처리 완료를 취소하는' }[action] +
-          ' 사유를 답변/메모 칸에 적은 뒤 다시 눌러 주세요.',
-        'error',
-      );
-      return;
+    const memo = form.comment.trim();
+    let reason = '';
+    if (action === 'START' || action === 'RESOLVE') {
+      const ask = {
+        START: '이 요청을 맡아 처리를 시작할까요?',
+        RESOLVE: '처리 완료로 바꿀까요? 고객에게 결과 확인 요청이 갑니다.',
+      }[action];
+      if (!(await confirmAction(ask))) return;
+    } else {
+      const ask = {
+        REVERT: {
+          title: '접수 상태로 되돌리기',
+          message:
+            '담당을 해제하고 접수 상태로 돌립니다. 다른 직원이 다시 맡을 수 있습니다. 사유는 내부 메모로 남습니다.',
+          confirmLabel: '되돌리기',
+        },
+        CANCEL: {
+          title: '요청 취소',
+          message: '이 요청을 취소합니다. 취소 사유가 고객에게 보입니다.',
+          confirmLabel: '요청 취소',
+        },
+        UNRESOLVE: {
+          title: '처리 완료 취소',
+          message: '다시 처리 중으로 돌립니다. 사유가 고객에게 보입니다.',
+          confirmLabel: '완료 취소',
+        },
+      }[action];
+      const typed = await askText({
+        ...ask,
+        danger: action === 'CANCEL',
+        input: { label: '사유', required: true, initial: memo, max: 10000 },
+      });
+      if (typed === null) return;
+      reason = typed;
     }
-    const ask = {
-      START: '이 요청을 맡아 처리를 시작할까요?',
-      RESOLVE: '처리 완료로 바꿀까요? 고객에게 결과 확인 요청이 갑니다.',
-      REVERT: '접수 상태로 되돌리고 담당을 해제할까요? 다른 직원이 다시 맡을 수 있게 됩니다.',
-      CANCEL: '이 요청을 취소할까요? 취소 사유가 고객에게 보입니다.',
-      UNRESOLVE: '처리 완료를 취소하고 다시 처리 중으로 돌릴까요? 사유가 고객에게 보입니다.',
-    }[action];
-    if (!(await confirmAction(ask))) return;
     await run(async () => {
       // 되돌리기 사유는 내부 메모, 취소 사유는 고객 공개로 남으므로 이미지도 같은 공개 범위로 올린다.
-      const sendReason = reason && action !== 'START' && action !== 'RESOLVE';
+      // 캡처는 메모 칸의 글을 그대로 사유로 쓴 경우에만 함께 올린다.
+      const sendReason = Boolean(reason);
+      const fromMemo = sendReason && reason === memo;
       const pasted = memoImgs.tokens();
-      if (sendReason)
+      if (fromMemo)
         await memoImgs.uploadAll(
           pasted.used,
           'requests/desk/' + selected,
@@ -173,7 +202,7 @@ export const SrDeskScreen = forwardRef<
         ...(action === 'START' && form.assigneeId && me.manager
           ? { assigneeId: form.assigneeId }
           : {}),
-        ...(sendReason ? { comment: pasted.text.trim() } : {}),
+        ...(sendReason ? { comment: fromMemo ? pasted.text.trim() : reason } : {}),
       });
       await load(selected);
       notify(r.message, 'success');
@@ -206,7 +235,7 @@ export const SrDeskScreen = forwardRef<
     save,
   }));
   useEffect(() => {
-    void load(null).catch((e) => notify((e as Error).message, 'error'));
+    void load(null, filters, true).catch((e) => notify((e as Error).message, 'error'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // 현재 필터를 ref에도 둔다. 주기 새로고침(setInterval)은 처음 만든 함수를 계속 쓰므로 최신 필터를 ref로 읽는다.
@@ -483,7 +512,7 @@ export const SrDeskScreen = forwardRef<
                   rows={3}
                   value={form.comment}
                   maxLength={10000}
-                  placeholder="되돌리기·요청 취소 때는 이 칸에 사유를 적어 주세요. 화면 캡처는 바로 붙여 넣을 수 있습니다(Ctrl+V)."
+                  placeholder="고객에게 보낼 답변이나 내부 메모를 적어 주세요. 화면 캡처는 바로 붙여 넣을 수 있습니다(Ctrl+V)."
                   onChange={(e) => setForm({ ...form, comment: e.target.value })}
                   onPaste={memoImgs.onPaste}
                   onDrop={memoImgs.onDrop}

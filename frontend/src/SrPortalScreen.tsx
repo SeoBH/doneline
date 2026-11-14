@@ -9,10 +9,10 @@ import { api } from './api';
 import { Screen, ScreenHandle, ViewState } from './types';
 import { Notify } from './Toasts';
 import { categoryLabel, dateTime, eventText, priorityLabel, statusLabel } from './srLabels';
-import { Attachments } from './Attachments';
+import { Attachments, sizeText } from './Attachments';
 import { ImageText, PastePreview, usePastedImages } from './PastedImages';
 import { upload } from './api';
-import { confirmAction } from './ConfirmDialog';
+import { askText, confirmAction } from './ConfirmDialog';
 
 const emptyDraft = {
   title: '',
@@ -61,11 +61,13 @@ export const SrPortalScreen = forwardRef<
   );
   // 첫 목록을 받기 전에는 '요청 없음' 대신 '불러오는 중'을 보여 준다(QA DL-008: 빈 목록으로 오해).
   const [loaded, setLoaded] = useState(false);
-  async function load(keep = selected) {
+  // keep: 다시 열 요청 ID(null이면 상세를 비움). listOnly: 목록만 읽고 상세는 건드리지 않는다(첫 조회용).
+  async function load(keep = selected, listOnly = false) {
     const r = await call('');
     setItems(r.items);
     setScopes(r.scopes);
     setLoaded(true);
+    if (listOnly) return;
     if (keep) setDetail(await call('/' + keep));
     else setDetail(null);
   }
@@ -173,29 +175,38 @@ export const SrPortalScreen = forwardRef<
       setBusy(false);
     }
   }
+  /**
+   * 완료 확인 또는 재처리 요청. 재처리는 확인 창 안에서 사유를 바로 받는다(QA DLV2-007).
+   * 예전에는 '아래 댓글 칸에 적고 다시 누르기'였는데, 사유를 [댓글 등록]으로 먼저 올리면 다시 적어야 했다.
+   * 댓글 칸에 적어 둔 글이 있으면 사유 칸에 미리 넣어 준다(캡처 이미지는 그 글과 함께 올라간다).
+   */
   async function decide(accept: boolean) {
     if (!detail || !canConfirm) return;
-    // 재처리 요청은 이유가 있어야 담당자가 무엇을 다시 할지 안다. 아래 댓글 칸에 적은 내용을 사유로 보낸다.
-    if (!accept && !comment.trim()) {
-      notify('재처리가 필요한 이유를 아래 댓글 칸에 적은 뒤 [재처리 요청]을 눌러 주세요.', 'error');
-      document.querySelector<HTMLTextAreaElement>('.sr-detail textarea')?.focus();
-      return;
+    let reason = '';
+    if (accept) {
+      if (!(await confirmAction('처리 결과를 확인하고 요청을 완료할까요?'))) return;
+    } else {
+      const typed = await askText({
+        title: '재처리 요청',
+        message: '담당자가 무엇을 다시 해야 하는지 알 수 있게 이유를 적어 주세요.',
+        confirmLabel: '재처리 요청',
+        input: { label: '재처리 사유', required: true, initial: comment.trim(), max: 2000 },
+      });
+      if (typed === null) return;
+      reason = typed;
     }
-    const question = accept
-      ? '처리 결과를 확인하고 요청을 완료할까요?'
-      : '처리 결과가 맞지 않아 다시 처리를 요청할까요?';
-    if (!(await confirmAction(question))) return;
     setBusy(true);
     try {
-      // 재처리 사유에 붙인 캡처도 먼저 첨부로 올린다.
+      // 댓글 칸의 글을 그대로 사유로 썼다면, 그 글에 붙인 캡처도 먼저 첨부로 올린다.
+      const fromComment = !accept && reason === comment.trim();
       const pasted = commentImgs.tokens();
-      if (!accept)
+      if (fromComment)
         await commentImgs.uploadAll(pasted.used, 'requests/portal/' + selected, screen.menu_id);
       const r = await call('/' + selected + (accept ? '/confirm' : '/reopen'), {
         version: detail.item.version,
-        ...(accept ? {} : { reason: pasted.text.trim() }),
+        ...(accept ? {} : { reason: fromComment ? pasted.text.trim() : reason }),
       });
-      if (!accept) {
+      if (!accept && reason === comment.trim()) {
         setComment('');
         commentImgs.reset();
       }
@@ -227,9 +238,10 @@ export const SrPortalScreen = forwardRef<
     },
     save,
   }));
-  // 화면을 처음 열면 바로 목록을 보여준다.
+  // 화면을 처음 열면 바로 목록을 보여준다. 상세는 비우지 않는다: 알림을 눌러 이 화면이 새로 열린 경우
+  // 알림의 요청을 먼저 고르는데, 목록 응답이 늦게 오면서 상세를 지워 버렸다(QA DLV2-006).
   useEffect(() => {
-    void load(null).catch((e) => notify((e as Error).message, 'error'));
+    void load(null, true).catch((e) => notify((e as Error).message, 'error'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // 목록만 조용히 새로 읽는다(상세·입력 중인 글은 건드리지 않음). 실패해도 알리지 않고 다음 기회에 다시 읽는다.
@@ -377,7 +389,7 @@ export const SrPortalScreen = forwardRef<
                   {newFiles.map((f, i) => (
                     <li key={f.name + i}>
                       <span>{f.name}</span>
-                      <small>{(f.size / 1024).toFixed(0)}KB</small>
+                      <small>{sizeText(f.size)}</small>
                       <button
                         type="button"
                         className="link-button"
@@ -404,7 +416,8 @@ export const SrPortalScreen = forwardRef<
                   />
                 </label>
                 <small>
-                  요청을 등록할 때 함께 올라갑니다. 파일당 10MB, 실행 파일은 올릴 수 없습니다.
+                  요청을 등록할 때 함께 올라갑니다. 파일당 10MB, 요청당 20개까지. 실행 파일은 올릴
+                  수 없습니다.
                 </small>
               </div>
             </div>

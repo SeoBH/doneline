@@ -397,12 +397,20 @@ footer {
   margin-top: 18px;
   padding: 18px;
 }
-.change-detail pre {
-  white-space: pre-wrap;
+/* 변경 내용 표: 바뀐 항목은 굵게, 같은 값은 흐리게 보여 무엇이 바뀌었는지 먼저 보이게 한다. */
+.change-detail table td {
   overflow-wrap: anywhere;
-  font-size: 12px;
-  max-height: 350px;
-  overflow: auto;
+}
+.change-detail tr.changed td {
+  font-weight: 600;
+}
+.change-detail tr:not(.changed) td {
+  color: var(--color-text-muted);
+}
+.query-bar label.audit-reads {
+  flex: none;
+  align-self: center;
+  gap: 4px;
 }
 .link-button {
   border: 0;
@@ -1654,6 +1662,12 @@ footer {
   margin: 0;
   opacity: 0.85;
 }
+/* 로그인 화면 미리보기 카드 위의 '화면 예시' 표시 */
+.login-preview-label {
+  margin: 24px 0 -16px;
+  font-size: 12px;
+  opacity: 0.75;
+}
 .login-preview {
   list-style: none;
   margin: 36px 0 0;
@@ -1970,6 +1984,18 @@ button.danger-outline:hover {
   background: var(--color-surface);
   box-shadow: 0 24px 60px rgb(15 23 42 / 30%);
 }
+/* 확인 창 안의 사유 입력 칸 */
+.confirm-input {
+  display: block;
+  margin: 0 0 14px;
+  font-size: 13px;
+}
+.confirm-input textarea {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  resize: vertical;
+}
 .confirm-dialog h2 {
   margin: 0 0 8px;
   font-size: 18px;
@@ -2005,6 +2031,34 @@ button.danger-solid {
   background: #fef2f2;
   color: #b91c1c;
   font-size: 14px;
+}
+/* 처리 중 글자 표시: 툴바 버튼 왼쪽에 작은 원과 함께 보인다(QA DL-006). */
+.busy-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 6px;
+  font-size: 12px;
+  color: var(--color-primary);
+}
+.busy-note::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: busy-spin 0.8s linear infinite;
+}
+@keyframes busy-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .busy-note::before {
+    animation: none;
+  }
 }
 /* 처리 중 표시(QA DL-006): 화면 맨 위를 가로지르는 얇은 줄. */
 .progress-line {

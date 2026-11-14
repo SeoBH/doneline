@@ -51,7 +51,8 @@ const RANGE = `WITH m AS (SELECT (($1||'-01')::timestamp AT TIME ZONE 'Asia/Seou
  * - auto_closed: 그중 고객 확인 없이 확인 기간이 지나 자동 완료된 건(closed와 겹치지 않음)
  * - resolve_met: 처리 완료 건 중 처리 기한 안에 끝낸 건
  * - response_total/response_met: 그 달 등록 건 중 응답 여부를 판단할 수 있는 건(응답했거나 응답 기한이 지난 건)과 기한 내 응답 건
- * - avg_resolve_hours: 그 달 처리 완료 건의 등록→처리 평균 시간
+ * - avg_resolve_hours: 그 달 처리 완료 건의 등록→처리 평균 시간(소수 둘째 자리)
+ * - avg_resolve_minutes: 같은 평균을 분 단위 정수로. 1시간 미만이 '0시간'으로 보이지 않게 엑셀에 함께 쓴다(QA DLV2-011)
  * - open_now: 조회 시점에 아직 진행 중인(접수·처리 중·확인 대기) 건
  */
 const SUMMARY_SQL = `${RANGE}
@@ -63,7 +64,8 @@ SELECT c.id AS customer_id,c.name AS customer_name,
   count(*) FILTER (WHERE r.resolved_at>=m.s AND r.resolved_at<m.e AND r.resolved_at<=r.due_at)::int AS resolve_met,
   count(*) FILTER (WHERE r.created_at>=m.s AND r.created_at<m.e AND (r.first_response_at IS NOT NULL OR r.response_due_at<now()))::int AS response_total,
   count(*) FILTER (WHERE r.created_at>=m.s AND r.created_at<m.e AND r.first_response_at<=r.response_due_at)::int AS response_met,
-  round((avg(extract(epoch FROM r.resolved_at-r.created_at)/3600) FILTER (WHERE r.resolved_at>=m.s AND r.resolved_at<m.e))::numeric,1)::float AS avg_resolve_hours,
+  round((avg(extract(epoch FROM r.resolved_at-r.created_at)/3600) FILTER (WHERE r.resolved_at>=m.s AND r.resolved_at<m.e))::numeric,2)::float AS avg_resolve_hours,
+  round((avg(extract(epoch FROM r.resolved_at-r.created_at)/60) FILTER (WHERE r.resolved_at>=m.s AND r.resolved_at<m.e))::numeric)::int AS avg_resolve_minutes,
   count(*) FILTER (WHERE r.status IN ('OPEN','IN_PROGRESS','RESOLVED'))::int AS open_now
 FROM app.customers c CROSS JOIN m LEFT JOIN app.service_requests r ON r.customer_id=c.id
 WHERE ($2='' OR c.id=$2::bigint)
@@ -80,9 +82,10 @@ WHERE (r.created_at>=m.s AND r.created_at<m.e OR r.resolved_at>=m.s AND r.resolv
 ORDER BY c.code,r.request_no`;
 
 const rate = (met: number, total: number) => (total ? Math.round((met / total) * 1000) / 10 : null);
-// 엑셀 날짜 칸은 한국 시간 문자열로 쓴다(받는 사람의 PC 시간대와 무관하게 같은 값이 보이도록).
-const kst = (v: Date | null) =>
-  v ? new Date(v).toLocaleString('sv-SE', { timeZone: 'Asia/Seoul' }).slice(0, 16) : '';
+// 엑셀 날짜 칸은 '진짜 날짜'로 쓴다. 글자로 쓰면 엑셀에서 날짜 정렬·필터·피벗이 안 된다(QA DLV2-011).
+// 엑셀 날짜에는 시간대가 없으므로 한국 시간(UTC+9)만큼 옮긴 값을 넣어, 받는 사람의 PC 시간대와 무관하게 한국 시각이 보이게 한다.
+const kst = (v: Date | null) => (v ? new Date(new Date(v).getTime() + 9 * 3600 * 1000) : null);
+const DATE_FORMAT = 'yyyy-mm-dd hh:mm';
 
 @Injectable()
 export class Reports {
@@ -114,10 +117,17 @@ export class Reports {
       open_now: sum('open_now'),
       resolveRate: rate(sum('resolve_met'), resolved),
       responseRate: rate(sum('response_met'), sum('response_total')),
+      // 전체 평균은 고객사별 평균을 처리 건수로 가중해 다시 구한다.
       avg_resolve_hours: resolved
         ? Math.round(
-            (rows.reduce((t, r) => t + (r.avg_resolve_hours || 0) * r.resolved, 0) / resolved) * 10,
-          ) / 10
+            (rows.reduce((t, r) => t + (r.avg_resolve_hours || 0) * r.resolved, 0) / resolved) *
+              100,
+          ) / 100
+        : null,
+      avg_resolve_minutes: resolved
+        ? Math.round(
+            rows.reduce((t, r) => t + (r.avg_resolve_minutes || 0) * r.resolved, 0) / resolved,
+          )
         : null,
     };
     return { rows, total };
@@ -170,6 +180,7 @@ export class Reports {
       '처리 SLA 준수율(%)',
       '첫 응답 SLA 준수율(%)',
       '평균 처리 시간(시간)',
+      '평균 처리 시간(분)',
       '현재 진행 중',
     ]);
     head(s);
@@ -183,6 +194,7 @@ export class Reports {
         r.resolveRate,
         r.responseRate,
         r.avg_resolve_hours,
+        r.avg_resolve_minutes,
         r.open_now,
       ]);
     const t = summary.total;
@@ -195,6 +207,7 @@ export class Reports {
       t.resolveRate,
       t.responseRate,
       t.avg_resolve_hours,
+      t.avg_resolve_minutes,
       t.open_now,
     ]).font = { bold: true };
     s.columns.forEach((col, i) => (col.width = i === 0 ? 28 : 18));
@@ -216,7 +229,7 @@ export class Reports {
       '처리 완료',
       '처리 기한',
       '종료(확인·자동 완료·취소)',
-      '처리 SLA',
+      '처리 SLA(준수/초과)',
     ]);
     head(d);
     for (const r of details)
@@ -241,6 +254,8 @@ export class Reports {
         r.resolved_at ? (new Date(r.resolved_at) <= new Date(r.due_at) ? '준수' : '초과') : '',
       ]);
     d.columns.forEach((col, i) => (col.width = [8, 18, 14, 14, 36][i] ?? 16));
+    // 11~16번째 칸(등록~종료)은 날짜 칸이다. 엑셀이 '2026-11-15 02:11'처럼 보이도록 표시 형식을 준다.
+    for (let i = 11; i <= 16; i++) d.getColumn(i).numFmt = DATE_FORMAT;
     return Buffer.from(await wb.xlsx.writeBuffer());
   }
 }

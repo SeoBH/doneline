@@ -25,7 +25,9 @@ const { mkdir } = require('node:fs/promises');
 const path = require('node:path');
 (async () => {
   let app, browser, page, signup;
-  const code = 'browser_' + randomBytes(4).toString('hex'),
+  // 코드 앞의 '0': 테스트 DB에 고객사가 쌓여도 코드순 목록 맨 앞에 오게 한다. 표는 화면에 보이는 줄만 그리므로
+  // 뒤로 밀리면 테스트가 행을 찾지 못한다.
+  const code = '0browser_' + randomBytes(4).toString('hex'),
     password = 'Browser account password 123!';
   try {
     app = await createApp();
@@ -117,16 +119,36 @@ const path = require('node:path');
     await expect(signup.getByRole('status').filter({ hasText: '가입 신청이 완료' })).toBeVisible();
     await page.locator('aside').getByRole('button', { name: '사용자등록', exact: true }).click();
     const panel = page.locator('.account-screen:visible');
-    await panel
-      .getByLabel('고객사', { exact: true })
-      .selectOption({ label: code + ' · 브라우저 고객사' });
-    await toolbar.getByRole('button', { name: '조회', exact: true }).click();
+    // 고르기 칸 글에는 사용자 수가 붙는다(예: '… · 브라우저 고객사 (1명 · 승인 대기 1)'). 코드로 찾아 고른다.
+    const customerSelect = panel.getByLabel('고객사', { exact: true });
+    // 방금 가입 신청한 1명이 이 고객사의 '승인 대기'로 표시된다(QA DLV2-005).
+    await expect(
+      customerSelect.locator('option', {
+        hasText: code + ' · 브라우저 고객사 (1명 · 승인 대기 1)',
+      }),
+    ).toHaveCount(1);
+    await customerSelect.selectOption(
+      await customerSelect
+        .locator('option', { hasText: code + ' · 브라우저 고객사' })
+        .getAttribute('value'),
+    );
+    // 고객사를 고르면 [조회] 없이 바로 읽는다(QA DLV2-004). 읽기가 끝날 때까지(툴바 잠김 해제) 기다린다.
+    await page.waitForFunction(() => !document.querySelector('.toolbar button:disabled'));
     await expect(panel.getByText(code + '_applicant', { exact: true })).toBeVisible();
     await expect(panel.getByLabel('승인 RESP', { exact: true })).toHaveCount(0);
     await panel.getByText(code + '_applicant', { exact: true }).click();
     await expect(panel.getByLabel('아이디', { exact: true })).toHaveValue(code + '_applicant');
     // 가입 신청 1건 승인: [승인]을 누르면 역할과 소속 부서를 한 번에 고르는 창이 열린다.
-    await panel.getByRole('checkbox', { name: '사용자 목록 행 선택 1', exact: true }).click();
+    // 고객사를 바꾸면 이전 고객사의 행이 잠깐 사라지는 효과(투명해지는 중)로 남아 있으므로 신청자 행에서 체크한다.
+    // 체크 칸은 왼쪽 고정 영역의 별도 줄에 있어, 글이 있는 줄의 row-id로 같은 행의 체크 칸을 찾는다.
+    const applicantId = await panel
+      .locator('.ag-row:not(.ag-opacity-zero)', { hasText: code + '_applicant' })
+      .first()
+      .getAttribute('row-id');
+    await panel
+      .locator(`.ag-row[row-id="${applicantId}"]:not(.ag-opacity-zero)`)
+      .getByRole('checkbox')
+      .click();
     await toolbar.getByRole('button', { name: '승인', exact: true }).click();
     const quick = page.getByRole('dialog', { name: '가입 승인' });
     await expect(quick).toBeVisible();
@@ -219,6 +241,8 @@ const path = require('node:path');
     await expect(toolbar.getByRole('button', { name: '조회', exact: true })).toBeEnabled();
     await panel.getByText(code + '_direct', { exact: true }).click();
     await expect(panel.getByLabel('아이디', { exact: true })).toHaveValue(code + '_direct');
+    // 행을 고르기만 했을 때는 탭 제목에 '저장 안 한 변경(*)' 표시가 붙지 않는다(QA R3·DLV2-013).
+    await expect(page.locator('.tab.active')).not.toContainText('*');
     await panel.getByLabel('이름', { exact: true }).fill('수정된 사용자');
     const [updated] = await Promise.all([
       page.waitForResponse((r) => r.url().endsWith('/accounts/update')),

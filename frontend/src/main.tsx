@@ -2,22 +2,14 @@
  * React 진입점과 업무 창틀. 로그인·메뉴 트리·탭·공통 툴바를 관리한다.
  * 탭은 메뉴와 화면 ID 조합으로 식별하여 메뉴별 권한을 구분한다.
  */
-import React, { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import React, { Fragment, Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { api } from './api';
-import { AuditScreen } from './AuditScreen';
-import { RegistrationScreen } from './RegistrationScreen';
-import { AccountsScreen } from './AccountsScreen';
-import { CustomersScreen } from './CustomersScreen';
 import { SignupScreen } from './SignupScreen';
 import { WorkspaceSignupScreen } from './WorkspaceSignupScreen';
 import { SrPortalScreen } from './SrPortalScreen';
-import { SrDeskScreen } from './SrDeskScreen';
 import { NotificationBell } from './NotificationBell';
-import { SlaSettingsScreen } from './SlaSettingsScreen';
-import { SrReportScreen } from './SrReportScreen';
 import { FeedbackButton } from './FeedbackButton';
-import { FeedbackInboxScreen } from './FeedbackInboxScreen';
 import { StartGuide } from './StartGuide';
 import { Icon } from './Icon';
 import { RecoveryScreen, RecoveryLink } from './RecoveryScreen';
@@ -28,6 +20,33 @@ import { useToasts } from './Toasts';
 import { useSidebar } from './useSidebar';
 import { checkForm, clearInvalid } from './formCheck';
 import { ConfirmHost } from './ConfirmDialog';
+/*
+ * 업무 화면 나눠 받기(QA DL-029: 화면 파일 하나가 1.4MB). lazy: 그 화면을 처음 열 때 해당 파일만 내려받는다.
+ * 표 편집기(AG Grid)를 쓰는 등록·관리 화면이 크므로 나누고, 로그인·고객 요청 화면은 첫 파일에 남겨 바로 뜨게 한다.
+ * import(...).then(m => ({ default: m.이름 })): lazy는 기본 내보내기(default)를 기대하므로 이름 있는 내보내기를 감싼다.
+ */
+const AuditScreen = lazy(() => import('./AuditScreen').then((m) => ({ default: m.AuditScreen })));
+const RegistrationScreen = lazy(() =>
+  import('./RegistrationScreen').then((m) => ({ default: m.RegistrationScreen })),
+);
+const AccountsScreen = lazy(() =>
+  import('./AccountsScreen').then((m) => ({ default: m.AccountsScreen })),
+);
+const CustomersScreen = lazy(() =>
+  import('./CustomersScreen').then((m) => ({ default: m.CustomersScreen })),
+);
+const SrDeskScreen = lazy(() =>
+  import('./SrDeskScreen').then((m) => ({ default: m.SrDeskScreen })),
+);
+const SlaSettingsScreen = lazy(() =>
+  import('./SlaSettingsScreen').then((m) => ({ default: m.SlaSettingsScreen })),
+);
+const SrReportScreen = lazy(() =>
+  import('./SrReportScreen').then((m) => ({ default: m.SrReportScreen })),
+);
+const FeedbackInboxScreen = lazy(() =>
+  import('./FeedbackInboxScreen').then((m) => ({ default: m.FeedbackInboxScreen })),
+);
 const emptyNav: Nav = { rootMenuId: '', menus: [], edges: [], screens: [] };
 // 너비 우선 탐색으로 시작 메뉴부터 대상까지 첫 경로를 찾고 방문 집합으로 중복 탐색을 막는다.
 function pathFor(n: Nav, id: string) {
@@ -101,13 +120,29 @@ function Branch({
   ) : null;
 }
 // 업무 화면 구현 키 → 컴포넌트. 모두 screen·notify·onState·ref 계약을 따른다.
-const workScreens: Record<string, typeof SrPortalScreen> = {
+const workScreens: Record<string, React.ComponentType<any>> = {
   'sr-portal': SrPortalScreen,
   'sr-desk': SrDeskScreen,
   'sla-settings': SlaSettingsScreen,
   'sr-report': SrReportScreen,
   'feedback-inbox': FeedbackInboxScreen,
 };
+/**
+ * 탭 사이 로그인 상태 알림. BroadcastChannel: 같은 브라우저·같은 사이트의 다른 탭에 짧은 메시지를 보내는 통로.
+ * 로그인하면 사용자 ID, 로그아웃하면 빈 문자열을 보낸다. 받는 탭은 자기 사용자와 다르면 새로고침한다.
+ * BroadcastChannel이 없는 오래된 브라우저에서는 아무 일도 하지 않는다(그 경우 서버 권한 검사가 여전히 막는다).
+ */
+const authChannel =
+  typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel('doneline-auth');
+function announceAuth(userId: string) {
+  authChannel?.postMessage(userId);
+}
+function onAuthChange(handler: (userId: string) => void) {
+  if (!authChannel) return () => {};
+  const listener = (e: MessageEvent) => handler(String(e.data || ''));
+  authChannel.addEventListener('message', listener);
+  return () => authChannel.removeEventListener('message', listener);
+}
 function App() {
   // 고객사 회원가입 링크의 가입 토큰. 고객사등록 화면이 만든 /?signup=<토큰> 주소에서 읽는다.
   const signupToken = new URLSearchParams(window.location.search).get('signup') || '';
@@ -156,6 +191,24 @@ function App() {
     [context, setContext] = useState<{ x: number; y: number; key: string } | null>(null);
   const [running, setRunning] = useState(false);
   const handles = useRef(new Map<string, ScreenHandle>());
+  /*
+   * 탭 화면의 툴바 동작(handle)을 등록하는 ref 함수. 탭마다 같은 함수를 재사용한다.
+   * 여기서 화면을 다시 그리게(setState) 하면 안 된다: 화면이 다시 그려질 때마다 handle이 새로 등록되어 무한 반복된다.
+   * 화면을 나눠 받기(lazy) 때문에 파일 도착 전에는 handle이 없다. 각 화면은 처음 붙을 때 onState로 상태를 알리고
+   * 그 알림이 창틀을 다시 그리므로, 그때 툴바 버튼이 풀린다(파일 도착 전 클릭이 무시되던 문제 방지).
+   */
+  const refCache = useRef(new Map<string, (h: ScreenHandle | null) => void>());
+  function refFor(key: string) {
+    let bind = refCache.current.get(key);
+    if (!bind) {
+      bind = (h) => {
+        if (h) handles.current.set(key, h);
+        else handles.current.delete(key);
+      };
+      refCache.current.set(key, bind);
+    }
+    return bind;
+  }
   const current = tabs.find((t) => tabKey(t) === active);
   useEffect(() => {
     if (!context) return;
@@ -177,6 +230,13 @@ function App() {
   );
   // 탭 식별자만 복원하며 편집 데이터는 복원하지 않는다. 최신 서버 목록에 남은 화면만 연다.
   async function initialize(u: User) {
+    // 가입 링크로 들어와 로그인했으면 주소창의 ?signup=<토큰>을 지운다. 남겨 두면 화면을 옮겨도 계속 보여
+    // 화면 공유·캡처·방문 기록으로 가입 링크가 새어 나갈 수 있다(QA DLV2-021).
+    const url = new URL(window.location.href);
+    if (url.searchParams.has('signup')) {
+      url.searchParams.delete('signup');
+      window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+    }
     const stored = sessionStorage.getItem('tabs:' + u.id) || '{}';
     if (!u.mustChangePassword) {
       const n: Nav = await api('navigation');
@@ -212,6 +272,8 @@ function App() {
       }
     }
     setUser(u);
+    // 로그인 경로(로그인 폼·링크·업체 가입·새로고침)와 관계없이 다른 탭에 현재 사용자를 알린다.
+    announceAuth(u.id);
   }
   // 저장 후 최신 권한을 열린 탭에 반영하고 접근 목록에서 빠진 화면은 제거한다.
   async function refreshNavigation() {
@@ -235,6 +297,18 @@ function App() {
       .catch(() => notify('서버에 연결할 수 없습니다.', 'error'))
       .finally(() => setBusy(false));
   }, []);
+  // 다른 브라우저 탭에서 로그인·로그아웃하면 이 탭도 새로 읽는다. 로그인 정보(쿠키)는 같은 브라우저의 모든 탭이
+  // 함께 쓰므로, 그대로 두면 이 탭이 이전 사용자의 화면을 계속 보여 주고 1분 자동 새로고침이 새 사용자 권한으로
+  // 거절되어 감사 로그에 '권한 없음' 실패가 쌓인다(QA DLV2-008·018). userRef: 이벤트 함수 안에서 최신 사용자를 읽는다.
+  const userRef = useRef<User | null>(null);
+  userRef.current = user;
+  useEffect(
+    () =>
+      onAuthChange((id) => {
+        if ((userRef.current?.id || '') !== id) window.location.reload();
+      }),
+    [],
+  );
   useEffect(() => {
     if (!tabs.some((t) => tabKey(t) === active)) setActive(tabs.length ? tabKey(tabs.at(-1)!) : '');
     if (user)
@@ -302,6 +376,7 @@ function App() {
   async function logout() {
     try {
       await api('auth/logout', { method: 'POST', body: '{}' });
+      announceAuth('');
       if (user) sessionStorage.removeItem('tabs:' + user.id);
       setUser(null);
       setTabs([]);
@@ -484,7 +559,10 @@ function App() {
                 <p>유지보수·IT 서비스 업체를 위한 고객 요청 포털</p>
               </>
             )}
-            {/* 장식용 미리보기 카드(실제 데이터 아님) */}
+            {/* 장식용 미리보기 카드(실제 데이터 아님). 고객이 자기 요청으로 오해하지 않게 '예시'라고 적는다(QA DLV2-012). */}
+            <p className="login-preview-label" aria-hidden="true">
+              화면 예시
+            </p>
             <ul className="login-preview" aria-hidden="true">
               <li>
                 <span className="sr-badge sr-OPEN">접수</span>회의실 프로젝터 화면이 안 나옵니다
@@ -497,7 +575,15 @@ function App() {
               </li>
             </ul>
           </section>
-          <form onSubmit={submit} noValidate onInput={clearInvalid}>
+          {/* 다시 입력하기 시작하면 폼 안 오류 문장을 지운다(QA DLV2-016). clearInvalid는 칸의 빨간 표시(aria-invalid)를 푼다. */}
+          <form
+            onSubmit={submit}
+            noValidate
+            onInput={(e) => {
+              clearInvalid(e);
+              if (loginError) setLoginError('');
+            }}
+          >
             {/* 고객사 가입 링크로 들어온 경우: 어느 업체·고객사의 포털인지 먼저 보여 주고 회원가입으로 안내한다. */}
             {!user && signupToken && signupChecked && !signupInfo && (
               <div className="signup-banner warn" role="alert">
@@ -707,6 +793,13 @@ function App() {
             <h1 className="screen-title">{current ? current.name : '시작하기'}</h1>
           </div>
           <div className="toolbar-actions">
+            {/* 처리 중에는 버튼 옆에 글자로도 알린다. 맨 위 줄만으로는 눈에 잘 띄지 않았다(QA DL-006).
+                role="status": 화면 낭독기가 '처리 중'을 읽어 준다. */}
+            {(running || states[active]?.busy) && (
+              <span className="busy-note" role="status">
+                처리 중…
+              </span>
+            )}
             {actions
               .filter(
                 (a) =>
@@ -719,7 +812,7 @@ function App() {
                   // 버튼 위계: 저장은 주요 동작(채움), 삭제는 위험 동작(빨간 테두리), 나머지는 보조 동작.
                   data-kind={a === 'SAVE' ? 'primary' : a === 'DELETE' ? 'danger' : undefined}
                   // 처리 중일 때만 실제로 막는다. 조건이 안 맞는 버튼은 흐리게만 표시하고, 누르면 이유를 알려 준다.
-                  disabled={running || states[active]?.busy}
+                  disabled={running || states[active]?.busy || !handles.current.has(active)}
                   aria-disabled={states[active]?.disabledActions?.includes(a) || undefined}
                   className={
                     states[active]?.disabledActions?.includes(a) ? 'is-disabled' : undefined
@@ -732,7 +825,8 @@ function App() {
               ))}
           </div>
         </div>
-        <div className="content">
+        {/* aria-busy: 이 영역이 처리 중이라 내용이 곧 바뀐다는 뜻. 보조 기술이 중간 상태를 읽지 않게 한다. */}
+        <div className="content" aria-busy={running || states[active]?.busy || undefined}>
           {!current && (
             <StartGuide
               user={user}
@@ -745,69 +839,58 @@ function App() {
           )}
           {tabs.map((t) => (
             <div key={tabKey(t)} hidden={tabKey(t) !== active}>
-              {Object.hasOwn(sourceModules, t.component_key || '') ? (
-                <RegistrationScreen
-                  kind={sourceModules[t.component_key!].kind}
-                  screen={t}
-                  ref={(h) => {
-                    if (h) handles.current.set(tabKey(t), h);
-                    else handles.current.delete(tabKey(t));
-                  }}
-                  notify={notify}
-                  onState={(s) => markState(tabKey(t), s)}
-                  onSaved={refreshNavigation}
-                />
-              ) : t.component_key === 'user-register' ? (
-                <AccountsScreen
-                  screen={t}
-                  notify={notify}
-                  onState={(s) => markState(tabKey(t), s)}
-                  ref={(h) => {
-                    if (h) handles.current.set(tabKey(t), h);
-                    else handles.current.delete(tabKey(t));
-                  }}
-                />
-              ) : ['customer-register', 'corporation-register', 'department-register'].includes(
-                  t.component_key || '',
-                ) ? (
-                <CustomersScreen
-                  screen={t}
-                  notify={notify}
-                  onState={(s) => markState(tabKey(t), s)}
-                  ref={(h) => {
-                    if (h) handles.current.set(tabKey(t), h);
-                    else handles.current.delete(tabKey(t));
-                  }}
-                />
-              ) : Object.hasOwn(workScreens, t.component_key || '') ? (
-                // 고객 요청·작업함·SLA·리포트는 같은 props 계약을 쓰므로 구현 키로 컴포넌트만 고른다.
-                (() => {
-                  const Sr = workScreens[t.component_key!];
-                  return (
-                    <Sr
-                      screen={t}
-                      focus={focusRequest}
-                      notify={notify}
-                      onState={(s) => markState(tabKey(t), s)}
-                      ref={(h) => {
-                        if (h) handles.current.set(tabKey(t), h);
-                        else handles.current.delete(tabKey(t));
-                      }}
-                    />
-                  );
-                })()
-              ) : t.component_key === 'audit' ? (
-                <AuditScreen
-                  screen={t}
-                  ref={(h) => {
-                    if (h) handles.current.set(tabKey(t), h);
-                    else handles.current.delete(tabKey(t));
-                  }}
-                  notify={notify}
-                />
-              ) : (
-                <div className="empty">연결된 화면이 아직 준비되지 않았습니다.</div>
-              )}
+              {/* Suspense: 나눠 받는 화면 파일을 내려받는 동안 대신 보여 줄 내용. */}
+              <Suspense fallback={<p className="hint">화면을 불러오는 중…</p>}>
+                {Object.hasOwn(sourceModules, t.component_key || '') ? (
+                  <RegistrationScreen
+                    kind={sourceModules[t.component_key!].kind}
+                    screen={t}
+                    ref={refFor(tabKey(t))}
+                    notify={notify}
+                    onState={(s) => markState(tabKey(t), s)}
+                    onSaved={refreshNavigation}
+                  />
+                ) : t.component_key === 'user-register' ? (
+                  <AccountsScreen
+                    screen={t}
+                    notify={notify}
+                    onState={(s) => markState(tabKey(t), s)}
+                    ref={refFor(tabKey(t))}
+                  />
+                ) : ['customer-register', 'corporation-register', 'department-register'].includes(
+                    t.component_key || '',
+                  ) ? (
+                  <CustomersScreen
+                    screen={t}
+                    notify={notify}
+                    onState={(s) => markState(tabKey(t), s)}
+                    ref={refFor(tabKey(t))}
+                  />
+                ) : Object.hasOwn(workScreens, t.component_key || '') ? (
+                  // 고객 요청·작업함·SLA·리포트는 같은 props 계약을 쓰므로 구현 키로 컴포넌트만 고른다.
+                  (() => {
+                    const Sr = workScreens[t.component_key!];
+                    return (
+                      <Sr
+                        screen={t}
+                        focus={focusRequest}
+                        notify={notify}
+                        onState={(s: ViewState) => markState(tabKey(t), s)}
+                        ref={refFor(tabKey(t))}
+                      />
+                    );
+                  })()
+                ) : t.component_key === 'audit' ? (
+                  <AuditScreen
+                    screen={t}
+                    ref={refFor(tabKey(t))}
+                    notify={notify}
+                    onState={(s) => markState(tabKey(t), s)}
+                  />
+                ) : (
+                  <div className="empty">연결된 화면이 아직 준비되지 않았습니다.</div>
+                )}
+              </Suspense>
             </div>
           ))}
         </div>

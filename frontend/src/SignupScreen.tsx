@@ -88,20 +88,9 @@ export function SignupScreen({
               customer={customer}
               signup
               disabled={busy}
+              confirm={confirm}
+              onConfirm={setConfirm}
             />
-            <label>
-              비밀번호 확인
-              <input
-                type="password"
-                value={confirm}
-                required
-                minLength={8}
-                maxLength={128}
-                autoComplete="new-password"
-                disabled={busy}
-                onChange={(e) => setConfirm(e.target.value)}
-              />
-            </label>
             <button className="primary" disabled={busy}>
               가입 신청
             </button>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 검색 엔진에 알릴 주소 목록. 앱 화면은 로그인이 필요해 빼고 사용 설명서만 둔다(robots.txt와 같은 범위, QA DL-017). -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://doneline.pages.dev/manual/</loc>
+  </url>
+</urlset>

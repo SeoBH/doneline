@@ -69,6 +69,17 @@ const STATUS_LABEL: Record<string, string> = {
   CANCELLED: '취소',
 };
 
+/**
+ * 받침에 맞는 조사 '으로/로'(QA DLV2-010: '(으)로'가 그대로 보였다).
+ * 한글 글자 코드에서 (코드-0xAC00) % 28이 받침 번호이며 0이면 받침 없음, 8(ㄹ)이면 '로'를 쓴다.
+ */
+function toParticle(word: string) {
+  const code = word.charCodeAt(word.length - 1) - 0xac00;
+  if (code < 0 || code > 11171) return '(으)로';
+  const final = code % 28;
+  return final === 0 || final === 8 ? '로' : '으로';
+}
+
 class CreateDto {
   @IsString() @Length(1, 200) title!: string;
   @IsString() @Length(1, 10000) body!: string;
@@ -319,9 +330,12 @@ export class Requests implements OnModuleDestroy {
     const events = (
       await c.query(
         // LEFT JOIN: 서버 자동 처리 이력은 작성자가 없으므로(actor_id NULL) 이름 없이도 이력에 포함한다.
+        // to_name: 담당자 변경(ASSIGN) 이력의 새 담당자 이름. 고객 화면도 상단처럼 이름을 보여 준다(QA DLV2-022).
         `SELECT e.id,e.kind,e.body,e.from_value,e.to_value,e.internal,e.created_at,
-         coalesce(u.display_name,'자동 처리') AS actor_name,(u.customer_id IS NOT NULL) AS actor_is_customer
+         coalesce(u.display_name,'자동 처리') AS actor_name,(u.customer_id IS NOT NULL) AS actor_is_customer,
+         CASE WHEN e.kind='ASSIGN' THEN t.display_name END AS to_name
          FROM app.request_events e LEFT JOIN app.users u ON u.id=e.actor_id
+         LEFT JOIN app.users t ON e.kind='ASSIGN' AND t.id::text=e.to_value
          WHERE e.request_id=$1 AND ($2 OR NOT e.internal) ORDER BY e.id`,
         [id, includeInternal],
       )
@@ -651,7 +665,9 @@ export class Requests implements OnModuleDestroy {
         else if (action === 'UNRESOLVE')
           toRequester.push('처리 완료가 취소되어 다시 처리 중입니다');
         else if (action !== 'REVERT')
-          toRequester.push(`상태가 '${STATUS_LABEL[status]}'(으)로 바뀌었습니다`);
+          toRequester.push(
+            `상태가 '${STATUS_LABEL[status]}'${toParticle(STATUS_LABEL[status])} 바뀌었습니다`,
+          );
       }
       if (assignee !== undefined) {
         await this.event(c, id, a.id, 'ASSIGN', { from: owner, to: assignee });

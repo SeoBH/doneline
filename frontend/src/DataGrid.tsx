@@ -20,6 +20,16 @@ const gridTheme = themeQuartz.withParams({
   fontSize: 12,
   borderColor: 'var(--color-border-strong)',
 });
+// 그리드 내장 문구(접근성 이름 등) 한국어판. 자주 들리는 것만 바꾸고 나머지는 그리드 기본값을 쓴다.
+const GRID_TEXT: Record<string, string> = {
+  ariaInputEditor: '셀 값 입력',
+  ariaDateFilterInput: '날짜 입력',
+  ariaChecked: '선택됨',
+  ariaUnchecked: '선택 안 됨',
+  ariaRowSelect: '행 선택',
+  noRowsToShow: '조회된 데이터가 없습니다.',
+  loadingOoo: '불러오는 중…',
+};
 export type GridRow = Record<string, any> & { _key: string; _checked?: boolean; _error?: string };
 // Record는 이름으로 값을 찾는 객체 타입, &는 타입 결합, 속성 뒤 ?는 생략 가능을 뜻한다.
 // 업무 컬럼은 화면마다 다르지만 모든 행에는 UI 식별자인 _key가 있어야 한다.
@@ -282,6 +292,8 @@ export const DataGrid = forwardRef<
           rowData={rows}
           columnDefs={defs}
           getRowId={(p) => p.data._key}
+          // localeText: 그리드가 화면 낭독기에 읽어 주는 영문 문구를 한국어로 바꾼다(QA DL-026: 편집 칸이 'Input Editor'로 읽힘).
+          localeText={GRID_TEXT}
           readOnlyEdit
           stopEditingWhenCellsLoseFocus
           singleClickEdit={false}

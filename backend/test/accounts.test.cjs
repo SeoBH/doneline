@@ -579,3 +579,44 @@ test('real deletion removes mappings and sessions, preserves audit, rejects own/
     managerRoot,
   ).expect(403);
 });
+
+test('audit change records hide signup tokens; rotating a signup link disables the old one', async () => {
+  // 고객사 저장 기록에 가입 링크 토큰이 남지 않는다(QA DLV2-001).
+  const leaked = await db.query(
+    "SELECT count(*)::int AS n FROM audit.audit_changes WHERE entity_type='customers' AND entity_key=$1 AND (before_values ? 'signup_token' OR after_values ? 'signup_token')",
+    [String(foreign.id)],
+  );
+  assert.equal(leaked.rows[0].n, 0);
+  const tokenOf = async () =>
+    (await db.query('SELECT signup_token FROM app.customers WHERE id=$1', [foreign.id])).rows[0]
+      .signup_token;
+  const old = await tokenOf();
+  // 고객사 운영자(CUSTOMER)는 고객사등록 화면 권한이 없어 링크를 바꿀 수 없다.
+  await post(manager, `catalogs/customers/${foreign.id}/signup-link`, {}, managerRoot).expect(403);
+  await post(system, `catalogs/corporations/${foreign.id}/signup-link`, {}).expect(404);
+  const res = await post(system, `catalogs/customers/${foreign.id}/signup-link`, {}).expect(201);
+  const fresh = await tokenOf();
+  assert.notEqual(fresh, old);
+  assert.equal(res.body.signupToken, fresh);
+  await (await guest()).agent.get('/api/signup/' + old).expect(404);
+  await (await guest()).agent.get('/api/signup/' + fresh).expect(200);
+  // 교체 기록에도 토큰 값은 없다.
+  const rotated = await db.query(
+    `SELECT c.after_values FROM audit.audit_changes c JOIN audit.audit_events e ON e.event_id=c.event_id
+     WHERE e.action='SIGNUP_LINK_ROTATE' AND c.entity_key=$1`,
+    [String(foreign.id)],
+  );
+  assert.equal(rotated.rowCount, 1);
+  assert.ok(!JSON.stringify(rotated.rows[0].after_values).includes(fresh));
+});
+
+test('stale CSRF token is rejected with a machine-readable code', async () => {
+  // 화면(api.ts)은 code가 CSRF일 때만 새 토큰을 받아 한 번 다시 보낸다(QA DLV2-018).
+  const res = await system.agent
+    .post('/api/auth/activity')
+    .set('Origin', settings.origin)
+    .set('X-CSRF-Token', 'x'.repeat(64))
+    .send({})
+    .expect(403);
+  assert.equal(res.body.code, 'CSRF');
+});
