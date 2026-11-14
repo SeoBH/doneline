@@ -99,3 +99,103 @@ test('Pages security headers match the server CSP', async () => {
   const pages = /Content-Security-Policy: (.+)/.exec(file)[1].trim();
   assert.equal(pages, server.headers.get('content-security-policy'));
 });
+
+test('file upload and binary download pass through the relay unchanged', async () => {
+  const argon2 = require('argon2');
+  const tag = 'px' + crypto.randomBytes(3).toString('hex');
+  const password = 'Relay test password 123!';
+  const ws = String(
+    (await db.query('SELECT app.create_workspace($1,$2) AS id', [tag, tag])).rows[0].id,
+  );
+  // 고객사·법인·부서와 그 부서에 매핑된 고객사 직원 한 명을 만든다.
+  await db.tx(async (c) => {
+    const customer = (
+      await c.query('INSERT INTO app.customers(code,name) VALUES($1,$1) RETURNING id', [tag])
+    ).rows[0].id;
+    const corp = (
+      await c.query(
+        "INSERT INTO app.corporations(customer_id,code,name) VALUES($1,'C1','C1') RETURNING id",
+        [customer],
+      )
+    ).rows[0].id;
+    const dept = (
+      await c.query(
+        "INSERT INTO app.departments(customer_id,corporation_id,code,name) VALUES($1,$2,'D1','D1') RETURNING id",
+        [customer, corp],
+      )
+    ).rows[0].id;
+    const resp = (await c.query("SELECT id FROM app.responsibilities WHERE code='CUSTOMER_USER'"))
+      .rows[0].id;
+    const user = (
+      await c.query(
+        'INSERT INTO app.users(login_id,password_hash,display_name,resp_id,must_change_password,customer_id) VALUES($1,$2,$1,$3,false,$4) RETURNING id',
+        [tag + '_c', await argon2.hash(password), resp, customer],
+      )
+    ).rows[0].id;
+    await c.query(
+      'INSERT INTO app.user_corporations(customer_id,user_id,corporation_id) VALUES($1,$2,$3)',
+      [customer, user, corp],
+    );
+    await c.query(
+      'INSERT INTO app.user_scopes(customer_id,user_id,corporation_id,department_id) VALUES($1,$2,$3,$4)',
+      [customer, user, corp, dept],
+    );
+  }, ws);
+  // 브라우저처럼 쿠키·CSRF 토큰을 이어 가며 중계 함수로만 요청한다.
+  let cookie = '';
+  let csrf = '';
+  const send = async (p, init = {}) => {
+    const res = await viaPages(p, {
+      ...init,
+      headers: { Cookie: cookie, 'X-CSRF-Token': csrf, ...(init.headers || {}) },
+    });
+    const set = res.headers.get('set-cookie');
+    if (set) cookie = set.split(';')[0];
+    return res;
+  };
+  csrf = (await (await send('/api/auth/csrf')).json()).csrfToken;
+  const login = await send('/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Menu-ID': '0' },
+    body: JSON.stringify({ loginId: tag + '_c', password }),
+  });
+  assert.equal(login.status, 201);
+  csrf = (await login.json()).csrfToken || csrf;
+  const nav = await (await send('/api/navigation')).json();
+  const menu = nav.screens.find((s) => s.code === 'SR_PORTAL').menu_id;
+  const scope = (
+    await (await send('/api/requests/portal', { headers: { 'X-Menu-ID': menu } })).json()
+  ).scopes[0];
+  const created = await send('/api/requests/portal', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Menu-ID': menu },
+    body: JSON.stringify({
+      title: '중계 첨부',
+      body: '본문',
+      category: 'REQUEST',
+      priority: 'LOW',
+      corporationId: String(scope.corporation_id),
+      departmentId: String(scope.department_id),
+    }),
+  });
+  const id = (await created.json()).id;
+  // 이진 파일(0~255 모든 바이트)을 multipart로 올리고, 받은 바이트가 그대로인지 비교한다.
+  const bytes = Buffer.from(Array.from({ length: 4096 }, (_, i) => i % 256));
+  const form = new FormData();
+  form.append('file', new Blob([bytes], { type: 'image/png' }), '중계 캡처.png');
+  const up = await send(`/api/requests/portal/${id}/attachments`, {
+    method: 'POST',
+    headers: { 'X-Menu-ID': menu },
+    body: form,
+  });
+  assert.equal(up.status, 201);
+  const detail = await (
+    await send(`/api/requests/portal/${id}`, { headers: { 'X-Menu-ID': menu } })
+  ).json();
+  assert.equal(detail.attachments[0].file_name, '중계 캡처.png');
+  const down = await send(`/api/requests/portal/${id}/attachments/${detail.attachments[0].id}`, {
+    headers: { 'X-Menu-ID': menu },
+  });
+  assert.equal(down.status, 200);
+  assert.ok(Buffer.from(await down.arrayBuffer()).equals(bytes));
+});
