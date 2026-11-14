@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { api } from './api';
 import { Notify } from './Toasts';
 import { User } from './types';
+import { checkForm, clearInvalid } from './formCheck';
 export type RecoveryLink = { purpose: 'VERIFY' | 'PASSWORD'; token: string };
 export function RecoveryScreen({
   code,
@@ -42,8 +43,13 @@ export function RecoveryScreen({
       .catch((e) => notify((e as Error).message, 'error'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [link?.token]);
+  // 입력 검사 결과 문장(브라우저 말풍선 대신 폼 안에 보여 준다, formCheck.ts).
+  const [formError, setFormError] = useState('');
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    const bad = checkForm(e.currentTarget as HTMLFormElement);
+    setFormError(bad);
+    if (bad) return;
     const data = new FormData(e.currentTarget),
       password = String(data.get('password') || '');
     if (link?.purpose === 'PASSWORD' && password !== data.get('confirm')) {
@@ -87,7 +93,7 @@ export function RecoveryScreen({
   }
   return (
     <main className="signup-page">
-      <form className="account-card" onSubmit={submit}>
+      <form className="account-card" onSubmit={submit} noValidate onInput={clearInvalid}>
         <h1>
           {link
             ? link.purpose === 'VERIFY'
@@ -191,6 +197,11 @@ export function RecoveryScreen({
         <button type="button" disabled={busy} onClick={onBack}>
           로그인으로 돌아가기
         </button>
+        {formError && (
+          <p className="form-error" role="alert">
+            {formError}
+          </p>
+        )}
       </form>
     </main>
   );

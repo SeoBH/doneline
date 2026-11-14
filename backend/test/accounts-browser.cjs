@@ -3,6 +3,17 @@ process.env.PGDATABASE = 'doneline_test';
 // 테스트 중 실제 슬랙 알림이 나가지 않도록 빈 값으로 고정한다(.env보다 우선).
 process.env.SLACK_WEBHOOK_URL = '';
 process.env.APP_ORIGIN = 'http://127.0.0.1:3002';
+// 시험 브라우저 전용: 앱 공통 확인 창(ConfirmDialog, role=alertdialog)이 뜨면 0.05초 안에 [확인]을 누르고 문구를 기록한다.
+// (예전 브라우저 기본 confirm을 page.on('dialog')로 수락하던 것과 같은 역할. 응답을 기다리는 중에도 동작한다.)
+const autoConfirm = () => {
+  window.__confirms = [];
+  setInterval(() => {
+    const box = document.querySelector('[role="alertdialog"]');
+    if (!box) return;
+    window.__confirms.push(box.querySelector('p')?.textContent || '');
+    box.querySelector('.confirm-actions button:last-child')?.click();
+  }, 50);
+};
 const { chromium } = require('playwright');
 const { expect } = require('playwright/test');
 const { createApp } = require('../dist/app');
@@ -31,7 +42,7 @@ const path = require('node:path');
     page = await browser.newPage({ viewport: { width: 1700, height: 1050 } });
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
-    page.on('dialog', (d) => d.accept());
+    await page.addInitScript(autoConfirm);
     await page.goto('http://127.0.0.1:3002');
     await page.getByLabel('아이디', { exact: true }).fill(code);
     await page.getByLabel('비밀번호', { exact: true }).fill(password);

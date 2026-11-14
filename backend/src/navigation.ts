@@ -102,11 +102,35 @@ export class NavigationController {
   }
   @Get('admin/audit-events')
   @Permission('AUDIT', 'QUERY')
-  async events(@Req() req: AppRequest, @Query('page') page = '1') {
+  /**
+   * 감사 목록(최신순 50건씩). 화면이 읽기 쉽도록 사용자 이름·아이디와 '변경 상세가 있는지'를 함께 돌려준다(QA DL-014).
+   * 거르기: from/to(YYYY-MM-DD, 한국 날짜), action(기능 코드 일부), user(이름·아이디 일부), outcome(SUCCESS 등).
+   * 업체 분리는 뷰·사용자 표의 RLS가 맡는다. 다음 쪽이 있는지는 51건을 읽어 판단한다.
+   */
+  async events(
+    @Req() req: AppRequest,
+    @Query('page') page = '1',
+    @Query('from') from = '',
+    @Query('to') to = '',
+    @Query('action') action = '',
+    @Query('user') user = '',
+    @Query('outcome') outcome = '',
+  ) {
     const index = /^\d{1,5}$/.test(page) ? Math.max(1, Number(page)) : 1;
+    const day = (v: string) => (/^\d{4}-\d{2}-\d{2}$/.test(v) ? v : '');
+    const text = (v: string) => String(v || '').slice(0, 60);
     const result = await this.db.query(
-      'SELECT * FROM audit.event_summary ORDER BY occurred_at DESC,event_id DESC LIMIT 50 OFFSET $1',
-      [(index - 1) * 50],
+      `SELECT e.event_id,e.request_id,e.occurred_at,e.action,e.outcome,e.user_id,
+         u.display_name AS user_name,u.login_id AS user_login,
+         EXISTS(SELECT 1 FROM audit.config_changes c WHERE c.event_id=e.event_id) AS has_changes
+       FROM audit.event_summary e LEFT JOIN app.users u ON u.id=e.user_id
+       WHERE ($2='' OR e.occurred_at >= ($2::date::timestamp AT TIME ZONE 'Asia/Seoul'))
+         AND ($3='' OR e.occurred_at < (($3::date + 1)::timestamp AT TIME ZONE 'Asia/Seoul'))
+         AND ($4='' OR e.action ILIKE '%'||$4||'%')
+         AND ($5='' OR u.display_name ILIKE '%'||$5||'%' OR u.login_id ILIKE '%'||$5||'%')
+         AND ($6='' OR e.outcome=$6)
+       ORDER BY e.occurred_at DESC,e.event_id DESC LIMIT 51 OFFSET $1`,
+      [(index - 1) * 50, day(from), day(to), text(action), text(user), text(outcome)],
     );
     await this.audit.write({
       requestId: req.requestId,
@@ -115,6 +139,6 @@ export class NavigationController {
       action: 'AUDIT_QUERY',
       outcome: 'SUCCESS',
     });
-    return { items: result.rows, page: index };
+    return { items: result.rows.slice(0, 50), page: index, hasNext: result.rows.length > 50 };
   }
 }

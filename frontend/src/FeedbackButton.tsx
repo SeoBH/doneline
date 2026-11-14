@@ -7,6 +7,7 @@ import { useRef, useState } from 'react';
 import { api } from './api';
 import { Notify } from './Toasts';
 import { Icon } from './Icon';
+import { checkForm, clearInvalid } from './formCheck';
 
 const empty = { kind: 'IMPROVEMENT', title: '', body: '' };
 
@@ -14,8 +15,13 @@ export function FeedbackButton({ page, notify }: { page?: string; notify: Notify
   const dialog = useRef<HTMLDialogElement>(null),
     [draft, setDraft] = useState(empty),
     [busy, setBusy] = useState(false);
+  // 입력 검사 결과 문장(브라우저 말풍선 대신 폼 안에 보여 준다, formCheck.ts).
+  const [formError, setFormError] = useState('');
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    const bad = checkForm(e.currentTarget as HTMLFormElement);
+    setFormError(bad);
+    if (bad) return;
     if (busy) return;
     setBusy(true);
     try {
@@ -45,7 +51,7 @@ export function FeedbackButton({ page, notify }: { page?: string; notify: Notify
         <span>개선 요청</span>
       </button>
       <dialog ref={dialog} className="code-lookup feedback-dialog" aria-label="개선 요청">
-        <form onSubmit={submit}>
+        <form onSubmit={submit} noValidate onInput={clearInvalid}>
           <h2>개선 요청</h2>
           <p className="hint">
             불편한 점이나 바라는 기능을 알려 주세요. Doneline 운영팀이 확인합니다.
@@ -89,6 +95,11 @@ export function FeedbackButton({ page, notify }: { page?: string; notify: Notify
               {busy ? '보내는 중…' : '보내기'}
             </button>
           </div>
+          {formError && (
+            <p className="form-error" role="alert">
+              {formError}
+            </p>
+          )}
         </form>
       </dialog>
     </>

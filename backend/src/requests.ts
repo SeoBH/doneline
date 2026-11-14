@@ -56,6 +56,8 @@ const DESK_FLOW: Record<string, { from: string[]; to: string }> = {
   RESOLVE: { from: ['IN_PROGRESS'], to: 'RESOLVED' },
   REVERT: { from: ['IN_PROGRESS'], to: 'OPEN' },
   CANCEL: { from: ['OPEN', 'IN_PROGRESS'], to: 'CANCELLED' },
+  // 완료 취소: 실수로 처리 완료한 요청을 다시 처리 중으로 돌린다(사유 필수, 고객에게 공개, QA DL-016).
+  UNRESOLVE: { from: ['RESOLVED'], to: 'IN_PROGRESS' },
 };
 const ID = /^\d{1,18}$/;
 // 알림 문구에 쓰는 상태 이름. 고객에게 영문 코드를 보이지 않는다.
@@ -86,7 +88,7 @@ class VersionDto {
 // 담당자 화면의 진행 동작. 상태를 직접 고르지 않고 '다음 동작'만 보내 단계를 건너뛰거나 거꾸로 가지 않게 한다.
 // START: 담당 지정과 동시에 처리 시작(접수→처리 중) / RESOLVE: 처리 완료(처리 중→고객 확인 대기)
 // REVERT: 되돌리기(처리 중→접수, 담당 해제, 사유 필수) / CANCEL: 요청 취소(접수·처리 중→취소, 사유 필수)
-const DESK_ACTIONS = ['START', 'RESOLVE', 'REVERT', 'CANCEL'] as const;
+const DESK_ACTIONS = ['START', 'RESOLVE', 'REVERT', 'CANCEL', 'UNRESOLVE'] as const;
 class DeskUpdateDto {
   @IsInt() @Min(1) version!: number;
   @IsOptional() @IsIn(DESK_ACTIONS) action?: string;
@@ -547,8 +549,19 @@ export class Requests implements OnModuleDestroy {
       if (!r) throw new NotFoundException('요청을 찾을 수 없습니다.');
       if (r.version !== body.version)
         throw new ConflictException('다른 사용자가 먼저 변경했습니다. 다시 조회해 주세요.');
-      if (['CLOSED', 'CANCELLED'].includes(r.status))
-        throw new ConflictException('종료된 요청입니다.');
+      // 종료(완료·취소)된 요청에는 업체 내부 메모만 남길 수 있다. 진행·우선순위·담당 변경과 고객 공개 답변은 막는다(QA DL-016).
+      const ended = ['CLOSED', 'CANCELLED'].includes(r.status);
+      if (
+        ended &&
+        (body.action ||
+          body.assigneeId ||
+          (body.priority && body.priority !== r.priority) ||
+          !body.comment?.trim() ||
+          !body.internal)
+      )
+        throw new ConflictException(
+          '종료된 요청입니다. 내부 메모(고객에게 보이지 않음)만 남길 수 있습니다.',
+        );
       const manager = await this.isManager(c, a.resp_id);
       const me = String(a.id);
       const owner = r.assignee_id ? String(r.assignee_id) : null;
@@ -577,9 +590,9 @@ export class Requests implements OnModuleDestroy {
           throw new BadRequestException(
             `현재 상태(${STATUS_LABEL[r.status]})에서는 할 수 없는 동작입니다. 다시 조회해 주세요.`,
           );
-        if (['REVERT', 'CANCEL'].includes(action) && !comment)
+        if (['REVERT', 'CANCEL', 'UNRESOLVE'].includes(action) && !comment)
           throw new BadRequestException(
-            `${action === 'REVERT' ? '되돌리는' : '취소하는'} 사유를 답변/메모 칸에 적어 주세요.`,
+            `${{ REVERT: '되돌리는', CANCEL: '취소하는', UNRESOLVE: '처리 완료를 취소하는' }[action]} 사유를 답변/메모 칸에 적어 주세요.`,
           );
         status = flow.to;
         if (action === 'START') {
@@ -609,9 +622,11 @@ export class Requests implements OnModuleDestroy {
           ? { body: '되돌림 사유: ' + comment, internal: true }
           : action === 'CANCEL'
             ? { body: '취소 사유: ' + comment, internal: false }
-            : comment
-              ? { body: comment, internal: Boolean(body.internal) }
-              : null;
+            : action === 'UNRESOLVE'
+              ? { body: '완료 취소 사유: ' + comment, internal: false }
+              : comment
+                ? { body: comment, internal: Boolean(body.internal) }
+                : null;
       await c.query(
         `UPDATE app.service_requests SET status=coalesce($2,status),
          assignee_id=CASE WHEN $3 THEN $4::bigint ELSE assignee_id END,priority=coalesce($5,priority),updated_at=now(),
@@ -633,6 +648,8 @@ export class Requests implements OnModuleDestroy {
         await this.event(c, id, a.id, 'STATUS', { from: r.status, to: status });
         // 되돌리기는 업체 안의 재배정 과정이라 고객에게 알리지 않는다.
         if (action === 'RESOLVE') toRequester.push('처리가 완료되어 확인을 기다립니다');
+        else if (action === 'UNRESOLVE')
+          toRequester.push('처리 완료가 취소되어 다시 처리 중입니다');
         else if (action !== 'REVERT')
           toRequester.push(`상태가 '${STATUS_LABEL[status]}'(으)로 바뀌었습니다`);
       }
@@ -659,7 +676,8 @@ export class Requests implements OnModuleDestroy {
       if (priority) await this.event(c, id, a.id, 'PRIORITY', { from: r.priority, to: priority });
       if (note) {
         await this.event(c, id, a.id, 'COMMENT', note);
-        if (!note.internal && action !== 'CANCEL') toRequester.push('담당자 답변이 등록되었습니다');
+        if (!note.internal && action !== 'CANCEL' && action !== 'UNRESOLVE')
+          toRequester.push('담당자 답변이 등록되었습니다');
       }
       if (toRequester.length)
         await this.notify(

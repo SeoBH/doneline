@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { api } from './api';
 import { Notify } from './Toasts';
 import { User } from './types';
+import { checkForm, clearInvalid } from './formCheck';
 
 const empty = {
   workspaceName: '',
@@ -48,8 +49,13 @@ export function WorkspaceSignupScreen({
   const [draft, setDraft] = useState(empty),
     [busy, setBusy] = useState(false),
     [done, setDone] = useState(false);
+  // 입력 검사 결과 문장(브라우저 말풍선 대신 폼 안에 보여 준다, formCheck.ts).
+  const [formError, setFormError] = useState('');
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    const bad = checkForm(e.currentTarget as HTMLFormElement);
+    setFormError(bad);
+    if (bad) return;
     if (busy) return;
     setBusy(true);
     try {
@@ -83,7 +89,7 @@ export function WorkspaceSignupScreen({
   }
   return (
     <main className="signup-page">
-      <form className="account-card" onSubmit={submit}>
+      <form className="account-card" onSubmit={submit} noValidate onInput={clearInvalid}>
         <h1>업체 무료 가입</h1>
         {done ? (
           <p role="status">가입이 완료되었습니다. 로그인 화면에서 바로 시작하세요.</p>
@@ -116,6 +122,11 @@ export function WorkspaceSignupScreen({
         <button type="button" disabled={busy} onClick={onBack}>
           로그인으로 돌아가기
         </button>
+        {formError && (
+          <p className="form-error" role="alert">
+            {formError}
+          </p>
+        )}
       </form>
     </main>
   );

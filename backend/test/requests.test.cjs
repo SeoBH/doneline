@@ -295,6 +295,14 @@ test('customer confirms a resolved request and closed requests reject changes', 
     version: item.version,
     comment: '종료 후 답변',
   }).expect(409);
+  // 종료된 요청에도 업체 내부 메모는 남길 수 있다(고객에게는 보이지 않음, QA DL-016).
+  await post(engineer, 'requests/desk/' + srId, {
+    version: item.version,
+    comment: '종료 후 내부 기록',
+    internal: true,
+  }).expect(201);
+  const after = (await get(u1, 'requests/portal/' + srId).expect(200)).body;
+  assert.ok(!after.events.some((e) => e.body === '종료 후 내부 기록'));
   // 알림 모두 읽음 처리.
   await post(engineer, 'notifications/read', { ids: [] }).expect(201);
   assert.equal((await engineer.agent.get('/api/notifications').expect(200)).body.unread, 0);
@@ -551,4 +559,42 @@ test('attachments respect department scope, internal flag and safe download head
   await get(u2, `requests/portal/${id}/attachments/${shot.id}`).expect(404);
   await get(engineer, `requests/desk/${id}/attachments/${memo.id}`).expect(200);
   await get(platformAdmin, `requests/desk/${id}/attachments/${shot.id}`).expect(404);
+});
+
+test('a mistaken resolve can be undone with a reason visible to the customer', async () => {
+  const scope = (await get(u1, 'requests/portal').expect(200)).body.scopes[0];
+  const id = (
+    await post(u1, 'requests/portal', {
+      title: '완료 취소 확인',
+      body: '본문',
+      category: 'REQUEST',
+      priority: 'LOW',
+      corporationId: String(scope.corporation_id),
+      departmentId: String(scope.department_id),
+    }).expect(201)
+  ).body.id;
+  const v = async () => (await get(engineer, 'requests/desk/' + id).expect(200)).body.item.version;
+  await post(engineer, 'requests/desk/' + id, { version: await v(), action: 'START' }).expect(201);
+  await post(engineer, 'requests/desk/' + id, { version: await v(), action: 'RESOLVE' }).expect(
+    201,
+  );
+  // 사유 없이는 되돌릴 수 없고, 담당자가 아닌 엔지니어는 되돌릴 수 없다.
+  await post(engineer, 'requests/desk/' + id, { version: await v(), action: 'UNRESOLVE' }).expect(
+    400,
+  );
+  await post(engineer2, 'requests/desk/' + id, {
+    version: await v(),
+    action: 'UNRESOLVE',
+    comment: '제가 할게요',
+  }).expect(403);
+  await post(engineer, 'requests/desk/' + id, {
+    version: await v(),
+    action: 'UNRESOLVE',
+    comment: '확인해 보니 아직 덜 끝났습니다',
+  }).expect(201);
+  const seen = (await get(u1, 'requests/portal/' + id).expect(200)).body;
+  assert.equal(seen.item.status, 'IN_PROGRESS');
+  assert.ok(seen.events.some((e) => e.body === '완료 취소 사유: 확인해 보니 아직 덜 끝났습니다'));
+  const n = (await u1.agent.get('/api/notifications').expect(200)).body;
+  assert.ok(n.items.some((x) => x.message.includes('처리 완료가 취소')));
 });

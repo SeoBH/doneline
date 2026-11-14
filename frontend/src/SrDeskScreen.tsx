@@ -12,6 +12,7 @@ import { DataGrid } from './DataGrid';
 import { Screen, ScreenHandle, ViewState } from './types';
 import { Notify } from './Toasts';
 import { categoryLabel, dateTime, eventText, priorityLabel, statusLabel } from './srLabels';
+import { confirmAction } from './ConfirmDialog';
 
 // 처리 폼의 초기값. priority는 선택한 요청의 현재 값, assigneeId는 맡길 사람(관리자의 배정·재배정 선택)이다.
 const emptyForm = { assigneeId: '', priority: '', comment: '', internal: false };
@@ -85,7 +86,7 @@ export const SrDeskScreen = forwardRef<
     }
   }
   async function pick(id: string) {
-    if (dirty && !window.confirm('입력 중인 내용을 버리고 다른 요청을 열까요?')) return;
+    if (dirty && !(await confirmAction('입력 중인 내용을 버리고 다른 요청을 열까요?'))) return;
     setSelected(id);
     try {
       fill(await call('/' + id));
@@ -102,20 +103,22 @@ export const SrDeskScreen = forwardRef<
       notify('변경된 내용이 없습니다.');
       return false;
     }
-    if (!window.confirm('변경 내용을 저장할까요?')) return false;
+    if (!(await confirmAction('변경 내용을 저장할까요?'))) return false;
     // 답변/메모의 캡처를 먼저 첨부로 올린다. 내부 메모면 이미지도 내부용(고객에게 안 보임)으로 올린다.
     const pasted = memoImgs.tokens();
     await memoImgs.uploadAll(
       pasted.used,
       'requests/desk/' + selected,
       screen.menu_id,
-      form.internal,
+      form.internal || Boolean(closed),
     );
     // 바뀐 항목만 보낸다. 서버는 보낸 항목마다 이력을 남기고 요청자에게 알린다.
     const r = await call('/' + selected, {
       version: detail.item.version,
       ...(form.priority !== original.priority ? { priority: form.priority } : {}),
-      ...(form.comment.trim() ? { comment: pasted.text, internal: form.internal } : {}),
+      ...(form.comment.trim()
+        ? { comment: pasted.text, internal: form.internal || Boolean(closed) }
+        : {}),
     });
     await load(selected);
     notify(r.message, 'success');
@@ -134,12 +137,12 @@ export const SrDeskScreen = forwardRef<
   }
   // 진행 동작: 처리 시작(START)·처리 완료(RESOLVE)·되돌리기(REVERT)·요청 취소(CANCEL).
   // 되돌리기·취소는 답변/메모 칸의 내용을 사유로 보낸다. 우선순위 변경은 함께 보내지 않고 [저장]으로 따로 한다.
-  async function act(action: 'START' | 'RESOLVE' | 'REVERT' | 'CANCEL') {
+  async function act(action: 'START' | 'RESOLVE' | 'REVERT' | 'CANCEL' | 'UNRESOLVE') {
     if (!detail) return;
     const reason = form.comment.trim();
-    if ((action === 'REVERT' || action === 'CANCEL') && !reason) {
+    if ((action === 'REVERT' || action === 'CANCEL' || action === 'UNRESOLVE') && !reason) {
       notify(
-        (action === 'REVERT' ? '되돌리는' : '취소하는') +
+        { REVERT: '되돌리는', CANCEL: '취소하는', UNRESOLVE: '처리 완료를 취소하는' }[action] +
           ' 사유를 답변/메모 칸에 적은 뒤 다시 눌러 주세요.',
         'error',
       );
@@ -150,8 +153,9 @@ export const SrDeskScreen = forwardRef<
       RESOLVE: '처리 완료로 바꿀까요? 고객에게 결과 확인 요청이 갑니다.',
       REVERT: '접수 상태로 되돌리고 담당을 해제할까요? 다른 직원이 다시 맡을 수 있게 됩니다.',
       CANCEL: '이 요청을 취소할까요? 취소 사유가 고객에게 보입니다.',
+      UNRESOLVE: '처리 완료를 취소하고 다시 처리 중으로 돌릴까요? 사유가 고객에게 보입니다.',
     }[action];
-    if (!window.confirm(ask)) return;
+    if (!(await confirmAction(ask))) return;
     await run(async () => {
       // 되돌리기 사유는 내부 메모, 취소 사유는 고객 공개로 남으므로 이미지도 같은 공개 범위로 올린다.
       const sendReason = reason && action !== 'START' && action !== 'RESOLVE';
@@ -177,7 +181,8 @@ export const SrDeskScreen = forwardRef<
   }
   // 관리자: 처리 중 요청의 담당자만 바꾼다(상태는 그대로).
   async function reassign() {
-    if (!detail || !window.confirm('담당자를 바꿀까요? 새 담당자에게 알림이 갑니다.')) return;
+    if (!detail || !(await confirmAction('담당자를 바꿀까요? 새 담당자에게 알림이 갑니다.')))
+      return;
     await run(async () => {
       const r = await call('/' + selected, {
         version: detail.item.version,
@@ -253,13 +258,14 @@ export const SrDeskScreen = forwardRef<
         OPEN: '접수됨 · 담당자가 맡으면 처리 중이 됩니다.',
         IN_PROGRESS: '처리 중 · 끝나면 [처리 완료]를 누르세요.',
         RESOLVED:
-          '처리 완료 · 고객이 결과를 확인하면 완료됩니다.' +
+          '처리 완료 · 고객이 결과를 확인하면 완료됩니다. 잘못 완료했다면 [완료 취소]로 되돌릴 수 있습니다.' +
           (detail.item.auto_close_at
             ? ` 확인이 없으면 ${dateTime(detail.item.auto_close_at)}에 자동 완료됩니다.`
             : ''),
-        CLOSED: detail.item.auto_closed
-          ? '완료된 요청입니다(고객 확인 없이 확인 기간이 지나 자동 완료).'
-          : '완료된 요청입니다.',
+        CLOSED:
+          (detail.item.auto_closed
+            ? '완료된 요청입니다(고객 확인 없이 확인 기간이 지나 자동 완료).'
+            : '완료된 요청입니다.') + ' 내부 메모는 남길 수 있습니다.',
         CANCELLED: '취소된 요청입니다.',
       }[detail.item.status as string] || '';
   return (
@@ -413,6 +419,12 @@ export const SrDeskScreen = forwardRef<
                         </button>
                       </>
                     )}
+                    {/* 실수로 처리 완료했을 때 되돌리는 길(QA DL-016). 고객 확인 전(확인 대기)에만 가능하다. */}
+                    {detail.item.status === 'RESOLVED' && (
+                      <button disabled={busy} onClick={() => void act('UNRESOLVE')}>
+                        완료 취소(다시 처리)
+                      </button>
+                    )}
                     {['OPEN', 'IN_PROGRESS'].includes(detail.item.status) && (
                       <button
                         className="danger-outline"
@@ -449,12 +461,13 @@ export const SrDeskScreen = forwardRef<
                 </div>
               )}
             </div>
-            <fieldset className="account-fields field-grid" disabled={busy || closed}>
+            {/* 종료된 요청도 업체 내부 메모는 남길 수 있다(QA DL-016). 우선순위·공개 답변은 잠근다. */}
+            <fieldset className="account-fields field-grid" disabled={busy}>
               <label>
                 우선순위
                 <select
                   value={form.priority}
-                  disabled={locked || detail.item.status === 'RESOLVED'}
+                  disabled={locked || closed || detail.item.status === 'RESOLVED'}
                   onChange={(e) => setForm({ ...form, priority: e.target.value })}
                 >
                   {Object.entries(priorityLabel).map(([k, v]) => (
@@ -486,14 +499,16 @@ export const SrDeskScreen = forwardRef<
               <label className="account-wide sr-check">
                 <input
                   type="checkbox"
-                  checked={form.internal}
+                  checked={form.internal || Boolean(closed)}
+                  disabled={Boolean(closed)}
                   onChange={(e) => setForm({ ...form, internal: e.target.checked })}
                 />
                 내부 메모(고객에게 보이지 않음)
+                {closed ? ' · 종료된 요청은 내부 메모만 남길 수 있습니다' : ''}
               </label>
             </fieldset>
             {/* 답변·우선순위 저장. 처리 칸을 채운 뒤 화면 맨 위 툴바까지 가지 않도록 바로 아래에 둔다(툴바 [저장]과 같은 동작). */}
-            {!closed && canSave && (
+            {canSave && (
               <div className="form-actions">
                 <button
                   className="primary"

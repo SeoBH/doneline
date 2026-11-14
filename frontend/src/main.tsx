@@ -26,6 +26,8 @@ import { actions, Nav, Screen, ScreenHandle, Tab, tabKey, User, ViewState } from
 import './style.css';
 import { useToasts } from './Toasts';
 import { useSidebar } from './useSidebar';
+import { checkForm, clearInvalid } from './formCheck';
+import { ConfirmHost } from './ConfirmDialog';
 const emptyNav: Nav = { rootMenuId: '', menus: [], edges: [], screens: [] };
 // 너비 우선 탐색으로 시작 메뉴부터 대상까지 첫 경로를 찾고 방문 집합으로 중복 탐색을 막는다.
 function pathFor(n: Nav, id: string) {
@@ -256,11 +258,17 @@ function App() {
       window.removeEventListener('pointerdown', activity);
     };
   }, [user]);
+  // 로그인 폼의 오류 문장. 우하단 알림은 금방 사라지고 폼과 멀어 놓치기 쉬워 폼 안에 남긴다(QA DL-024).
+  const [loginError, setLoginError] = useState('');
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    const formEl = e.currentTarget;
+    const bad = checkForm(formEl);
+    setLoginError(bad);
+    if (bad) return;
     setBusy(true);
     clear();
-    const form = new FormData(e.currentTarget);
+    const form = new FormData(formEl);
     try {
       if (user?.mustChangePassword) {
         const r = await api('auth/password', {
@@ -279,7 +287,14 @@ function App() {
         await initialize(r.user);
       }
     } catch (e) {
-      notify((e as Error).message, 'error');
+      setLoginError((e as Error).message);
+      // 실패하면 비밀번호 칸을 비우고 다시 입력하게 한다(공용 PC에서 남지 않게).
+      const pw = formEl.elements.namedItem(user ? 'currentPassword' : 'password');
+      if (pw instanceof HTMLInputElement) {
+        pw.value = '';
+        pw.setAttribute('aria-invalid', 'true');
+        pw.focus();
+      }
     } finally {
       setBusy(false);
     }
@@ -449,10 +464,10 @@ function App() {
             </div>
             {signupToken ? (
               <>
-                <h2>
+                <p className="login-headline">
                   요청은 올리고, <br />
                   처리 상황은 바로 확인하세요.
-                </h2>
+                </p>
                 <p>
                   {signupInfo
                     ? `${signupInfo.workspaceName}에서 운영하는 ${signupInfo.customerName} 전용 요청 창구`
@@ -461,11 +476,11 @@ function App() {
               </>
             ) : (
               <>
-                <h2>
+                <p className="login-headline">
                   고객 요청을 <br />
                   접수부터 완료 확인까지 <br />
                   <em>한 줄로.</em>
-                </h2>
+                </p>
                 <p>유지보수·IT 서비스 업체를 위한 고객 요청 포털</p>
               </>
             )}
@@ -482,7 +497,7 @@ function App() {
               </li>
             </ul>
           </section>
-          <form onSubmit={submit}>
+          <form onSubmit={submit} noValidate onInput={clearInvalid}>
             {/* 고객사 가입 링크로 들어온 경우: 어느 업체·고객사의 포털인지 먼저 보여 주고 회원가입으로 안내한다. */}
             {!user && signupToken && signupChecked && !signupInfo && (
               <div className="signup-banner warn" role="alert">
@@ -552,6 +567,11 @@ function App() {
                 </label>
               </Fragment>
             )}
+            {loginError && (
+              <p className="form-error" role="alert">
+                {loginError}
+              </p>
+            )}
             {/* 고객사 가입 링크로 처음 온 사람의 주 행동은 회원가입이라 로그인 버튼을 보조 모양으로 낮춘다. */}
             <button className={signupToken && !user ? 'secondary' : 'primary'} disabled={busy}>
               {busy ? '처리 중…' : user ? '변경' : '로그인'}
@@ -608,6 +628,10 @@ function App() {
     >
       {toasts}
       <header>
+        {/* 저장·조회 등 처리 중에는 화면 맨 위에 움직이는 줄을 보여 '멈춘 것'으로 오해하지 않게 한다(QA DL-006). */}
+        {(running || states[active]?.busy) && (
+          <div className="progress-line" role="progressbar" aria-label="처리 중" />
+        )}
         {/* 휴대폰에서는 사이드 메뉴를 숨기고 이 버튼으로 연다(style.css의 좁은 화면 규칙). */}
         <button
           className="menu-toggle"
@@ -679,7 +703,8 @@ function App() {
                   .join(' / ')}
               </small>
             )}
-            <strong>{current ? current.name : '시작하기'}</strong>
+            {/* 화면마다 제목을 h1로 둔다(화면 읽기 프로그램의 제목 이동, QA DL-026). */}
+            <h1 className="screen-title">{current ? current.name : '시작하기'}</h1>
           </div>
           <div className="toolbar-actions">
             {actions
@@ -797,6 +822,12 @@ function App() {
             });
           }}
         >
+          {/* 하단 탭이 상태 표시줄로 오해되지 않게 이름표를 붙인다(QA DL-023). */}
+          {tabs.length > 0 && (
+            <span className="tab-caption" aria-hidden="true">
+              열린 화면
+            </span>
+          )}
           {tabs.map((t) => (
             <div
               data-tab-key={tabKey(t)}
@@ -807,7 +838,11 @@ function App() {
                 {t.name}
                 {states[tabKey(t)]?.dirty ? ' *' : ''}
               </button>
-              <button aria-label={t.name + ' 닫기'} onClick={() => requestClose([tabKey(t)])}>
+              <button
+                className="tab-close"
+                aria-label={t.name + ' 닫기'}
+                onClick={() => requestClose([tabKey(t)])}
+              >
                 ×
               </button>
             </div>
@@ -840,4 +875,10 @@ function App() {
     </div>
   );
 }
-createRoot(document.getElementById('root')!).render(<App />);
+// ConfirmHost: 어느 화면에서든 confirmAction()으로 띄우는 공통 확인 창(ConfirmDialog.tsx).
+createRoot(document.getElementById('root')!).render(
+  <>
+    <App />
+    <ConfirmHost />
+  </>,
+);

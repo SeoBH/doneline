@@ -8,6 +8,7 @@ import { api } from './api';
 import { Screen, ScreenHandle, ViewState } from './types';
 import { Notify } from './Toasts';
 import { priorityLabel } from './srLabels';
+import { confirmAction } from './ConfirmDialog';
 
 type Row = {
   priority: string;
@@ -62,7 +63,8 @@ export const SlaSettingsScreen = forwardRef<
       notify('첫 응답 기한은 처리 기한보다 길 수 없습니다.', 'error');
       return false;
     }
-    if (!window.confirm('SLA를 저장할까요? 이후 등록되는 요청부터 적용됩니다.')) return false;
+    if (!(await confirmAction('SLA를 저장할까요? 이후 등록되는 요청부터 적용됩니다.')))
+      return false;
     const r = await api('sla', {
       method: 'POST',
       headers,

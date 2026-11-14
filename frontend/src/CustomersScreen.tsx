@@ -4,6 +4,7 @@ import { api } from './api';
 import { DataGrid, GridHandle, GridRow } from './DataGrid';
 import { Screen, ScreenHandle, ViewState } from './types';
 import { Notify } from './Toasts';
+import { confirmAction } from './ConfirmDialog';
 const wrap = (r: any): GridRow => ({ ...r, _key: r.id, _checked: false });
 export const CustomersScreen = forwardRef<
   ScreenHandle,
@@ -90,7 +91,7 @@ export const CustomersScreen = forwardRef<
     await grid.current?.stop();
     if (
       latest.current.some((r) => r._checked) &&
-      !window.confirm('편집 중인 행을 버리고 고객사를 변경할까요?')
+      !(await confirmAction('편집 중인 행을 버리고 고객사를 변경할까요?'))
     )
       return;
     setCustomerId(r.id);
@@ -102,7 +103,7 @@ export const CustomersScreen = forwardRef<
     await grid.current?.stop();
     if (
       latest.current.some((r) => r._checked) &&
-      !window.confirm('편집 중인 행을 버리고 법인을 변경할까요?')
+      !(await confirmAction('편집 중인 행을 버리고 법인을 변경할까요?'))
     )
       return;
     setCorporationId(r.id);
@@ -143,7 +144,9 @@ export const CustomersScreen = forwardRef<
       notify('처리할 행을 체크해 주세요.');
       return false;
     }
-    if (!window.confirm(selected.length + '개 행을 ' + (remove ? '삭제' : '저장') + '할까요?'))
+    if (
+      !(await confirmAction(selected.length + '개 행을 ' + (remove ? '삭제' : '저장') + '할까요?'))
+    )
       return false;
     let committed = false;
     setBusy(true);

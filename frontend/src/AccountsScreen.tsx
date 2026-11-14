@@ -8,6 +8,8 @@ import { DataGrid, GridRow } from './DataGrid';
 import { AccountForm, emptyAccount } from './AccountForm';
 import { Screen, ScreenHandle, ViewState } from './types';
 import { Notify } from './Toasts';
+import { confirmAction } from './ConfirmDialog';
+import { checkForm, clearInvalid } from './formCheck';
 export const AccountsScreen = forwardRef<
   ScreenHandle,
   { screen: Screen; notify: Notify; onState: (s: ViewState) => void }
@@ -134,8 +136,8 @@ export const AccountsScreen = forwardRef<
     setStatus('');
     setBusy(false);
   }
-  function chooseCustomer(id: string) {
-    if (dirty && !window.confirm('입력 중인 내용을 버리고 고객사를 변경할까요?')) return;
+  async function chooseCustomer(id: string) {
+    if (dirty && !(await confirmAction('입력 중인 내용을 버리고 고객사를 변경할까요?'))) return;
     epoch.current++;
     setCustomerId(id);
     setSelected(null);
@@ -148,12 +150,17 @@ export const AccountsScreen = forwardRef<
     setNote('');
   }
   async function save() {
-    if (!form.current?.reportValidity() || !customerId) return false;
+    const bad = checkForm(form.current);
+    if (bad) {
+      notify(bad, 'error');
+      return false;
+    }
+    if (!customerId) return false;
     if (editing) return updateAccount();
     if (
-      !window.confirm(
+      !(await confirmAction(
         '사용자를 등록할까요? 등록 후 비밀번호 설정 링크를 직원에게 전달해야 로그인할 수 있습니다.',
-      )
+      ))
     )
       return false;
     setBusy(true);
@@ -200,9 +207,9 @@ export const AccountsScreen = forwardRef<
   async function passwordLink() {
     if (
       !editing ||
-      !window.confirm(
+      !(await confirmAction(
         '비밀번호 설정 링크를 새로 만들까요? 이전에 만든 링크는 사용할 수 없게 됩니다.',
-      )
+      ))
     )
       return;
     setBusy(true);
@@ -222,7 +229,7 @@ export const AccountsScreen = forwardRef<
     }
   }
   async function updateAccount() {
-    if (!editing || !window.confirm('선택한 사용자의 기본정보를 변경할까요?')) return false;
+    if (!editing || !(await confirmAction('선택한 사용자의 기본정보를 변경할까요?'))) return false;
     setBusy(true);
     try {
       await api('accounts/update', {
@@ -293,13 +300,13 @@ export const AccountsScreen = forwardRef<
     }
     const label = { approve: '승인', reject: '반려', suspend: '정지' }[action];
     if (
-      !window.confirm(
+      !(await confirmAction(
         selected.length +
           '개 계정을 ' +
           label +
           '할까요?' +
           (reapprove ? ' 다시 사용 가능 상태로 변경합니다.' : ''),
-      )
+      ))
     )
       return;
     setBusy(true);
@@ -396,11 +403,11 @@ export const AccountsScreen = forwardRef<
     }
   }
   // 클릭한 사용자의 저장된 스냅샷을 불러온다. 미저장 매핑은 사용자 전환 전에 확인한다.
-  function pickUser(row: GridRow) {
+  async function pickUser(row: GridRow) {
     if (selected?.id === row.id) return;
     if (
       (mappingDirty || formDirty) &&
-      !window.confirm('저장하지 않은 입력을 버리고 사용자를 변경할까요?')
+      !(await confirmAction('저장하지 않은 입력을 버리고 사용자를 변경할까요?'))
     )
       return;
     restoreMapping(row);
@@ -417,7 +424,7 @@ export const AccountsScreen = forwardRef<
   async function remove() {
     if (
       !checked.length ||
-      !window.confirm(checked.length + '개 사용자를 실제 삭제할까요? 복구할 수 없습니다.')
+      !(await confirmAction(checked.length + '개 사용자를 실제 삭제할까요? 복구할 수 없습니다.'))
     )
       return;
     setBusy(true);
@@ -440,7 +447,8 @@ export const AccountsScreen = forwardRef<
       notify('법인·부서 매핑 탭에서 사용자를 선택해 주세요.');
       return;
     }
-    if (!window.confirm('법인·부서 매핑을 저장할까요? 기존 로그인 세션은 종료됩니다.')) return;
+    if (!(await confirmAction('법인·부서 매핑을 저장할까요? 기존 로그인 세션은 종료됩니다.')))
+      return;
     setBusy(true);
     try {
       await api('accounts/mapping', {
@@ -665,7 +673,13 @@ export const AccountsScreen = forwardRef<
           )}
         </section>
         {tab === 'basic' ? (
-          <form ref={form} className="account-card" onSubmit={(e) => e.preventDefault()}>
+          <form
+            ref={form}
+            className="account-card"
+            noValidate
+            onInput={clearInvalid}
+            onSubmit={(e) => e.preventDefault()}
+          >
             <h2>사용자정보</h2>
             <button
               type="button"

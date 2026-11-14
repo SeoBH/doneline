@@ -86,15 +86,19 @@ export function Attachments(props: {
       )}
       {props.canUpload && (
         <div className="sr-files-add">
-          {/* multiple: 여러 파일을 한 번에 고를 수 있다. 휴대폰에서는 사진 촬영·앨범 선택도 이 버튼으로 된다. */}
-          <input
-            ref={input}
-            type="file"
-            multiple
-            disabled={busy}
-            aria-label="첨부할 파일 선택"
-            onChange={(e) => void send(e.target.files)}
-          />
+          {/* 기본 파일 칸은 모양이 다른 화면과 어울리지 않아 숨기고, 버튼 모양 라벨을 누르면 파일 고르기 창이 열린다(QA DL-025).
+              multiple: 여러 파일을 한 번에 고를 수 있다. 휴대폰에서는 사진 촬영·앨범 선택도 이 버튼으로 된다. */}
+          <label className={'file-button' + (busy ? ' disabled' : '')}>
+            {busy ? '올리는 중…' : props.files.length ? '파일 더 첨부' : '파일 첨부'}
+            <input
+              ref={input}
+              type="file"
+              multiple
+              disabled={busy}
+              className="visually-hidden"
+              onChange={(e) => void send(e.target.files)}
+            />
+          </label>
           {props.allowInternal && (
             <label className="sr-check">
               <input

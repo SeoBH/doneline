@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { api } from './api';
 import { AccountForm, emptyAccount } from './AccountForm';
 import { Notify } from './Toasts';
+import { checkForm, clearInvalid } from './formCheck';
 export function SignupScreen({
   code,
   onBack,
@@ -35,11 +36,16 @@ export function SignupScreen({
       active = false;
     };
   }, [code]);
+  // 입력 검사 결과 문장(브라우저 말풍선 대신 폼 안에 보여 준다, formCheck.ts).
+  const [formError, setFormError] = useState('');
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    const bad = checkForm(e.currentTarget as HTMLFormElement);
+    setFormError(bad);
+    if (bad) return;
     if (busy || !customer) return;
     if (draft.password !== confirm) {
-      notify('비밀번호와 비밀번호 확인이 다릅니다.', 'error');
+      setFormError('비밀번호와 비밀번호 확인이 다릅니다.');
       return;
     }
     setBusy(true);
@@ -61,7 +67,7 @@ export function SignupScreen({
   }
   return (
     <main className="signup-page">
-      <form className="account-card" onSubmit={submit}>
+      <form className="account-card" onSubmit={submit} noValidate onInput={clearInvalid}>
         <h1>회원가입</h1>
         {customer?.customerName && (
           <p className="signup-banner">
@@ -106,6 +112,11 @@ export function SignupScreen({
         <button type="button" disabled={busy} onClick={onBack}>
           로그인으로 돌아가기
         </button>
+        {formError && (
+          <p className="form-error" role="alert">
+            {formError}
+          </p>
+        )}
       </form>
     </main>
   );

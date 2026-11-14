@@ -5,6 +5,17 @@ process.env.PGDATABASE = 'doneline_test';
 // 테스트 중 실제 슬랙 알림이 나가지 않도록 빈 값으로 고정한다(.env보다 우선).
 process.env.SLACK_WEBHOOK_URL = '';
 process.env.APP_ORIGIN = 'http://127.0.0.1:3001';
+// 시험 브라우저 전용: 앱 공통 확인 창(ConfirmDialog, role=alertdialog)이 뜨면 0.05초 안에 [확인]을 누르고 문구를 기록한다.
+// (예전 브라우저 기본 confirm을 page.on('dialog')로 수락하던 것과 같은 역할. 응답을 기다리는 중에도 동작한다.)
+const autoConfirm = () => {
+  window.__confirms = [];
+  setInterval(() => {
+    const box = document.querySelector('[role="alertdialog"]');
+    if (!box) return;
+    window.__confirms.push(box.querySelector('p')?.textContent || '');
+    box.querySelector('.confirm-actions button:last-child')?.click();
+  }, 50);
+};
 const { chromium } = require('playwright');
 const { expect } = require('playwright/test');
 const { createApp } = require('../dist/app');
@@ -51,21 +62,20 @@ const assert = require('node:assert/strict');
     await app.listen(3001, '127.0.0.1');
     browser = await chromium.launch({ channel: 'msedge', headless: true });
     page = await browser.newPage({ viewport: { width: 1700, height: 1050 } });
-    const errors = [],
-      dialogs = [];
+    const errors = [];
+    // 지금까지 뜬 확인 창 수(autoConfirm이 기록).
+    const confirms = () => page.evaluate(() => window.__confirms?.length || 0);
     page.on('pageerror', (e) => {
       errors.push(e.message);
       console.error(e.message);
     });
-    page.on('dialog', (d) => {
-      dialogs.push(d.message());
-      d.accept();
-    });
+    await page.addInitScript(autoConfirm);
     await page.goto('http://127.0.0.1:3001');
     await page.getByLabel('아이디').fill(name);
     await page.getByLabel('비밀번호', { exact: true }).fill('incorrect-password');
     await page.getByRole('button', { name: '로그인', exact: true }).click();
-    await expect(page.locator('.toast-error')).toContainText('아이디 또는 비밀번호');
+    // 로그인 실패는 폼 안 오류 문장으로 보여 준다(QA DL-024).
+    await expect(page.locator('form .form-error')).toContainText('아이디 또는 비밀번호');
     await page.getByLabel('비밀번호', { exact: true }).fill(password);
     await page.getByRole('button', { name: '로그인', exact: true }).click();
     const splitter = page.getByRole('separator', { name: '사이드메뉴 너비', exact: true });
@@ -234,9 +244,9 @@ const assert = require('node:assert/strict');
     await expect(
       active().locator('.fixed-bar').getByLabel('메뉴코드', { exact: true }),
     ).toHaveValue('');
-    const beforeClose = dialogs.length;
+    const beforeClose = await confirms();
     await page.getByRole('button', { name: '메뉴등록 닫기', exact: true }).click();
-    assert.equal(dialogs.length, beforeClose);
+    assert.equal(await confirms(), beforeClose);
     await open('화면등록');
     await active()
       .locator('.register-left .query-bar')
@@ -316,9 +326,9 @@ const assert = require('node:assert/strict');
       '/responsibilities/' + respSaved.items[0].id + '/apply',
     );
     await page.screenshot({ path: path.resolve(__dirname, '../../runtime/resp-registration.png') });
-    const count = dialogs.length;
+    const count = await confirms();
     await tool.getByRole('button', { name: '초기화', exact: true }).click();
-    assert.equal(dialogs.length, count);
+    assert.equal(await confirms(), count);
     // All tabs close at the mouse context menu, with no discard prompt.
     const tab = page.locator('footer .tab').first(),
       box = await tab.boundingBox();
@@ -329,7 +339,7 @@ const assert = require('node:assert/strict');
     assert.ok(Math.abs(popupBox.x - (box.x + box.width / 2)) < 10);
     await popup.getByRole('menuitem', { name: '전체 닫기', exact: true }).click();
     await expect(page.locator('footer .tab')).toHaveCount(0);
-    assert.equal(dialogs.length, count);
+    assert.equal(await confirms(), count);
     assert.deepEqual(errors, []);
     console.log(
       'Browser registration, atomic rollback, saved-value selection, draft mapping, RESP apply and tab close passed.',

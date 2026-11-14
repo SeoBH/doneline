@@ -12,6 +12,7 @@ import { categoryLabel, dateTime, eventText, priorityLabel, statusLabel } from '
 import { Attachments } from './Attachments';
 import { ImageText, PastePreview, usePastedImages } from './PastedImages';
 import { upload } from './api';
+import { confirmAction } from './ConfirmDialog';
 
 const emptyDraft = {
   title: '',
@@ -108,7 +109,7 @@ export const SrPortalScreen = forwardRef<
         notify('제목·내용·법인/부서를 입력해 주세요.');
         return false;
       }
-      if (!window.confirm('요청을 등록할까요?')) return false;
+      if (!(await confirmAction('요청을 등록할까요?'))) return false;
       // 붙여 넣은 이미지 표시를 저장 형식으로 바꾼다. 이미지는 요청이 만들어진 뒤 아래에서 올린다.
       const pasted = bodyImgs.tokens();
       const r = await call('', {
@@ -150,7 +151,7 @@ export const SrPortalScreen = forwardRef<
       notify('새 요청을 작성하거나, 요청을 선택해 댓글을 입력해 주세요.');
       return false;
     }
-    if (!window.confirm('댓글을 등록할까요?')) return false;
+    if (!(await confirmAction('댓글을 등록할까요?'))) return false;
     // 댓글의 이미지는 먼저 올린다(실패하면 댓글을 남기지 않고 입력을 그대로 둔다).
     const pasted = commentImgs.tokens();
     await commentImgs.uploadAll(pasted.used, 'requests/portal/' + selected, screen.menu_id);
@@ -183,7 +184,7 @@ export const SrPortalScreen = forwardRef<
     const question = accept
       ? '처리 결과를 확인하고 요청을 완료할까요?'
       : '처리 결과가 맞지 않아 다시 처리를 요청할까요?';
-    if (!window.confirm(question)) return;
+    if (!(await confirmAction(question))) return;
     setBusy(true);
     try {
       // 재처리 사유에 붙인 캡처도 먼저 첨부로 올린다.
@@ -367,15 +368,46 @@ export const SrPortalScreen = forwardRef<
               setWidth={bodyImgs.setWidth}
               remove={bodyImgs.remove}
             />
-            <label>
-              첨부 파일(선택)
-              {/* 휴대폰에서는 사진 촬영·앨범 선택도 된다. 파일당 10MB, 실행 파일 불가(서버 검사). */}
-              <input
-                type="file"
-                multiple
-                onChange={(e) => setNewFiles(Array.from(e.target.files || []))}
-              />
-            </label>
+            {/* 첨부 파일(선택): 고른 파일을 등록 전에 목록으로 보여 주고 뺄 수 있게 한다(QA DL-025).
+                휴대폰에서는 사진 촬영·앨범 선택도 된다. 파일당 10MB, 실행 파일 불가(서버 검사). */}
+            <div className="sr-files">
+              <strong>첨부 파일(선택)</strong>
+              {newFiles.length > 0 && (
+                <ul>
+                  {newFiles.map((f, i) => (
+                    <li key={f.name + i}>
+                      <span>{f.name}</span>
+                      <small>{(f.size / 1024).toFixed(0)}KB</small>
+                      <button
+                        type="button"
+                        className="link-button"
+                        onClick={() => setNewFiles(newFiles.filter((_, j) => j !== i))}
+                      >
+                        빼기
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="sr-files-add">
+                <label className="file-button">
+                  파일 고르기
+                  <input
+                    type="file"
+                    multiple
+                    className="visually-hidden"
+                    onChange={(e) => {
+                      // 여러 번 골라도 앞서 고른 파일에 덧붙인다. 같은 파일을 다시 고를 수 있게 칸은 비운다.
+                      setNewFiles([...newFiles, ...Array.from(e.target.files || [])]);
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+                <small>
+                  요청을 등록할 때 함께 올라갑니다. 파일당 10MB, 실행 파일은 올릴 수 없습니다.
+                </small>
+              </div>
+            </div>
             {/* 휴대폰에서 내용을 쓴 뒤 화면 맨 위 툴바까지 올라가지 않도록 폼 아래에도 등록 버튼을 둔다. */}
             <button className="primary" disabled={busy} onClick={() => void submitHere()}>
               요청 등록

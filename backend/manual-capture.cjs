@@ -9,6 +9,17 @@
  * 준비: 루트 .env.db-admin(DB 관리 계정)·.env(앱 계정)와 Edge가 필요하다. 3300 포트를 쓴다. 실행할 때마다 doneline_manual을 지우고 다시 만든다.
  * 부수 효과: doneline_manual DB 재생성, media 폴더 파일 덮어쓰기. 다른 DB와 슬랙 알림에는 영향이 없다.
  */
+// 시험 브라우저 전용: 앱 공통 확인 창(ConfirmDialog, role=alertdialog)이 뜨면 0.05초 안에 [확인]을 누르고 문구를 기록한다.
+// (예전 브라우저 기본 confirm을 page.on('dialog')로 수락하던 것과 같은 역할. 응답을 기다리는 중에도 동작한다.)
+const autoConfirm = () => {
+  window.__confirms = [];
+  setInterval(() => {
+    const box = document.querySelector('[role="alertdialog"]');
+    if (!box) return;
+    window.__confirms.push(box.querySelector('p')?.textContent || '');
+    box.querySelector('.confirm-actions button:last-child')?.click();
+  }, 50);
+};
 const path = require('node:path');
 const fs = require('node:fs');
 const { execFileSync } = require('node:child_process');
@@ -105,9 +116,10 @@ const overlayScript = () => {
       ...(video ? { recordVideo: { dir: out, size: device.viewport } } : {}),
     });
     await ctx.addInitScript(overlayScript);
+    await ctx.addInitScript(autoConfirm);
     const page = await ctx.newPage();
     page.on('pageerror', (e) => console.error('page error:', e.message));
-    page.on('dialog', (d) => d.accept());
+
     if (video) videos.set(page, { ctx, name: video });
     // 비밀번호 링크(#account=…)는 첫 로딩 때만 읽으므로 처음부터 그 주소로 연다.
     await page.goto(url);
@@ -362,7 +374,7 @@ const overlayScript = () => {
   const form = lee2.locator('.sr-detail');
   await type(lee2, field(form, '제목'), '회의실 프로젝터 화면이 안 나옵니다');
   await field(form, '구분').selectOption({ label: '장애' });
-  await field(form, '긴급도').selectOption({ label: '높음' });
+  await field(form, '우선순위').selectOption({ label: '높음' });
   await field(form, '법인 / 부서').selectOption({ index: 1 });
   await type(
     lee2,

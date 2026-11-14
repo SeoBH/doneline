@@ -7,6 +7,7 @@ import { api, ApiError } from './api';
 import { Column, DataGrid, GridHandle, GridRow } from './DataGrid';
 import { actions, labels, Screen, ScreenHandle, ViewState } from './types';
 import { Notify } from './Toasts';
+import { confirmAction } from './ConfirmDialog';
 export type RegisterKind = 'screens' | 'menus' | 'responsibilities';
 const titles = { screens: '화면', menus: '메뉴', responsibilities: 'RESP' };
 const time = (v: any) => (v ? new Date(v).toLocaleString('ko-KR') : '');
@@ -190,7 +191,7 @@ export const RegistrationScreen = forwardRef<ScreenHandle, Props>(function Regis
       notify('첫 열에서 처리할 행을 체크해 주세요.');
       return false;
     }
-    if (!window.confirm(chosen.length + '개 행을 ' + (remove ? '삭제' : '저장') + '할까요?'))
+    if (!(await confirmAction(chosen.length + '개 행을 ' + (remove ? '삭제' : '저장') + '할까요?')))
       return false;
     setBusy(true);
     const payload = chosen.map((r) => ({
@@ -364,11 +365,11 @@ export const RegistrationScreen = forwardRef<ScreenHandle, Props>(function Regis
       return;
     }
     if (
-      !window.confirm(
+      !(await confirmAction(
         kind === 'menus'
           ? '현재 하위 메뉴·화면 구성을 적용할까요?'
           : '선택한 메뉴를 RESP에 적용할까요?',
-      )
+      ))
     )
       return;
     setBusy(true);
