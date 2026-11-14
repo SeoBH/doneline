@@ -13,3 +13,4 @@ runtime/
 .github/agents/
 .github/hooks/
 .github/skills/
+deploy/pages/dist-app/

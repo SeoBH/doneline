@@ -30,6 +30,10 @@ export const settings = {
     // 받는 사람에게 보이는 보내는 사람. 예: Doneline 알림 <doneline.noti@gmail.com>. 비우면 SMTP_USER를 쓴다.
     from: process.env.MAIL_FROM || process.env.SMTP_USER || '',
   },
+  // Cloudflare Pages 중계 모드의 비밀 표식(32자 이상). 운영 모드(NODE_ENV=production)에서 값이 있으면
+  // 중계 함수(deploy/pages/functions)가 이 값을 붙인 요청만 받는다. ts.net 주소로 직접 들어오는 요청은 거절해
+  // 접속 IP를 꾸며 로그인 시도 제한을 우회하는 길을 막는다. 개발 PC의 일반 실행(production 아님)에는 적용하지 않는다.
+  proxySecret: process.env.PROXY_SECRET || '',
   // 서버 앞에 있는 프록시 수(0=없음). Tailscale Funnel·클라우드 로드밸런서 뒤에서 실행할 때 1 이상으로 둔다.
   // 그 수만큼만 X-Forwarded-* 헤더를 믿어 실제 접속 IP(로그인 시도 제한)와 HTTPS 여부(보안 쿠키)를 판단한다.
   trustProxy: Number(process.env.TRUST_PROXY || 0),
@@ -48,6 +52,8 @@ if (
   !['127.0.0.1', '::1', 'localhost'].includes(settings.host)
 )
   throw new Error('TRUST_PROXY requires a loopback HOST or PROXY_ONLY_INGRESS=1');
+if (settings.proxySecret && settings.proxySecret.length < 32)
+  throw new Error('PROXY_SECRET must contain at least 32 characters');
 // 메일 설정은 켜는 경우에만 검사한다. 포트 465는 처음부터 암호화 연결, 그 밖(587)은 연결 후 STARTTLS로 암호화한다.
 if (settings.smtp.host) {
   if (!Number.isInteger(settings.smtp.port) || settings.smtp.port < 1 || settings.smtp.port > 65535)

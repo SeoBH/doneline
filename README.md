@@ -28,6 +28,7 @@ npm.cmd start
 | `.env.example`                                            | 설정 항목의 예시.                                                                            |
 | `.env.bootstrap`                                          | 최초 관리자 생성 때 발급한 로그인 정보. 현재 비밀번호와 다를 수 있습니다.                    |
 | `SLACK_WEBHOOK_URL` (`.env`)                              | 운영 알림용 슬랙 Incoming Webhook 주소. 비우면 알림을 보내지 않습니다. 테스트는 항상 빈 값으로 실행합니다. |
+| `PROXY_SECRET` (`.env`)                                   | Cloudflare Pages 중계 표식(32자 이상). 운영 모드에서 이 값을 붙인 중계 요청만 받습니다. Pages 앱 프로젝트 비밀값과 같아야 하며 외부에 공유하지 않습니다. |
 | `SMTP_HOST`·`SMTP_PORT`·`SMTP_USER`·`SMTP_PASS`·`MAIL_FROM` (`.env`) | 메일 발송 설정. `SMTP_HOST`를 비우면 메일을 보내지 않고 대기열에만 남깁니다. 아래 '메일 발송 설정' 참고. 테스트는 항상 빈 값(메일 테스트만 PC 안의 가짜 메일 서버)으로 실행합니다. |
 | `backend/package-lock.json`, `frontend/package-lock.json` | 의존성 버전 고정.                                                                            |
 
@@ -152,7 +153,7 @@ npm.cmd run test:browser
 npm.cmd run test:lookup
 ```
 
-통합 테스트는 인증·기존 등록·가입/승인/매핑/삭제·RESP 레벨·이메일 복구·워크스페이스 격리·업체 셀프 가입·고객 요청 처리·SLA·월간 리포트·개선 요청·메일 발송(받는 사람·재시도·실패 경보)·운영 경보·확인 대기 자동 완료의 46개 시나리오를 검사합니다. 메일 테스트는 PC 안에서만 동작하는 가짜 메일 서버로 보내므로 실제 메일은 나가지 않습니다. 브라우저 테스트는 빌드 후 Edge와 3001·3002 포트를 순차 사용해 기존 등록 화면과 고객사 등록·회원가입·승인·매핑·사용자 수정/삭제·메일 링크를 통한 최초 비밀번호 설정을 검사합니다. Edge가 설치되어 있어야 합니다. 두 테스트 모두 `doneline_test`에 고유 데이터를 생성하며 테스트 이력이 남습니다. 브라우저 테스트는 runtime에 화면 캡처를 생성합니다.
+통합 테스트는 인증·기존 등록·가입/승인/매핑/삭제·RESP 레벨·이메일 복구·워크스페이스 격리·업체 셀프 가입·고객 요청 처리·SLA·월간 리포트·개선 요청·메일 발송(받는 사람·재시도·실패 경보)·운영 경보·확인 대기 자동 완료·Pages 중계(직접 접속 거절·접속자 IP·보안 헤더)의 51개 시나리오를 검사합니다. 메일 테스트는 PC 안에서만 동작하는 가짜 메일 서버로 보내므로 실제 메일은 나가지 않습니다. 브라우저 테스트는 빌드 후 Edge와 3001·3002 포트를 순차 사용해 기존 등록 화면과 고객사 등록·회원가입·승인·매핑·사용자 수정/삭제·메일 링크를 통한 최초 비밀번호 설정을 검사합니다. Edge가 설치되어 있어야 합니다. 두 테스트 모두 `doneline_test`에 고유 데이터를 생성하며 테스트 이력이 남습니다. 브라우저 테스트는 runtime에 화면 캡처를 생성합니다.
 
 테스트 seed는 `.env.bootstrap` 파일을 생성하지 않습니다. 개발용 seed도 기존 파일을 덮어쓰지 않습니다. 2026-09-17 테스트 초기화가 기존 초기 발급 파일을 덮어쓴 문제가 있어 테스트용 파일은 제거했습니다. 기존 개발 DB의 관리자 비밀번호는 변경하지 않았으며, 이전 초기 발급 파일 내용은 복원하지 못했습니다. 현재 관리자는 기존에 사용하던 비밀번호로 로그인합니다.
 
@@ -220,51 +221,54 @@ MAIL_FROM=Doneline 알림 <보내는Gmail주소>
 
 직접 체험할 샘플은 `npm.cmd run dev --prefix frontend -- --port 5173 --strictPort` 실행 후 `http://127.0.0.1:5173/test/lookup.html?sample=1`에서 확인합니다. 법인·부서 검색과 행추가를 가상 데이터로 체험하며 로그인과 DB 저장은 없습니다. 해당 법인을 선택해야 부서 검색을 사용할 수 있습니다.
 
-## 외부 데모(Tailscale Funnel)
+## 외부 공개(Cloudflare Pages + Tailscale Funnel)
 
-이 PC의 서버를 Tailscale Funnel로 공개합니다. 서버가 화면 파일도 제공하므로 주소 하나(`https://castanets.tail12e316.ts.net`, 고정)로 전부 동작하며 비용과 추가 설치가 없습니다. PC가 켜져 있고 스크립트가 실행 중일 때만 접속됩니다.
+사용자가 보는 주소는 Cloudflare Pages의 무료 주소입니다. 서버는 그대로 이 PC에서 실행합니다.
 
-```powershell
-npm.cmd run build
-```
+| 주소 | 내용 |
+| --- | --- |
+| `https://doneline-app.pages.dev` | 앱. 화면 파일은 Pages가 주고, `/api/*`만 중계 함수(`deploy/pages/functions/api/[[path]].js`)가 이 PC 서버로 전달합니다. |
+| `https://doneline.pages.dev` | 소개 페이지(`landing/`). |
+| `https://castanets.taile12e316.ts.net` | 서버 입구(Tailscale Funnel). 중계 함수만 쓰며 사람이 직접 들어오면 거절됩니다. |
+
+이렇게 나눈 이유: 고객에게 나가는 가입 링크·메일 링크가 처음부터 바뀌지 않는 주소를 쓰게 하기 위해서입니다. 나중에 도메인을 사서 Pages에 연결해도 `pages.dev` 주소는 계속 동작하고, 서버 입구만 Cloudflare Tunnel로 바꾸면 됩니다(중계 함수의 `BACKEND_ORIGIN`만 변경).
+
+- **중계 표식:** 운영 모드에서 `.env`의 `PROXY_SECRET`(32자 이상)이 있으면 서버는 중계 함수가 이 값을 붙인 요청만 받습니다(`app.ts`). 중계 함수는 Cloudflare가 확인한 접속자 IP도 따로 전달해, 로그인·가입 시도 제한이 접속자별로 동작합니다. 개발 PC의 일반 실행(`npm.cmd start`)에는 적용하지 않습니다.
+- **보안 헤더:** 화면 파일은 Pages가 주므로 서버의 브라우저 보안 헤더(helmet)를 `deploy/pages/_headers`에 똑같이 둡니다. 서버 설정을 바꾸면 이 파일도 맞춥니다(테스트가 CSP 일치를 확인).
+- **무료 한도:** 중계 함수는 Cloudflare 무료 플랜에서 하루 10만 요청까지입니다(화면 파일은 무제한). 하루 종일 쓰는 사용자 한 명이 약 1,000요청이라 대략 80~100명까지입니다. 넘으면 그날 API가 실패하고 한국 시간 오전 9시에 초기화되므로, 사용자가 늘면 Workers 유료 플랜(월 5달러)으로 올립니다.
+- PC가 꺼져 있으면 화면은 열리지만 "서버에 연결할 수 없습니다"가 나옵니다.
+
+서버 실행(이 PC, 빌드 후):
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/demo.ps1
 ```
 
-설명서의 예시 데이터(한빛IT서비스·서울메디랩, `hanbit_ceo`·`hanbit_park`·`smlab_lee`, 비밀번호는 `backend/manual-capture.cjs`의 `PW`)로 외부 테스트하려면 `-Sample`을 붙입니다. 예시 DB는 `npm run manual`을 실행하면 처음 상태로 다시 만들어집니다.
+`APP_ORIGIN`을 `https://doneline-app.pages.dev`로, `NODE_ENV=production`·`TRUST_PROXY=1`로 실행하고 Funnel을 켭니다. 처음 실행하면 Tailscale이 Funnel 승인 링크를 보여줄 수 있습니다. 예시 데이터(한빛IT서비스·서울메디랩, `hanbit_ceo`·`hanbit_park`·`smlab_lee`, 비밀번호는 `backend/manual-capture.cjs`의 `PW`)로 열려면 `-Sample`, 예전처럼 ts.net 주소로 직접 접속하게 하려면 `-Direct`를 붙입니다. 공개를 완전히 끄려면 `& 'C:\Program Files\Tailscale\tailscale.exe' funnel reset`을 실행합니다.
+
+Pages 배포(대표님 Cloudflare 계정, 처음 한 번 설정):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/demo.ps1 -Sample
+npx.cmd --yes wrangler@4 login
 ```
-
-처음 실행하면 Tailscale이 Funnel 사용 승인 링크를 보여줄 수 있습니다. 링크를 열어 이 PC(`castanets`)의 Funnel을 허용하면 됩니다. 스크립트는 `NODE_ENV=production`(HTTPS 출처·보안 쿠키), `APP_ORIGIN`(Funnel 주소), `TRUST_PROXY=1`(앞단 프록시 1개)로 서버를 실행합니다. 공개를 완전히 끄려면 아래 명령을 실행합니다.
 
 ```powershell
-& 'C:\Program Files\Tailscale\tailscale.exe' funnel reset
+powershell -ExecutionPolicy Bypass -File scripts/deploy-pages.ps1 -Setup
 ```
+
+`login`은 브라우저에서 Cloudflare 로그인과 허용을 묻습니다. `-Setup`은 Pages 프로젝트 2개(`doneline-app`, `doneline`)를 만들고, `.env`의 `PROXY_SECRET`과 이 PC의 Funnel 주소를 앱 프로젝트 비밀값으로 등록한 뒤 둘 다 배포합니다(값은 화면에 표시하지 않음). 이후 화면이나 소개 페이지를 고치면 `scripts/deploy-pages.ps1`(둘 다), `-App`, `-Landing`으로 다시 배포합니다. 프로젝트 이름이 이미 쓰이고 있으면 Cloudflare가 다른 주소를 주므로, 그 주소에 맞춰 `scripts/demo.ps1`의 출처와 `landing/index.html`의 링크를 바꿉니다.
 
 데모는 개발 DB(`doneline_dev`)를 사용하며 방문자는 **업체 무료 가입**으로 자기 업체를 만들어 체험합니다. 업체 가입·개선 요청·서버 시작·서버 오류·메일 발송 실패는 운영 슬랙으로 알립니다. 회사 PC·회사망에서는 실행하지 않습니다.
 
-`deploy/pages/functions/api/[[path]].js`는 나중에 화면을 Cloudflare Pages(`doneline.pages.dev`)에 두고 API만 이 서버로 보내고 싶을 때 쓰는 선택 구성입니다(Pages 환경변수 `BACKEND_ORIGIN`=서버 주소, `TRUST_PROXY`는 경유 프록시 수에 맞춤).
-
 ## 소개 페이지(랜딩)
 
-`landing/`(index.html·landing.css)은 영업용 소개 페이지입니다. 앱과 분리해 **Cloudflare Pages**(무료)에 올립니다. 앱 주소(`castanets.taile12e316.ts.net`)는 이 PC의 데모 주소라 PC가 꺼지면 열리지 않고 이름도 개인 PC처럼 보이므로, 처음 방문하는 사람이 보는 페이지는 항상 열려 있는 별도 주소(`doneline.pages.dev`)에 둡니다. 도메인을 사면 소개 페이지는 `doneline.kr`, 앱은 `app.doneline.kr`처럼 나눕니다.
+`landing/`(index.html·landing.css)은 영업용 소개 페이지이며 `https://doneline.pages.dev`에 올립니다(위 배포 스크립트). 도메인을 사면 소개 페이지는 `doneline.○○`, 앱은 `app.doneline.○○`처럼 나눕니다.
 
-- [무료로 시작하기]는 `앱주소/?start=1`로 이동해 업체 가입 화면을 바로 엽니다. [로그인]·[사용 설명서 보기]도 앱 주소로 갑니다. 앱 주소가 바뀌면 `landing/index.html`의 주소를 모두 바꿉니다.
+- [무료로 시작하기]는 `https://doneline-app.pages.dev/?start=1`로 이동해 업체 가입 화면을 바로 엽니다. [로그인]·[사용 설명서 보기]도 앱 주소로 갑니다. 앱 주소가 바뀌면 `landing/index.html`의 주소를 모두 바꿉니다.
 - 문의 메일은 `doneline.team@gmail.com`입니다(계정이 만들어져야 메일을 받습니다).
 - 화면 그림은 실제 화면을 단순화한 HTML 예시이고, 숫자는 예시 값입니다. 스크립트는 쓰지 않습니다.
 - 요금은 "현재 모든 기능 무료"만 알리고 카드·요금제·혜택 내용은 넣지 않습니다(실제 과금을 시작할 때 페이지를 새로 만듭니다). 자주 묻는 질문에는 요금제가 생기면 30일 전에 알리고 동의한 경우에만 적용한다는 원칙만 둡니다. 셀프 가입 처음 30곳은 앱 내부에 초기 업체로 기록하며(020 마이그레이션) 외부에는 공개하지 않습니다. 운영 슬랙의 가입 알림에만 `초기 업체 n/30`이 붙습니다.
 - 이 PC에서 미리 보기: `python -m http.server 4100 --bind 127.0.0.1 --directory landing` 후 http://127.0.0.1:4100
-
-올리는 방법(처음 한 번):
-1. https://dash.cloudflare.com 에 로그인 → **Workers & Pages** → **Create** → **Pages** → **Upload assets**(직접 올리기)를 고릅니다.
-2. 프로젝트 이름을 `doneline`으로 정합니다(이미 쓰이고 있으면 다른 이름 → 주소도 그 이름으로 바뀝니다).
-3. `landing` 폴더 안의 `index.html`·`landing.css` 두 파일을 끌어다 놓고 **Deploy**를 누르면 `https://doneline.pages.dev`에 공개됩니다.
-4. 내용을 고친 뒤에는 같은 프로젝트에서 **Create new deployment**로 두 파일을 다시 올립니다.
-
-`deploy/pages/functions`(API 중계)는 화면 전체를 Pages에 둘 때 쓰는 선택 구성이며, 소개 페이지에는 쓰지 않습니다.
 
 ## 자동 검증(GitHub Actions)
 

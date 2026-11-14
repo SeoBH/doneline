@@ -1,0 +1,16 @@
+# Cloudflare Pages 응답 헤더(앱 화면 파일용). 백엔드(helmet)가 주던 브라우저 보안 헤더를 Pages에서도 똑같이 준다.
+# 화면 파일은 이제 백엔드가 아니라 Pages가 주기 때문이다. API(/api/*) 응답은 백엔드 헤더가 그대로 전달된다.
+# 백엔드 helmet 설정을 바꾸면 이 파일도 맞춘다(backend/test/proxy.test.cjs가 CSP가 같은지 확인한다).
+/*
+  Content-Security-Policy: default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Resource-Policy: same-origin
+  Origin-Agent-Cluster: ?1
+  Referrer-Policy: no-referrer
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Content-Type-Options: nosniff
+  X-DNS-Prefetch-Control: off
+  X-Download-Options: noopen
+  X-Frame-Options: SAMEORIGIN
+  X-Permitted-Cross-Domain-Policies: none
+  X-XSS-Protection: 0

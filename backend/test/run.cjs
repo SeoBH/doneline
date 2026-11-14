@@ -16,6 +16,7 @@ const result = spawnSync(
     path.join(__dirname, 'workspace.test.cjs'),
     path.join(__dirname, 'requests.test.cjs'),
     path.join(__dirname, 'mail.test.cjs'),
+    path.join(__dirname, 'proxy.test.cjs'),
   ],
   // SLACK_WEBHOOK_URL·SMTP_HOST를 빈 값으로 고정해 테스트 중 실제 슬랙 알림·메일이 나가지 않게 한다(.env보다 우선).
   // mail.test.cjs만 자기 안에서 띄운 가짜 메일 서버 주소로 SMTP_HOST를 다시 지정한다.

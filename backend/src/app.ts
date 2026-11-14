@@ -8,7 +8,8 @@ import { APP_GUARD, NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import session from 'express-session';
 import helmet from 'helmet';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
+import { isIP } from 'node:net';
 import { join } from 'node:path';
 import { settings } from './config';
 import { Permissions } from './permissions';
@@ -75,6 +76,25 @@ export async function createApp() {
   });
   // 숫자 n: 오른쪽부터 n개의 프록시만 신뢰한다(그보다 앞의 X-Forwarded-For 값은 꾸며낼 수 있으므로 무시).
   if (settings.trustProxy) app.set('trust proxy', settings.trustProxy);
+  // Pages 중계 모드(운영 + PROXY_SECRET). 화면은 Cloudflare Pages가 주고 API만 중계 함수를 거쳐 들어온다.
+  // ① 비밀 표식이 맞지 않는 요청(ts.net 직접 접속 등)은 거절한다.
+  // ② 중계를 두 번 거치면(Pages → Tailscale) X-Forwarded-For로는 실제 접속자를 알 수 없으므로,
+  //    표식이 맞을 때만 중계 함수가 알려 준 접속자 IP를 req.ip로 쓴다(로그인·가입 시도 제한의 기준).
+  if (settings.production && settings.proxySecret) {
+    const expected = createHash('sha256').update(settings.proxySecret).digest();
+    app.use((req: any, res: any, next: any) => {
+      // 같은 길이의 해시끼리 비교해 글자 수나 비교 시간으로 값을 추측할 수 없게 한다.
+      const given = createHash('sha256')
+        .update(String(req.get('x-doneline-proxy') || ''))
+        .digest();
+      if (!timingSafeEqual(given, expected))
+        return res.status(403).json({ message: '허용되지 않은 접속 경로입니다.' });
+      const ip = String(req.get('x-doneline-client-ip') || '');
+      // Object.defineProperty: Express가 계산하는 req.ip 대신 이 요청에서만 중계 함수가 알려 준 값을 쓰게 한다.
+      if (isIP(ip)) Object.defineProperty(req, 'ip', { value: ip, configurable: true });
+      next();
+    });
+  }
   app.use(
     helmet({
       contentSecurityPolicy: {
