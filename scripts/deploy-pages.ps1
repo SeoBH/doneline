@@ -3,7 +3,7 @@
 # - 소개 페이지(doneline.pages.dev): landing 폴더
 # 처음 한 번: npx.cmd wrangler login (브라우저에서 Cloudflare 로그인·허용) 후 -Setup으로 프로젝트와 비밀값을 만든다.
 # 실행(프로젝트 루트에서):
-#   powershell -ExecutionPolicy Bypass -File scripts/deploy-pages.ps1 -Setup   # 처음 한 번: 프로젝트 생성 + 비밀값 등록
+#   powershell -ExecutionPolicy Bypass -File scripts/deploy-pages.ps1 -Setup   # 처음 한 번: 프로젝트 생성 + 비밀값 등록 + 앱 배포
 #   powershell -ExecutionPolicy Bypass -File scripts/deploy-pages.ps1          # 앱과 소개 페이지 모두 배포
 #   ... -App / -Landing                                                        # 하나만 배포
 # 비밀값은 .env(PROXY_SECRET)와 Tailscale 주소에서 읽어 바로 Cloudflare로 보내며 화면·파일에 남기지 않는다.
@@ -27,8 +27,9 @@ if ($Setup) {
   # 파이프로 값을 넘겨 화면에 표시하지 않는다.
   $secret | npx.cmd --yes wrangler@4 pages secret put PROXY_SECRET --project-name doneline-app
   $backend | npx.cmd --yes wrangler@4 pages secret put BACKEND_ORIGIN --project-name doneline-app
-  Write-Host '프로젝트와 비밀값을 준비했습니다. 이어서 배포합니다.'
-  $App = $true; $Landing = $true
+  # 소개 페이지는 외부 공개 시점을 따로 정하므로 -Setup만으로는 앱만 배포한다(필요하면 -Landing을 함께 붙인다).
+  Write-Host '프로젝트와 비밀값을 준비했습니다. 이어서 앱을 배포합니다.'
+  $App = $true
 }
 
 if ($App) {
