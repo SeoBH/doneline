@@ -10,6 +10,7 @@ import { Screen, ScreenHandle, ViewState } from './types';
 import { Notify } from './Toasts';
 import { categoryLabel, dateTime, eventText, priorityLabel, statusLabel } from './srLabels';
 import { Attachments } from './Attachments';
+import { ImageText, PastePreview, usePastedImages } from './PastedImages';
 import { upload } from './api';
 
 const emptyDraft = {
@@ -40,6 +41,9 @@ export const SrPortalScreen = forwardRef<
     // 새 요청과 함께 올릴 파일. 요청이 먼저 만들어져야 첨부할 수 있어 등록 직후 차례로 올린다.
     [newFiles, setNewFiles] = useState<File[]>([]),
     [busy, setBusy] = useState(false);
+  // 글 칸별 캡처 붙여넣기(PastedImages.tsx). 요청 내용과 댓글이 각자 따로 이미지를 모은다.
+  const bodyImgs = usePastedImages(draft.body, (v) => setDraft((d) => ({ ...d, body: v })));
+  const commentImgs = usePastedImages(comment, setComment);
   // 모든 요청에 메뉴 ID를 붙여 서버가 이 메뉴에서 허용된 버튼인지 검사하게 한다.
   const call = (path: string, body?: unknown) =>
     api('requests/portal' + path, {
@@ -76,6 +80,7 @@ export const SrPortalScreen = forwardRef<
     setCreating(false);
     setSelected(id);
     setComment('');
+    commentImgs.reset();
     try {
       setDetail(await call('/' + id));
     } catch (e) {
@@ -101,9 +106,11 @@ export const SrPortalScreen = forwardRef<
         return false;
       }
       if (!window.confirm('요청을 등록할까요?')) return false;
+      // 붙여 넣은 이미지 표시를 저장 형식으로 바꾼다. 이미지는 요청이 만들어진 뒤 아래에서 올린다.
+      const pasted = bodyImgs.tokens();
       const r = await call('', {
         title: draft.title,
-        body: draft.body,
+        body: pasted.text,
         category: draft.category,
         priority: draft.priority,
         corporationId,
@@ -121,7 +128,12 @@ export const SrPortalScreen = forwardRef<
           'X-Menu-ID': screen.menu_id,
         }).catch(() => failed++);
       }
+      for (const img of pasted.used)
+        await bodyImgs
+          .uploadAll([img], `requests/portal/${r.id}`, screen.menu_id)
+          .catch(() => failed++);
       setNewFiles([]);
+      bodyImgs.reset();
       await load(r.id);
       notify(
         failed
@@ -136,8 +148,12 @@ export const SrPortalScreen = forwardRef<
       return false;
     }
     if (!window.confirm('댓글을 등록할까요?')) return false;
-    const r = await call('/' + selected + '/comment', { body: comment });
+    // 댓글의 이미지는 먼저 올린다(실패하면 댓글을 남기지 않고 입력을 그대로 둔다).
+    const pasted = commentImgs.tokens();
+    await commentImgs.uploadAll(pasted.used, 'requests/portal/' + selected, screen.menu_id);
+    const r = await call('/' + selected + '/comment', { body: pasted.text });
     setComment('');
+    commentImgs.reset();
     await load(selected);
     notify(r.message, 'success');
     return true;
@@ -167,11 +183,18 @@ export const SrPortalScreen = forwardRef<
     if (!window.confirm(question)) return;
     setBusy(true);
     try {
+      // 재처리 사유에 붙인 캡처도 먼저 첨부로 올린다.
+      const pasted = commentImgs.tokens();
+      if (!accept)
+        await commentImgs.uploadAll(pasted.used, 'requests/portal/' + selected, screen.menu_id);
       const r = await call('/' + selected + (accept ? '/confirm' : '/reopen'), {
         version: detail.item.version,
-        ...(accept ? {} : { reason: comment.trim() }),
+        ...(accept ? {} : { reason: pasted.text.trim() }),
       });
-      if (!accept) setComment('');
+      if (!accept) {
+        setComment('');
+        commentImgs.reset();
+      }
       await load(selected);
       notify(r.message, 'success');
     } catch (e) {
@@ -195,6 +218,8 @@ export const SrPortalScreen = forwardRef<
       setDetail(null);
       setDraft(emptyDraft);
       setComment('');
+      bodyImgs.reset();
+      commentImgs.reset();
     },
     save,
   }));
@@ -297,9 +322,17 @@ export const SrPortalScreen = forwardRef<
                 rows={8}
                 value={draft.body}
                 maxLength={10000}
+                placeholder="화면 캡처는 이 칸에 바로 붙여 넣을 수 있습니다(Ctrl+V)."
                 onChange={(e) => setDraft({ ...draft, body: e.target.value })}
+                onPaste={bodyImgs.onPaste}
+                onDrop={bodyImgs.onDrop}
               />
             </label>
+            <PastePreview
+              images={bodyImgs.images}
+              setWidth={bodyImgs.setWidth}
+              remove={bodyImgs.remove}
+            />
             <label>
               첨부 파일(선택)
               {/* 휴대폰에서는 사진 촬영·앨범 선택도 된다. 파일당 10MB, 실행 파일 불가(서버 검사). */}
@@ -326,7 +359,14 @@ export const SrPortalScreen = forwardRef<
               </small>
             </div>
             <h2>{detail.item.title}</h2>
-            <p className="sr-body">{detail.item.body}</p>
+            <p className="sr-body">
+              <ImageText
+                text={detail.item.body}
+                files={detail.attachments || []}
+                base={'requests/portal/' + detail.item.id}
+                menuId={screen.menu_id}
+              />
+            </p>
             <p className="hint">
               담당자 {detail.item.assignee_name || '배정 전'} · 처리 기한{' '}
               {dateTime(detail.item.due_at)}
@@ -368,7 +408,18 @@ export const SrPortalScreen = forwardRef<
                   <small>
                     {e.actor_name} · {dateTime(e.created_at)}
                   </small>
-                  <div>{eventText(e)}</div>
+                  <div>
+                    {e.kind === 'COMMENT' ? (
+                      <ImageText
+                        text={e.body}
+                        files={detail.attachments || []}
+                        base={'requests/portal/' + detail.item.id}
+                        menuId={screen.menu_id}
+                      />
+                    ) : (
+                      eventText(e)
+                    )}
+                  </div>
                 </li>
               ))}
             </ol>
@@ -381,9 +432,17 @@ export const SrPortalScreen = forwardRef<
                       rows={3}
                       value={comment}
                       maxLength={10000}
+                      placeholder="화면 캡처는 이 칸에 바로 붙여 넣을 수 있습니다(Ctrl+V)."
                       onChange={(e) => setComment(e.target.value)}
+                      onPaste={commentImgs.onPaste}
+                      onDrop={commentImgs.onDrop}
                     />
                   </label>
+                  <PastePreview
+                    images={commentImgs.images}
+                    setWidth={commentImgs.setWidth}
+                    remove={commentImgs.remove}
+                  />
                   <button disabled={busy || !comment.trim()} onClick={() => void submitHere()}>
                     댓글 등록
                   </button>

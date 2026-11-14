@@ -1860,3 +1860,66 @@ button.danger-outline:hover {
   align-items: center;
   margin-top: 10px;
 }
+
+/* 캡처 붙여넣기 미리보기(PastedImages.tsx). 상자 오른쪽 아래 모서리를 끌어 보일 너비를 정한다(resize). */
+.paste-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 6px 0 10px;
+}
+.paste-preview figure {
+  margin: 0;
+}
+.paste-box {
+  resize: horizontal;
+  overflow: hidden;
+  min-width: 80px;
+  max-width: 100%;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: 8px;
+  background: var(--color-surface);
+}
+.paste-box img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.paste-preview figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+.paste-preview figcaption button {
+  padding: 2px 8px;
+  font-size: 12px;
+}
+/* 저장된 글 속 이미지. 누르면 크게 본다. */
+.body-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 8px 0;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  cursor: zoom-in;
+}
+.image-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(15 23 42 / 80%);
+  cursor: zoom-out;
+}
+.image-viewer img {
+  max-width: 100%;
+  max-height: 100%;
+  background: #fff;
+}

@@ -98,7 +98,12 @@ export async function createApp() {
   app.use(
     helmet({
       contentSecurityPolicy: {
-        directives: { 'upgrade-insecure-requests': settings.production ? [] : null },
+        directives: {
+          'upgrade-insecure-requests': settings.production ? [] : null,
+          // blob: 화면이 권한 머리글을 붙여 받아 둔 첨부 이미지(메모리 속 임시 주소)를 본문에 표시하기 위해 허용한다.
+          // 외부 사이트 이미지는 여전히 막힌다. 바꾸면 deploy/pages/_headers도 같은 값으로 맞춘다.
+          'img-src': ["'self'", 'data:', 'blob:'],
+        },
       },
     }),
   );

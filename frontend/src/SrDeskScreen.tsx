@@ -6,6 +6,7 @@
  */
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from 'react';
 import { Attachments } from './Attachments';
+import { ImageText, PastePreview, usePastedImages } from './PastedImages';
 import { api } from './api';
 import { DataGrid } from './DataGrid';
 import { Screen, ScreenHandle, ViewState } from './types';
@@ -34,6 +35,8 @@ export const SrDeskScreen = forwardRef<
     [detail, setDetail] = useState<any>(null),
     [form, setForm] = useState(emptyForm),
     [busy, setBusy] = useState(false);
+  // 답변/메모 칸의 캡처 붙여넣기(PastedImages.tsx).
+  const memoImgs = usePastedImages(form.comment, (v) => setForm((f) => ({ ...f, comment: v })));
   const call = (path: string, body?: unknown) =>
     api('requests/desk' + path, {
       method: body === undefined ? 'GET' : 'POST',
@@ -51,6 +54,8 @@ export const SrDeskScreen = forwardRef<
   );
   function fill(d: any) {
     setDetail(d);
+    // 상세를 다시 읽으면 입력 칸을 비우므로 붙여 넣은 이미지도 함께 비운다.
+    memoImgs.reset();
     setForm({
       ...emptyForm,
       assigneeId: d.item.assignee_id ? String(d.item.assignee_id) : '',
@@ -98,11 +103,19 @@ export const SrDeskScreen = forwardRef<
       return false;
     }
     if (!window.confirm('변경 내용을 저장할까요?')) return false;
+    // 답변/메모의 캡처를 먼저 첨부로 올린다. 내부 메모면 이미지도 내부용(고객에게 안 보임)으로 올린다.
+    const pasted = memoImgs.tokens();
+    await memoImgs.uploadAll(
+      pasted.used,
+      'requests/desk/' + selected,
+      screen.menu_id,
+      form.internal,
+    );
     // 바뀐 항목만 보낸다. 서버는 보낸 항목마다 이력을 남기고 요청자에게 알린다.
     const r = await call('/' + selected, {
       version: detail.item.version,
       ...(form.priority !== original.priority ? { priority: form.priority } : {}),
-      ...(form.comment.trim() ? { comment: form.comment, internal: form.internal } : {}),
+      ...(form.comment.trim() ? { comment: pasted.text, internal: form.internal } : {}),
     });
     await load(selected);
     notify(r.message, 'success');
@@ -140,13 +153,23 @@ export const SrDeskScreen = forwardRef<
     }[action];
     if (!window.confirm(ask)) return;
     await run(async () => {
+      // 되돌리기 사유는 내부 메모, 취소 사유는 고객 공개로 남으므로 이미지도 같은 공개 범위로 올린다.
+      const sendReason = reason && action !== 'START' && action !== 'RESOLVE';
+      const pasted = memoImgs.tokens();
+      if (sendReason)
+        await memoImgs.uploadAll(
+          pasted.used,
+          'requests/desk/' + selected,
+          screen.menu_id,
+          action === 'REVERT',
+        );
       const r = await call('/' + selected, {
         version: detail.item.version,
         action,
         ...(action === 'START' && form.assigneeId && me.manager
           ? { assigneeId: form.assigneeId }
           : {}),
-        ...(reason && action !== 'START' && action !== 'RESOLVE' ? { comment: reason } : {}),
+        ...(sendReason ? { comment: pasted.text.trim() } : {}),
       });
       await load(selected);
       notify(r.message, 'success');
@@ -298,7 +321,14 @@ export const SrDeskScreen = forwardRef<
               요청자 {detail.item.requester_name} · 등록 {dateTime(detail.item.created_at)} · 기한{' '}
               {dateTime(detail.item.due_at)}
             </p>
-            <p className="sr-body">{detail.item.body}</p>
+            <p className="sr-body">
+              <ImageText
+                text={detail.item.body}
+                files={detail.attachments || []}
+                base={'requests/desk/' + detail.item.id}
+                menuId={screen.menu_id}
+              />
+            </p>
             {/* 진행 상자: 현재 상태와 담당자, 그리고 지금 할 수 있는 '다음 동작'만 버튼으로 보여 준다.
                 상태를 직접 고르게 하면 단계를 건너뛰거나 거꾸로 갈 수 있어 SR 이력이 흐려지기 때문이다. */}
             <div className="sr-progress">
@@ -411,10 +441,19 @@ export const SrDeskScreen = forwardRef<
                   rows={3}
                   value={form.comment}
                   maxLength={10000}
-                  placeholder="되돌리기·요청 취소 때는 이 칸에 사유를 적어주세요."
+                  placeholder="되돌리기·요청 취소 때는 이 칸에 사유를 적어주세요. 화면 캡처는 바로 붙여 넣을 수 있습니다(Ctrl+V)."
                   onChange={(e) => setForm({ ...form, comment: e.target.value })}
+                  onPaste={memoImgs.onPaste}
+                  onDrop={memoImgs.onDrop}
                 />
               </label>
+              <div className="account-wide">
+                <PastePreview
+                  images={memoImgs.images}
+                  setWidth={memoImgs.setWidth}
+                  remove={memoImgs.remove}
+                />
+              </div>
               <label className="account-wide sr-check">
                 <input
                   type="checkbox"
@@ -458,7 +497,18 @@ export const SrDeskScreen = forwardRef<
                     {e.actor_is_customer ? ' (고객)' : ''} · {dateTime(e.created_at)}
                     {e.internal ? ' · 내부 메모' : ''}
                   </small>
-                  <div>{eventText(e, names)}</div>
+                  <div>
+                    {e.kind === 'COMMENT' ? (
+                      <ImageText
+                        text={e.body}
+                        files={detail.attachments || []}
+                        base={'requests/desk/' + detail.item.id}
+                        menuId={screen.menu_id}
+                      />
+                    ) : (
+                      eventText(e, names)
+                    )}
+                  </div>
                 </li>
               ))}
             </ol>
