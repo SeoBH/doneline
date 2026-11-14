@@ -16,17 +16,28 @@ function Wrangler { & npx.cmd --yes wrangler@4 @args; if ($LASTEXITCODE) { throw
 if (-not ($App -or $Landing -or $Setup)) { $App = $true; $Landing = $true }
 
 if ($Setup) {
-  # 이미 있는 프로젝트면 생성 오류를 무시하고 넘어간다.
-  foreach ($p in 'doneline-app', 'doneline') {
-    & npx.cmd --yes wrangler@4 pages project create $p --production-branch main
-  }
+  # 주의(2026-11 wrangler 4.162): 'pages project create'는 기본으로 Cloudflare Workers 자동 설정으로 넘어가
+  # 실행 폴더 전체를 Workers 정적 파일로 올려 버린다(소스 공개 사고). 그래서 ① 빈 임시 폴더에서 ② --force로
+  # 기존 Pages에 직접 만든다. --force는 프로젝트를 처음 만들 때만 필요하고, 이후 명령은 Pages로 바로 간다.
+  $empty = Join-Path $env:TEMP ('doneline-wrangler-' + [guid]::NewGuid())
+  New-Item -ItemType Directory $empty | Out-Null
+  Push-Location $empty
+  try {
+    # 이미 있는 프로젝트면 생성 오류를 무시하고 넘어간다.
+    foreach ($p in 'doneline-app', 'doneline') {
+      & npx.cmd --yes wrangler@4 pages project create $p --production-branch main --force
+    }
+  } finally { Pop-Location }
   # .env에서 PROXY_SECRET 한 줄만 읽는다(다른 값은 읽지 않는다).
   $secret = (Select-String -Path .env -Pattern '^PROXY_SECRET=(.+)$').Matches[0].Groups[1].Value
   $tailscale = 'C:\Program Files\Tailscale\tailscale.exe'
   $backend = 'https://' + ((& $tailscale status --json | ConvertFrom-Json).Self.DNSName).TrimEnd('.')
-  # 파이프로 값을 넘겨 화면에 표시하지 않는다.
-  $secret | npx.cmd --yes wrangler@4 pages secret put PROXY_SECRET --project-name doneline-app
-  $backend | npx.cmd --yes wrangler@4 pages secret put BACKEND_ORIGIN --project-name doneline-app
+  # 파이프로 값을 넘겨 화면에 표시하지 않는다. 설정 파일이 없는 빈 폴더에서 실행한다.
+  Push-Location $empty
+  try {
+    $secret | npx.cmd --yes wrangler@4 pages secret put PROXY_SECRET --project-name doneline-app
+    $backend | npx.cmd --yes wrangler@4 pages secret put BACKEND_ORIGIN --project-name doneline-app
+  } finally { Pop-Location; Remove-Item -Recurse -Force $empty }
   # 소개 페이지는 외부 공개 시점을 따로 정하므로 -Setup만으로는 앱만 배포한다(필요하면 -Landing을 함께 붙인다).
   Write-Host '프로젝트와 비밀값을 준비했습니다. 이어서 앱을 배포합니다.'
   $App = $true
