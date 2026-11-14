@@ -395,3 +395,69 @@ test('monthly report summarizes the current month and exports Excel', async () =
   assert.equal(list.rowCount, 1 + 3);
   assert.equal(list.getRow(2).getCell(5).value, 'VPN 접속 불가');
 });
+
+test('resolved requests close automatically after the confirmation period', async () => {
+  const { Requests, AUTO_CLOSE_DAYS } = require('../dist/requests');
+  const scope = (await get(u1, 'requests/portal').expect(200)).body.scopes[0];
+  // 처리 완료까지 진행한 요청 하나를 만들고, 처리 완료 시각을 days일 전으로 옮긴다(기다리는 대신).
+  const resolvedRequest = async (title, days) => {
+    const id = (
+      await post(u1, 'requests/portal', {
+        title,
+        body: '본문',
+        category: 'REQUEST',
+        priority: 'LOW',
+        corporationId: String(scope.corporation_id),
+        departmentId: String(scope.department_id),
+      }).expect(201)
+    ).body.id;
+    let v = (await get(engineer, 'requests/desk/' + id).expect(200)).body.item.version;
+    await post(engineer, 'requests/desk/' + id, { version: v, action: 'START' }).expect(201);
+    v = (await get(engineer, 'requests/desk/' + id).expect(200)).body.item.version;
+    await post(engineer, 'requests/desk/' + id, { version: v, action: 'RESOLVE' }).expect(201);
+    await db.query(
+      'UPDATE app.service_requests SET resolved_at=now()-make_interval(days=>$2) WHERE id=$1',
+      [id, days],
+      ws,
+    );
+    return id;
+  };
+  const old = await resolvedRequest('자동 완료 대상', AUTO_CLOSE_DAYS + 1);
+  const recent = await resolvedRequest('아직 확인 기간', AUTO_CLOSE_DAYS - 1);
+  // 확인 대기 화면에는 자동 완료 예정 시각이 함께 온다.
+  const waiting = (await get(u1, 'requests/portal/' + recent).expect(200)).body.item;
+  assert.ok(waiting.auto_close_at);
+  const before = (await get(u1, 'requests/portal/' + old).expect(200)).body.item;
+  await post(engineer, 'notifications/read', { ids: [] }).expect(201);
+  await post(u1, 'notifications/read', { ids: [] }).expect(201);
+
+  assert.ok((await app.get(Requests).autoClose()) >= 1);
+  const closed = (await get(u1, 'requests/portal/' + old).expect(200)).body;
+  assert.equal(closed.item.status, 'CLOSED');
+  assert.equal(closed.item.auto_closed, true);
+  assert.equal(closed.item.auto_close_at, null);
+  // 이력에는 작성자 대신 '자동 처리'로 상태 변경과 안내 문구가 고객에게도 보인다.
+  const auto = closed.events.filter((e) => e.actor_name === '자동 처리');
+  assert.ok(auto.some((e) => e.kind === 'STATUS' && e.to_value === 'CLOSED'));
+  assert.ok(auto.some((e) => e.kind === 'COMMENT' && e.body.includes('자동으로 완료')));
+  // 확인 기간이 남은 요청은 그대로다.
+  assert.equal(
+    (await get(u1, 'requests/portal/' + recent).expect(200)).body.item.status,
+    'RESOLVED',
+  );
+  // 요청자와 담당자에게 앱 안 알림이 간다.
+  for (const who of [u1, engineer]) {
+    const n = (await who.agent.get('/api/notifications').expect(200)).body;
+    assert.ok(n.items.some((x) => x.message.includes('자동으로 완료')));
+  }
+  // 자동 완료된 뒤 고객이 예전 화면에서 확인을 눌러도 거절된다(이미 종료).
+  await post(u1, `requests/portal/${old}/confirm`, { version: before.version }).expect(409);
+  // 리포트는 고객 확인 완료와 자동 완료를 따로 센다(처리 완료 시각이 속한 달 기준).
+  const month = new Date(Date.now() - (AUTO_CLOSE_DAYS + 1) * 864e5)
+    .toLocaleString('sv-SE', { timeZone: 'Asia/Seoul' })
+    .slice(0, 7);
+  const row = (await get(admin, 'reports/monthly?month=' + month).expect(200)).body.rows.find(
+    (x) => x.customer_name === prefix,
+  );
+  assert.ok(row.auto_closed >= 1);
+});

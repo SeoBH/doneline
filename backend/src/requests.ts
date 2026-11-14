@@ -4,6 +4,7 @@
  * - 요청 작업함(desk, 화면 SR_DESK): 업체 SYSTEM 계정이 자기 워크스페이스의 모든 요청을 배정·처리한다.
  * 워크스페이스 분리는 DB 행 수준 보안이 맡고(012/014 마이그레이션), 이 파일은 고객사·부서 범위와 상태 규칙을 맡는다.
  * 상태·담당자 변경은 version으로 동시 편집 충돌을 검사하고, 변경과 이력·알림·감사 기록을 한 트랜잭션으로 저장한다.
+ * 확인 대기 자동 완료: 처리 완료 후 AUTO_CLOSE_DAYS일 동안 고객 확인이 없으면 서버 작업(autoClose)이 완료로 바꾼다(019 마이그레이션).
  */
 import {
   BadRequestException,
@@ -14,6 +15,7 @@ import {
   Get,
   Injectable,
   NotFoundException,
+  OnModuleDestroy,
   Param,
   Post,
   Query,
@@ -93,16 +95,24 @@ class ReadDto {
 }
 
 // 목록 공통 SELECT. overdue는 종료되지 않은 요청이 기한을 넘겼는지 DB 시각으로 계산한다.
+/**
+ * 처리 완료(확인 대기) 후 고객 확인 없이 자동 완료하기까지의 날짜 수. 유지보수 계약의 일반적인 검수 기간(1주)에 맞췄다.
+ * 업체별로 다르게 둘 필요가 생기면 SLA 설정처럼 업체 설정으로 옮긴다.
+ */
+export const AUTO_CLOSE_DAYS = 7;
 const LIST_SQL = `SELECT r.id,r.request_no,r.title,r.status,r.priority,r.category,r.due_at,r.updated_at,r.created_at,r.version,
   r.customer_id,c.name AS customer_name,co.name AS corporation_name,d.name AS department_name,
   rq.display_name AS requester_name,r.assignee_id,a.display_name AS assignee_name,
-  (r.status IN ('OPEN','IN_PROGRESS') AND r.due_at<now()) AS overdue
+  (r.status IN ('OPEN','IN_PROGRESS') AND r.due_at<now()) AS overdue,r.auto_closed,
+  -- 확인 대기 요청이 자동 완료될 예정 시각(화면 안내용). 그 밖의 상태는 NULL.
+  CASE WHEN r.status='RESOLVED' THEN r.resolved_at+make_interval(days=>${AUTO_CLOSE_DAYS}) END AS auto_close_at
   FROM app.service_requests r JOIN app.customers c ON c.id=r.customer_id
   JOIN app.corporations co ON co.id=r.corporation_id JOIN app.departments d ON d.id=r.department_id
   JOIN app.users rq ON rq.id=r.requester_id LEFT JOIN app.users a ON a.id=r.assignee_id`;
 
 @Injectable()
-export class Requests {
+export class Requests implements OnModuleDestroy {
+  private timer?: NodeJS.Timeout;
   constructor(
     private readonly db: Db,
     private readonly audit: Audit,
@@ -241,7 +251,8 @@ export class Requests {
   private async event(
     c: PoolClient,
     requestId: string,
-    actorId: string,
+    // null: 사람이 아닌 서버 자동 처리(확인 기간 경과 자동 완료)
+    actorId: string | null,
     kind: string,
     values: { body?: string; from?: string | null; to?: string | null; internal?: boolean } = {},
   ) {
@@ -286,9 +297,10 @@ export class Requests {
       .body;
     const events = (
       await c.query(
-        `SELECT e.id,e.kind,e.body,e.from_value,e.to_value,e.internal,e.created_at,u.display_name AS actor_name,
-         (u.customer_id IS NOT NULL) AS actor_is_customer
-         FROM app.request_events e JOIN app.users u ON u.id=e.actor_id
+        // LEFT JOIN: 서버 자동 처리 이력은 작성자가 없으므로(actor_id NULL) 이름 없이도 이력에 포함한다.
+        `SELECT e.id,e.kind,e.body,e.from_value,e.to_value,e.internal,e.created_at,
+         coalesce(u.display_name,'자동 처리') AS actor_name,(u.customer_id IS NOT NULL) AS actor_is_customer
+         FROM app.request_events e LEFT JOIN app.users u ON u.id=e.actor_id
          WHERE e.request_id=$1 AND ($2 OR NOT e.internal) ORDER BY e.id`,
         [id, includeInternal],
       )
@@ -667,6 +679,71 @@ export class Requests {
       await this.auditWrite(c, req, 'SR_UPDATE');
       return { message: '저장했습니다.' };
     });
+  }
+
+  // ---------- 확인 대기 자동 완료 ----------
+  /** 서버 시작 시 main.ts가 호출한다. 시작 직후 한 번, 이후 1시간마다 실행한다. 테스트는 autoClose를 직접 부른다. */
+  startAutoClose() {
+    if (this.timer) return;
+    this.timer = setInterval(() => void this.autoClose(), 60 * 60 * 1000);
+    // unref: 이 타이머만 남았다고 프로세스 종료를 막지 않게 한다.
+    this.timer.unref();
+    void this.autoClose();
+  }
+  onModuleDestroy() {
+    if (this.timer) clearInterval(this.timer);
+  }
+  /**
+   * 처리 완료 후 AUTO_CLOSE_DAYS일 넘게 고객 확인이 없는 요청을 완료(CLOSED)로 바꾼다. 반환값은 완료한 건수.
+   * ① 대상 요청이 있는 워크스페이스 ID를 RLS 밖 함수로 얻고 ② 워크스페이스마다 한 트랜잭션에서
+   * 상태 변경·이력(작성자 없음)·앱 안 알림·감사 기록을 함께 저장한다.
+   * FOR UPDATE SKIP LOCKED: 고객이 같은 순간 [완료 확인]/[재처리 요청]을 누르는 중인 요청은 건너뛰고 다음 실행에 다시 본다.
+   * 고객 확인 화면은 status='RESOLVED'를 다시 검사하므로, 자동 완료가 먼저 끝난 요청에 대한 확인은 '처리 완료된 요청만…'으로 거절된다.
+   * 알림 대상: 요청자·그 부서의 고객사 관리자(결과 안내)와 담당자(종료 확인). 메일은 보내지 않는다(업무 메일 대상 아님).
+   */
+  async autoClose(): Promise<number> {
+    let closed = 0;
+    try {
+      const workspaces = (
+        await this.db.query('SELECT app.auto_close_workspaces($1) AS id', [AUTO_CLOSE_DAYS])
+      ).rows.map((r) => String(r.id));
+      for (const workspaceId of workspaces)
+        closed += await this.db.tx(async (c) => {
+          const rows = (
+            await c.query(
+              `SELECT * FROM app.service_requests WHERE status='RESOLVED'
+               AND resolved_at<=now()-make_interval(days=>$1) ORDER BY id LIMIT 200 FOR UPDATE SKIP LOCKED`,
+              [AUTO_CLOSE_DAYS],
+            )
+          ).rows;
+          for (const r of rows) {
+            await c.query(
+              `UPDATE app.service_requests SET status='CLOSED',closed_at=now(),auto_closed=true,updated_at=now() WHERE id=$1`,
+              [r.id],
+            );
+            await this.event(c, r.id, null, 'STATUS', { from: 'RESOLVED', to: 'CLOSED' });
+            await this.event(c, r.id, null, 'COMMENT', {
+              body: `처리 완료 후 ${AUTO_CLOSE_DAYS}일 동안 확인이 없어 자동으로 완료되었습니다.`,
+            });
+            // actorId ''는 '보낸 사람 없음'이라 누구도 알림 대상에서 빠지지 않는다.
+            await this.notify(
+              c,
+              [...(await this.customerTargets(c, r)), r.assignee_id ? String(r.assignee_id) : ''],
+              '',
+              r.id,
+              `#${r.request_no} 확인 기간(${AUTO_CLOSE_DAYS}일)이 지나 자동으로 완료되었습니다: ${r.title}`,
+            );
+          }
+          if (rows.length)
+            // 사용자가 한 일이 아니므로 사용자 ID 없이 서버 작업으로 남긴다(건별 내역은 요청 이력에 있음).
+            await this.audit.write({ action: 'SR_AUTO_CLOSE', outcome: 'SUCCESS' }, c);
+          return rows.length;
+        }, workspaceId);
+    } catch {
+      // 다음 실행(1시간 뒤)에 다시 시도한다. 반복되면 서버 로그로 확인한다.
+      console.error('SR_AUTO_CLOSE_FAILED');
+    }
+    return closed;
   }
 
   // ---------- 앱 안 알림 ----------

@@ -305,7 +305,12 @@ export const SrPortalScreen = forwardRef<
             </p>
             {canConfirm && (
               <div className="sr-decide">
-                <span>처리가 완료되었습니다. 결과를 확인해주세요.</span>
+                <span>
+                  처리가 완료되었습니다. 결과를 확인해주세요.
+                  {/* auto_close_at: 서버가 계산한 자동 완료 예정 시각(처리 완료 + 7일). */}
+                  {detail.item.auto_close_at &&
+                    ` ${dateTime(detail.item.auto_close_at)}까지 확인이 없으면 자동으로 완료됩니다.`}
+                </span>
                 {screen.buttons.ETC1?.allowed && (
                   <>
                     <button className="primary" disabled={busy} onClick={() => decide(true)}>

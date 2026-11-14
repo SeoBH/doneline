@@ -199,8 +199,14 @@ export const SrDeskScreen = forwardRef<
     : {
         OPEN: '접수됨 · 담당자가 맡으면 처리 중이 됩니다.',
         IN_PROGRESS: '처리 중 · 끝나면 [처리 완료]를 누르세요.',
-        RESOLVED: '처리 완료 · 고객이 결과를 확인하면 완료됩니다.',
-        CLOSED: '완료된 요청입니다.',
+        RESOLVED:
+          '처리 완료 · 고객이 결과를 확인하면 완료됩니다.' +
+          (detail.item.auto_close_at
+            ? ` 확인이 없으면 ${dateTime(detail.item.auto_close_at)}에 자동 완료됩니다.`
+            : ''),
+        CLOSED: detail.item.auto_closed
+          ? '완료된 요청입니다(고객 확인 없이 확인 기간이 지나 자동 완료).'
+          : '완료된 요청입니다.',
         CANCELLED: '취소된 요청입니다.',
       }[detail.item.status as string] || '';
   return (

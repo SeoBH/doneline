@@ -108,7 +108,8 @@ export const SrReportScreen = forwardRef<
       </p>
       <p className="hint">
         처리 SLA 준수율 = 처리 완료 건 중 기한 안에 끝낸 비율 · 첫 응답 SLA 준수율 = 등록 건 중 첫
-        응답 기한 안에 답한 비율 · 평균 처리 시간 = 등록부터 처리 완료까지
+        응답 기한 안에 답한 비율 · 평균 처리 시간 = 등록부터 처리 완료까지 · 자동 완료 = 고객 확인
+        없이 확인 기간(7일)이 지나 완료된 건
       </p>
       <div className="table-scroll">
         <table>
@@ -117,7 +118,8 @@ export const SrReportScreen = forwardRef<
               <th>고객사</th>
               <th>등록</th>
               <th>처리 완료</th>
-              <th>고객 확인 완료</th>
+              <th title="처리 완료 건 중 고객이 [완료 확인]을 누른 건">고객 확인 완료</th>
+              <th title="처리 완료 후 확인 기간(7일)이 지나 자동으로 완료된 건">자동 완료</th>
               {/* title: 마우스를 올리면 지표 정의를 보여 준다. 아래 범례에도 같은 설명을 둔다. */}
               <th title="그 달 처리 완료 건 중 처리 기한 안에 끝낸 비율">처리 SLA 준수율</th>
               <th title="그 달 등록 건 중 첫 응답 기한 안에 답한 비율">첫 응답 SLA 준수율</th>
@@ -132,6 +134,7 @@ export const SrReportScreen = forwardRef<
                 <td>{r.created}</td>
                 <td>{r.resolved}</td>
                 <td>{r.closed}</td>
+                <td>{r.auto_closed}</td>
                 <td>{pct(r.resolveRate)}</td>
                 <td>{pct(r.responseRate)}</td>
                 <td>{duration(r.avg_resolve_hours)}</td>

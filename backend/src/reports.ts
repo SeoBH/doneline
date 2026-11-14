@@ -47,7 +47,8 @@ const RANGE = `WITH m AS (SELECT (($1||'-01')::timestamp AT TIME ZONE 'Asia/Seou
 
 /**
  * 고객사별 지표.
- * - created: 그 달 등록 / resolved: 그 달 처리 완료(담당자 완료 기준) / closed: 그중 고객 확인까지 끝난 건
+ * - created: 그 달 등록 / resolved: 그 달 처리 완료(담당자 완료 기준) / closed: 그중 고객이 직접 확인해 끝난 건
+ * - auto_closed: 그중 고객 확인 없이 확인 기간이 지나 자동 완료된 건(closed와 겹치지 않음)
  * - resolve_met: 처리 완료 건 중 처리 기한 안에 끝낸 건
  * - response_total/response_met: 그 달 등록 건 중 응답 여부를 판단할 수 있는 건(응답했거나 응답 기한이 지난 건)과 기한 내 응답 건
  * - avg_resolve_hours: 그 달 처리 완료 건의 등록→처리 평균 시간
@@ -57,7 +58,8 @@ const SUMMARY_SQL = `${RANGE}
 SELECT c.id AS customer_id,c.name AS customer_name,
   count(*) FILTER (WHERE r.created_at>=m.s AND r.created_at<m.e)::int AS created,
   count(*) FILTER (WHERE r.resolved_at>=m.s AND r.resolved_at<m.e)::int AS resolved,
-  count(*) FILTER (WHERE r.resolved_at>=m.s AND r.resolved_at<m.e AND r.status='CLOSED')::int AS closed,
+  count(*) FILTER (WHERE r.resolved_at>=m.s AND r.resolved_at<m.e AND r.status='CLOSED' AND NOT r.auto_closed)::int AS closed,
+  count(*) FILTER (WHERE r.resolved_at>=m.s AND r.resolved_at<m.e AND r.status='CLOSED' AND r.auto_closed)::int AS auto_closed,
   count(*) FILTER (WHERE r.resolved_at>=m.s AND r.resolved_at<m.e AND r.resolved_at<=r.due_at)::int AS resolve_met,
   count(*) FILTER (WHERE r.created_at>=m.s AND r.created_at<m.e AND (r.first_response_at IS NOT NULL OR r.response_due_at<now()))::int AS response_total,
   count(*) FILTER (WHERE r.created_at>=m.s AND r.created_at<m.e AND r.first_response_at<=r.response_due_at)::int AS response_met,
@@ -70,7 +72,7 @@ GROUP BY c.id,c.name,c.code ORDER BY c.code`;
 // 엑셀 상세: 그 달 등록되었거나 처리 완료된 요청.
 const DETAIL_SQL = `${RANGE}
 SELECT r.request_no,c.name AS customer_name,co.name AS corporation_name,d.name AS department_name,r.title,r.category,r.priority,r.status,
-  rq.display_name AS requester_name,a.display_name AS assignee_name,r.created_at,r.first_response_at,r.response_due_at,r.resolved_at,r.due_at,r.closed_at
+  rq.display_name AS requester_name,a.display_name AS assignee_name,r.created_at,r.first_response_at,r.response_due_at,r.resolved_at,r.due_at,r.closed_at,r.auto_closed
 FROM app.service_requests r CROSS JOIN m JOIN app.customers c ON c.id=r.customer_id
 JOIN app.corporations co ON co.id=r.corporation_id JOIN app.departments d ON d.id=r.department_id
 JOIN app.users rq ON rq.id=r.requester_id LEFT JOIN app.users a ON a.id=r.assignee_id
@@ -108,6 +110,7 @@ export class Reports {
       created: sum('created'),
       resolved,
       closed: sum('closed'),
+      auto_closed: sum('auto_closed'),
       open_now: sum('open_now'),
       resolveRate: rate(sum('resolve_met'), resolved),
       responseRate: rate(sum('response_met'), sum('response_total')),
@@ -163,6 +166,7 @@ export class Reports {
       '등록',
       '처리 완료',
       '고객 확인 완료',
+      '자동 완료',
       '처리 SLA 준수율(%)',
       '첫 응답 SLA 준수율(%)',
       '평균 처리 시간(시간)',
@@ -175,6 +179,7 @@ export class Reports {
         r.created,
         r.resolved,
         r.closed,
+        r.auto_closed,
         r.resolveRate,
         r.responseRate,
         r.avg_resolve_hours,
@@ -186,6 +191,7 @@ export class Reports {
       t.created,
       t.resolved,
       t.closed,
+      t.auto_closed,
       t.resolveRate,
       t.responseRate,
       t.avg_resolve_hours,
@@ -209,7 +215,7 @@ export class Reports {
       '응답 기한',
       '처리 완료',
       '처리 기한',
-      '고객 확인',
+      '종료(확인·자동 완료·취소)',
       '처리 SLA',
     ]);
     head(d);
@@ -222,7 +228,8 @@ export class Reports {
         r.title,
         CATEGORY[r.category],
         PRIORITY[r.priority],
-        STATUS[r.status],
+        // 자동 완료는 고객이 직접 확인한 완료와 구분해 표시한다.
+        r.auto_closed ? '완료(자동)' : STATUS[r.status],
         r.requester_name,
         r.assignee_name || '',
         kst(r.created_at),
