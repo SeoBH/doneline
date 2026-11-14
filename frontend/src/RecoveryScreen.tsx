@@ -22,7 +22,15 @@ export function RecoveryScreen({
     [busy, setBusy] = useState(false),
     [done, setDone] = useState(false),
     // 링크 주인의 이름·업체명. 남의 링크를 받았거나 어느 계정인지 헷갈리지 않게 화면 위에 보여 준다.
-    [owner, setOwner] = useState<{ name: string; workspaceName: string } | null>(null);
+    [owner, setOwner] = useState<{ name: string; workspaceName: string } | null>(null),
+    // 서버의 메일 발송 설정 여부(auth/csrf 응답). 켜져 있으면 '메일을 확인해주세요', 꺼져 있으면 '관리자에게 문의' 안내를 보인다.
+    [mailEnabled, setMailEnabled] = useState(false);
+  useEffect(() => {
+    if (link) return;
+    api('auth/csrf')
+      .then((r) => setMailEnabled(Boolean(r.mailEnabled)))
+      .catch(() => undefined);
+  }, [link]);
   useEffect(() => {
     if (!link) return;
     // 토큰은 주소가 아니라 본문으로 보낸다. 실패(만료 등)하면 안내 없이 두고 제출 때 서버 오류를 보여 준다.
@@ -97,14 +105,18 @@ export function RecoveryScreen({
           <p role="status">
             {link
               ? '처리를 완료했습니다. 승인·소속 부서 지정이 끝나면 로그인할 수 있습니다.'
-              : '요청을 처리했습니다. 현재 이메일 실제 발송은 보류되어 있으므로 관리자에게 문의해주세요.'}
+              : mailEnabled
+                ? '요청을 처리했습니다. 입력한 정보와 일치하는 계정이 있으면 안내 메일을 보냅니다. 받은편지함과 스팸함을 확인해주세요.'
+                : '요청을 처리했습니다. 현재 이메일 실제 발송은 보류되어 있으므로 관리자에게 문의해주세요.'}
           </p>
         ) : (
           <>
             {!link && (
               <>
                 <p>
-                  현재 이메일 실제 발송은 연결되지 않았습니다. 인증된 이메일로 계정을 찾으며,
+                  {mailEnabled
+                    ? '인증된 이메일로 계정을 찾아 안내 메일을 보냅니다.'
+                    : '현재 이메일 실제 발송은 연결되지 않았습니다. 인증된 이메일로 계정을 찾으며,'}{' '}
                   연락처를 사용할 수 없으면 관리자에게 문의해주세요.
                 </p>
                 <label>

@@ -33,8 +33,13 @@ export const AccountsScreen = forwardRef<
     [editCustomer, setEditCustomer] = useState('');
   const form = useRef<HTMLFormElement>(null),
     epoch = useRef(0);
-  // 관리자가 직원에게 직접 전달할 비밀번호 설정 링크(메일 자동 발송 전까지 사용). 닫거나 다른 작업 전까지 표시한다.
-  const [issuedLink, setIssuedLink] = useState<{ who: string; link: string } | null>(null);
+  // 비밀번호 설정 링크. 메일 발송이 켜져 있으면 메일로도 갔고(mailed), 메일이 닿지 않을 때 관리자가 복사해 직접 전달한다.
+  // 닫거나 다른 작업 전까지 표시한다.
+  const [issuedLink, setIssuedLink] = useState<{
+    who: string;
+    link: string;
+    mailed: boolean;
+  } | null>(null);
   // 한 번에 승인하기 창: 대상 사용자, 지정할 역할, 소속 부서. 승인·역할 저장·부서 지정을 한 번의 확인으로 처리한다.
   const [quick, setQuick] = useState<GridRow | null>(null),
     [quickResp, setQuickResp] = useState(''),
@@ -165,7 +170,7 @@ export const AccountsScreen = forwardRef<
       });
       setDraft(emptyAccount());
       notify(r.message, 'success');
-      if (r.link) setIssuedLink({ who: profile.name, link: r.link });
+      if (r.link) setIssuedLink({ who: profile.name, link: r.link, mailed: Boolean(r.mailed) });
       await query();
       return true;
     } catch (e) {
@@ -208,7 +213,8 @@ export const AccountsScreen = forwardRef<
         body: JSON.stringify({ userId: editing.id, version: editing.version }),
       });
       notify(r.message, 'success');
-      if (r.link) setIssuedLink({ who: editing.display_name, link: r.link });
+      if (r.link)
+        setIssuedLink({ who: editing.display_name, link: r.link, mailed: Boolean(r.mailed) });
     } catch (e) {
       notify((e as Error).message, 'error');
     } finally {
@@ -666,10 +672,13 @@ export const AccountsScreen = forwardRef<
             >
               비밀번호 설정 링크 만들기
             </button>
-            {/* 메일 자동 발송 전까지: 관리자가 링크를 복사해 메신저 등으로 직접 전달한다. */}
+            {/* 메일이 꺼져 있거나 닿지 않을 때: 관리자가 링크를 복사해 메신저 등으로 직접 전달한다. */}
             {issuedLink && (
               <div className="link-box" role="status">
-                <strong>{issuedLink.who}님 비밀번호 설정 링크 (24시간 유효)</strong>
+                <strong>
+                  {issuedLink.who}님 비밀번호 설정 링크 (24시간 유효
+                  {issuedLink.mailed ? ' · 이메일로 보냄' : ''})
+                </strong>
                 <code>{issuedLink.link}</code>
                 <button
                   type="button"

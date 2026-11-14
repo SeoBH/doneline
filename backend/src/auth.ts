@@ -17,6 +17,7 @@ import { IsString, Length, Matches } from 'class-validator';
 import { Response } from 'express';
 import { createHash, randomBytes } from 'node:crypto';
 import * as argon2 from 'argon2';
+import { settings } from './config';
 import { Db } from './db';
 import { Audit } from './audit';
 import { AllowPasswordChange, AppRequest, Public } from './security';
@@ -161,7 +162,8 @@ export class AuthController {
       await new Promise<void>((resolve) => req.session.destroy(() => resolve()));
       throw e;
     }
-    return { csrfToken: req.session.csrf };
+    // mailEnabled: 로그인 전 화면(계정 찾기)이 '메일을 확인해주세요'와 '관리자에게 문의해주세요' 중 맞는 안내를 고르게 한다.
+    return { csrfToken: req.session.csrf, mailEnabled: Boolean(settings.smtp.host) };
   }
   @Post('auth/login')
   @Public()

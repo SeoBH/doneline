@@ -35,6 +35,8 @@ import { Db } from './db';
 import { Audit } from './audit';
 import { AppRequest, Permission } from './security';
 import { slaFor } from './sla';
+import { Mail } from './mail';
+import { settings } from './config';
 
 const CATEGORIES = ['INCIDENT', 'REQUEST', 'QUESTION'] as const;
 const PRIORITIES = ['LOW', 'NORMAL', 'HIGH', 'URGENT'] as const;
@@ -104,6 +106,7 @@ export class Requests {
   constructor(
     private readonly db: Db,
     private readonly audit: Audit,
+    private readonly mail: Mail,
   ) {}
   /** 고객 요청 화면은 고객사 사용자 전용이다. 고객사가 없는 SYSTEM 계정이 쓰면 범위를 정할 수 없어 거절한다. */
   private customerActor(req: AppRequest) {
@@ -158,6 +161,72 @@ export class Requests {
       )
     ).rows.map((x) => String(x.id));
     return [String(r.requester_id), ...managers];
+  }
+  /** 업체 관리자(WORKSPACE_ADMIN·ADMIN) 중 사용 가능한 계정. 새 요청 메일은 배정 권한이 있는 이 사람들에게만 보낸다. */
+  private async managerTargets(c: PoolClient) {
+    return (
+      await c.query(
+        `SELECT u.id FROM app.users u JOIN app.account_access a ON a.id=u.id JOIN app.responsibilities p ON p.id=u.resp_id
+         WHERE a.authority_type='SYSTEM' AND a.account_enabled AND p.code IN ('WORKSPACE_ADMIN','ADMIN')`,
+      )
+    ).rows.map((x) => String(x.id));
+  }
+  /**
+   * 업무 메일을 발송 대기열에 넣는다(실제 발송은 커밋 후 mail.ts 발송기). 앱 안 알림과 달리 정해진 순간에만 보낸다:
+   * 새 요청=업체 관리자, 처리 시작=담당자+요청자, 재배정=새 담당자, 처리 완료·요청 취소=요청자,
+   * 되돌리기=업체 직원 전체, 고객의 재처리 요청=담당자. 고객 쪽은 요청자 본인만 받는다(고객사 관리자 제외).
+   * - 받는 사람: 사용 가능한 계정이면서 이메일 인증을 마친 사람만(잘못 입력한 주소로 요청 정보가 나가지 않게). 자기 동작은 제외.
+   * - 내용: 요청 번호·제목·바로가기 링크만. 요청 본문·댓글은 넣지 않고 로그인해서 보게 한다(메일 전달·유출 시 노출 최소화).
+   * - 메일 발송이 꺼져 있으면(SMTP 미설정) 쌓아 두지 않는다. 앱 안 알림은 그대로 간다.
+   * staff: 받는 사람이 업체 직원이면 제목 앞에 고객사 이름을, 고객이면 업체 이름을 붙인다.
+   */
+  private async mailTo(
+    c: PoolClient,
+    users: string[],
+    actorId: string,
+    r: { id: string; request_no: number; title: string; customer_id: string },
+    what: string,
+    staff: boolean,
+    hint = '',
+  ) {
+    if (!this.mail.enabled) return;
+    const targets = [...new Set(users.filter((u) => u && u !== String(actorId)))];
+    if (!targets.length) return;
+    const rows = (
+      await c.query(
+        `SELECT u.id,u.email,u.display_name FROM app.users u JOIN app.account_access a ON a.id=u.id
+         WHERE u.id=ANY($1::bigint[]) AND a.account_enabled AND u.email IS NOT NULL AND u.email_verified_at IS NOT NULL`,
+        [targets],
+      )
+    ).rows;
+    if (!rows.length) return;
+    const label =
+      (staff
+        ? await c.query('SELECT name FROM app.customers WHERE id=$1', [r.customer_id])
+        : await c.query('SELECT name FROM app.workspaces WHERE id=app.current_workspace_id()')
+      ).rows[0]?.name || 'Doneline';
+    // 로그인 후 이 요청을 바로 연다(main.tsx가 ?request= 값을 읽음). 요청 ID는 권한 확인 없이는 내용을 볼 수 없는 번호다.
+    const link = `${settings.origin}/?request=${r.id}`;
+    for (const u of rows)
+      await this.mail.hold(
+        c,
+        String(u.id),
+        {
+          to: u.email,
+          subject: `[${label}] #${r.request_no} ${what}: ${r.title}`.slice(0, 200),
+          text: [
+            `${u.display_name}님, 안녕하세요.`,
+            '',
+            `요청 #${r.request_no} "${r.title}" — ${what}.`,
+            ...(hint ? [hint] : []),
+            '아래 주소에서 내용을 확인해주세요.',
+            link,
+            '',
+            '이 메일은 Doneline에서 자동으로 보낸 알림입니다. 회신하셔도 확인되지 않습니다.',
+          ].join('\n'),
+        },
+        { kind: 'REQUEST', minutes: 24 * 60 },
+      );
   }
   /** 담당자가 있으면 담당자, 없으면 워크스페이스의 활성 SYSTEM 계정 전체(소규모 팀 기준)에게 알린다. */
   private async staffTargets(c: PoolClient, assigneeId: string | null) {
@@ -299,6 +368,15 @@ export class Requests {
         row.id,
         `#${row.request_no} 새 요청: ${body.title.trim()}`,
       );
+      await this.mailTo(
+        c,
+        await this.managerTargets(c),
+        a.id,
+        { ...row, title: body.title.trim(), customer_id: a.customer_id },
+        '새 요청이 등록되었습니다',
+        true,
+        '요청 작업함에서 담당자를 정해주세요.',
+      );
       await this.auditWrite(c, req, 'SR_CREATE');
       return {
         id: String(row.id),
@@ -367,6 +445,16 @@ export class Requests {
         id,
         `#${r.request_no} ${accept ? '고객이 완료를 확인했습니다' : '고객이 재처리를 요청했습니다'}: ${r.title}`,
       );
+      if (!accept)
+        await this.mailTo(
+          c,
+          await this.staffTargets(c, r.assignee_id),
+          a.id,
+          r,
+          '고객이 재처리를 요청했습니다',
+          true,
+          '재처리 사유는 요청의 처리 이력에서 확인할 수 있습니다.',
+        );
       await this.auditWrite(c, req, accept ? 'SR_CONFIRM' : 'SR_REOPEN');
       return { message: accept ? '완료를 확인했습니다.' : '재처리를 요청했습니다.' };
     });
@@ -540,6 +628,41 @@ export class Requests {
           a.id,
           id,
           `#${r.request_no} ${toRequester.join(', ')}: ${r.title}`,
+        );
+      // 업무 메일은 단계가 바뀌는 순간에만 보낸다(우선순위·답변만 바꾼 저장은 앱 안 알림만). 받는 사람 규칙은 mailTo 설명 참고.
+      const requester = [String(r.requester_id)];
+      if (assignee && assignee !== me)
+        await this.mailTo(c, [assignee], me, r, '담당자로 지정되었습니다', true);
+      if (action === 'START')
+        await this.mailTo(c, requester, me, r, '담당자가 배정되어 처리를 시작했습니다', false);
+      if (action === 'RESOLVE')
+        await this.mailTo(
+          c,
+          requester,
+          me,
+          r,
+          '처리가 완료되었습니다',
+          false,
+          '결과를 확인하고 [완료 확인]을 눌러주세요. 다시 처리가 필요하면 [재처리 요청]을 누를 수 있습니다.',
+        );
+      if (action === 'CANCEL')
+        await this.mailTo(
+          c,
+          requester,
+          me,
+          r,
+          '요청이 취소되었습니다',
+          false,
+          '취소 사유는 요청의 처리 이력에서 확인할 수 있습니다.',
+        );
+      if (action === 'REVERT')
+        await this.mailTo(
+          c,
+          await this.staffTargets(c, null),
+          me,
+          r,
+          '담당이 해제되어 다시 배정이 필요합니다',
+          true,
         );
       await this.auditWrite(c, req, 'SR_UPDATE');
       return { message: '저장했습니다.' };

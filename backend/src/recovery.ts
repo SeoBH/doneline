@@ -68,14 +68,15 @@ export class Recovery {
   }
   /**
    * 호출자는 사용자 행을 잠근다. 최신 링크 하나만 유효하며 발급 자체로 기존 비밀번호는 바뀌지 않는다.
-   * 링크 원문을 돌려준다. 실제 메일 발송이 연결되기 전까지 관리자가 화면에서 복사해 직접 전달하는 용도다.
+   * 링크 원문을 돌려준다. 메일 발송(SMTP)이 설정되어 있으면 메일로도 보내며, 관리자는 화면에서 같은 링크를 복사해 전달할 수도 있다.
    * hours: 유효 시간. 본인이 요청한 복구 링크는 30분, 관리자가 전달하는 링크는 전달 시간을 고려해 24시간.
    */
   async issue(c: PoolClient, user: any, purpose: 'VERIFY' | 'PASSWORD', hours = 0.5) {
     if (!user.email) throw new BadRequestException('사용자정보에 이메일을 먼저 저장해주세요.');
     await c.query('DELETE FROM app.account_tokens WHERE user_id=$1', [user.id]);
+    // 이전 링크 메일만 취소한다. 같은 사용자의 고객 요청 업무 메일(kind=REQUEST)은 그대로 보낸다.
     await c.query(
-      "UPDATE app.mail_outbox SET status='CANCELLED',payload='' WHERE user_id=$1 AND status='HELD'",
+      "UPDATE app.mail_outbox SET status='CANCELLED',payload='' WHERE user_id=$1 AND status='HELD' AND kind='ACCOUNT'",
       [user.id],
     );
     const token = randomBytes(32).toString('hex');
@@ -85,11 +86,17 @@ export class Recovery {
     );
     // URL fragment는 HTTP 요청·Referer에 포함되지 않는다. 화면이 읽은 뒤 주소창에서도 제거한다.
     const link = settings.origin + '/#account=' + purpose + ':' + token;
-    await this.mail.hold(c, user.id, {
-      to: user.email,
-      subject: purpose === 'VERIFY' ? '이메일 인증 안내' : '비밀번호 설정 안내',
-      text: `${user.display_name}님, 아래 링크에서 ${purpose === 'VERIFY' ? '이메일을 인증' : '비밀번호를 설정'}해주세요. 링크는 ${hours >= 1 ? hours + '시간' : Math.round(hours * 60) + '분'} 동안 한 번만 사용할 수 있습니다.\n${link}`,
-    });
+    await this.mail.hold(
+      c,
+      user.id,
+      {
+        to: user.email,
+        subject: purpose === 'VERIFY' ? '이메일 인증 안내' : '비밀번호 설정 안내',
+        text: `${user.display_name}님, 아래 링크에서 ${purpose === 'VERIFY' ? '이메일을 인증' : '비밀번호를 설정'}해주세요. 링크는 ${hours >= 1 ? hours + '시간' : Math.round(hours * 60) + '분'} 동안 한 번만 사용할 수 있습니다.\n${link}`,
+      },
+      // 링크가 유효한 동안만 발송을 시도한다(만료된 링크를 늦게 보내지 않음).
+      { minutes: Math.round(hours * 60) },
+    );
     return link;
   }
   async request(req: AppRequest, body: RequestDto) {
@@ -159,7 +166,7 @@ export class Recovery {
         throw new BadRequestException('사용할 수 없거나 만료된 링크입니다. 다시 요청해주세요.');
       await c.query('DELETE FROM app.account_tokens WHERE user_id=$1', [u.id]);
       await c.query(
-        "UPDATE app.mail_outbox SET status='CANCELLED',payload='' WHERE user_id=$1 AND status='HELD'",
+        "UPDATE app.mail_outbox SET status='CANCELLED',payload='' WHERE user_id=$1 AND status='HELD' AND kind='ACCOUNT'",
         [u.id],
       );
       if (hash) {

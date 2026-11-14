@@ -21,6 +21,7 @@ import { PoolClient } from 'pg';
 import { createHash } from 'node:crypto';
 import * as argon2 from 'argon2';
 import { Db, useWorkspace } from './db';
+import { settings } from './config';
 import { Recovery, emailAddress } from './recovery';
 import { Audit } from './audit';
 import { AppRequest, Permission, Public } from './security';
@@ -50,6 +51,8 @@ function fields(body: any, allowed: string[]) {
   )
     throw new BadRequestException('허용되지 않은 입력입니다.');
 }
+// 메일 발송(SMTP) 설정 여부. 링크를 메일로 보냈는지에 따라 관리자 안내 문구가 달라진다.
+const mailed = Boolean(settings.smtp.host);
 @Injectable()
 export class Accounts {
   constructor(
@@ -402,7 +405,7 @@ export class Accounts {
         },
         c,
       );
-      // 관리자 등록: 메일 자동 발송 전까지 관리자가 직접 전달하도록 24시간 유효 링크를 돌려준다.
+      // 관리자 등록: 24시간 유효 링크를 메일로 보내고(SMTP 설정 시), 메일이 닿지 않을 때 관리자가 직접 전달하도록 화면에도 돌려준다.
       const link = await this.recovery.issue(
         c,
         user,
@@ -431,8 +434,12 @@ export class Accounts {
       return actor
         ? {
             message:
-              '등록했습니다. 비밀번호 설정 링크를 직원에게 전달해주세요(24시간 유효). 고객사 사용자는 소속 부서 지정 후 로그인할 수 있습니다.',
+              (mailed
+                ? '등록했습니다. 비밀번호 설정 링크를 직원 이메일로 보냈습니다(24시간 유효). 메일이 오지 않으면 아래 링크를 직접 전달해주세요.'
+                : '등록했습니다. 비밀번호 설정 링크를 직원에게 전달해주세요(24시간 유효).') +
+              ' 고객사 사용자는 소속 부서 지정 후 로그인할 수 있습니다.',
             link,
+            mailed,
           }
         : {
             message:
@@ -535,8 +542,12 @@ export class Accounts {
       );
       return {
         message:
-          '비밀번호 설정 링크를 만들었습니다. 사용자에게 전달해주세요(24시간 유효). 기존 비밀번호는 링크를 쓰기 전까지 유지됩니다.',
+          (mailed
+            ? '비밀번호 설정 링크를 사용자 이메일로 보냈습니다(24시간 유효). 메일이 오지 않으면 아래 링크를 직접 전달해주세요.'
+            : '비밀번호 설정 링크를 만들었습니다. 사용자에게 전달해주세요(24시간 유효).') +
+          ' 기존 비밀번호는 링크를 쓰기 전까지 유지됩니다.',
         link,
+        mailed,
       };
     });
   }

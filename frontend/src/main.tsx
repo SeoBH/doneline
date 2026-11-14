@@ -315,6 +315,22 @@ function App() {
     open(s, pathFor(nav, s.menu_id));
     if (n.request_id) setFocusRequest({ id: String(n.request_id), seq: Date.now() });
   }
+  // 업무 메일의 바로가기(/?request=<요청 ID>)로 들어온 경우 열 요청. 로그인 전이면 로그인 후 메뉴가 준비될 때 연다.
+  // useRef: 값이 바뀌어도 화면을 다시 그리지 않는 보관함. 한 번 연 뒤 비워서 다시 열리지 않게 한다.
+  const linkedRequest = useRef(
+    /^\d{1,18}$/.exec(new URLSearchParams(window.location.search).get('request') || '')?.[0] || '',
+  );
+  useEffect(() => {
+    if (!linkedRequest.current || !nav.screens.length) return;
+    const id = linkedRequest.current;
+    linkedRequest.current = '';
+    // 주소창에서 요청 번호를 지워 새로고침 때 같은 요청이 다시 열리지 않게 한다.
+    const url = new URL(window.location.href);
+    url.searchParams.delete('request');
+    window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+    openNotification({ request_id: id, message: '' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nav]);
   function discard(keys: string[]) {
     setTabs((old) => old.filter((t) => !keys.includes(tabKey(t))));
     setStates((old) => Object.fromEntries(Object.entries(old).filter(([k]) => !keys.includes(k))));
