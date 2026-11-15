@@ -4,7 +4,7 @@
  */
 import React, { Fragment, Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { api } from './api';
+import { api, ApiError } from './api';
 import { SignupScreen } from './SignupScreen';
 import { WorkspaceSignupScreen } from './WorkspaceSignupScreen';
 import { SrPortalScreen } from './SrPortalScreen';
@@ -20,6 +20,7 @@ import { useToasts } from './Toasts';
 import { useSidebar } from './useSidebar';
 import { checkForm, clearInvalid } from './formCheck';
 import { ConfirmHost, useConfirmOpen } from './ConfirmDialog';
+import { DemoAccount, DemoAccounts } from './DemoAccounts';
 /*
  * 업무 화면 나눠 받기(QA DL-029: 화면 파일 하나가 1.4MB). lazy: 그 화면을 처음 열 때 해당 파일만 내려받는다.
  * 표 편집기(AG Grid)를 쓰는 등록·관리 화면이 크므로 나누고, 로그인·고객 요청 화면은 첫 파일에 남겨 바로 뜨게 한다.
@@ -312,8 +313,14 @@ function App() {
   useEffect(() => {
     api('me')
       .then((r) => initialize(r.user))
-      .catch(() => api('auth/csrf'))
-      .catch(() => notify('서버에 연결할 수 없습니다.', 'error'))
+      .catch(() => api('auth/csrf').then((r) => setDemoAccounts(r.demoAccounts || [])))
+      // 서버(중계 함수)가 준 안내가 있으면 그대로 보여 준다. 예: 시연 서버가 꺼져 있을 때의 안내.
+      .catch((e) =>
+        notify(
+          e instanceof ApiError && e.message ? e.message : '서버에 연결할 수 없습니다.',
+          'error',
+        ),
+      )
       .finally(() => setBusy(false));
   }, []);
   // 다른 브라우저 탭에서 로그인·로그아웃하면 이 탭도 새로 읽는다. 로그인 정보(쿠키)는 같은 브라우저의 모든 탭이
@@ -360,6 +367,8 @@ function App() {
   }, [user, nav]);
   // 로그인 폼의 오류 문장. 우하단 알림은 금방 사라지고 폼과 멀어 놓치기 쉬워 폼 안에 남긴다(QA DL-024).
   const [loginError, setLoginError] = useState('');
+  // 시연 모드 서버가 알려 준 공개 시연 계정(일반 모드는 빈 배열). 로그인 화면의 '시연 계정' 창에 쓴다.
+  const [demoAccounts, setDemoAccounts] = useState<DemoAccount[]>([]);
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const formEl = e.currentTarget;
@@ -627,6 +636,25 @@ function App() {
               </div>
             )}
             <h1>{user ? '비밀번호 변경' : '로그인'}</h1>
+            {/* 시연 모드에서만 보이는 시연 계정 창. 고르면 아래 로그인 칸에 아이디·비밀번호를 채운다. */}
+            {!user && (
+              <DemoAccounts
+                accounts={demoAccounts}
+                onPick={(a) => {
+                  const fill = (name: string, value: string) => {
+                    const el = document.querySelector<HTMLInputElement>(`input[name="${name}"]`);
+                    if (el) el.value = value;
+                  };
+                  fill('loginId', a.loginId);
+                  fill('password', a.password);
+                  setLoginError('');
+                  // 로그인 버튼(type 없는 제출 버튼)에 초점: Enter 한 번으로 로그인.
+                  document
+                    .querySelector<HTMLButtonElement>('main.login form button:not([type="button"])')
+                    ?.focus();
+                }}
+              />
+            )}
             <p>
               {user
                 ? '처음 로그인했습니다. 사용할 비밀번호를 설정해 주세요.'

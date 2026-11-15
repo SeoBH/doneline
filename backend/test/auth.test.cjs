@@ -61,7 +61,10 @@ before(async () => {
     await c.query("INSERT INTO app.menu_screen_buttons VALUES($1,'QUERY',true)", [mapping]);
   });
   agent = request.agent(server);
-  csrf = (await agent.get('/api/auth/csrf').expect(200)).body.csrfToken;
+  const first = (await agent.get('/api/auth/csrf').expect(200)).body;
+  csrf = first.csrfToken;
+  // 시연 모드(DEMO_ACCOUNTS)가 아니면 로그인 화면에 공개할 시연 계정이 없어야 한다.
+  assert.deepEqual(first.demoAccounts, []);
 });
 // 앱 종료 시 DB 풀과 서버 자원도 함께 반환한다.
 after(async () => {

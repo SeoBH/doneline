@@ -39,7 +39,25 @@ export const settings = {
   trustProxy: Number(process.env.TRUST_PROXY || 0),
   // 서버가 프록시를 거쳐서만 접속 가능한 환경(컨테이너·사설망)임을 운영자가 확인했다는 표시. 아래 검사 참고.
   proxyOnlyIngress: process.env.PROXY_ONLY_INGRESS === '1',
+  // 시연 모드의 공개 계정 목록(backend/demo-seed.cjs가 .env.demo에 만들고 scripts/demo.ps1 -Sample이 넘긴다).
+  // 값이 있으면 로그인 화면이 '시연 계정' 창에 아이디·비밀번호를 보여 준다. 비우면 일반 모드다.
+  demoAccounts: parseDemoAccounts(process.env.DEMO_ACCOUNTS || ''),
 };
+/** DEMO_ACCOUNTS(JSON 배열)를 읽는다. 화면에 그대로 보이는 값이라 필요한 4개 칸만 글자로 남긴다. */
+function parseDemoAccounts(raw: string) {
+  if (!raw) return [];
+  const list = JSON.parse(raw);
+  if (!Array.isArray(list)) throw new Error('DEMO_ACCOUNTS must be a JSON array');
+  return list.slice(0, 10).map((a) => ({
+    role: String(a.role || ''),
+    loginId: String(a.loginId || ''),
+    password: String(a.password || ''),
+    note: String(a.note || ''),
+  }));
+}
+// 비밀번호를 공개하는 모드라 실제 업무 DB에서 켜지면 안 된다. 시연 전용 DB가 아니면 서버 시작을 막는다.
+if (settings.demoAccounts.length && process.env.PGDATABASE !== 'doneline_demo')
+  throw new Error('DEMO_ACCOUNTS is allowed only with PGDATABASE=doneline_demo');
 if (settings.production && !settings.origin.startsWith('https://'))
   throw new Error('Production requires HTTPS origin');
 if (!Number.isInteger(settings.trustProxy) || settings.trustProxy < 0 || settings.trustProxy > 5)

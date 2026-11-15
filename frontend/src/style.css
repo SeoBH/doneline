@@ -2197,3 +2197,46 @@ footer {
   background: #fff7e6;
   color: #8a5300;
 }
+/* 시연 계정 창(DemoAccounts.tsx): 표가 들어가므로 일반 확인 창보다 넓게, 좁은 화면에서는 창 안에서 가로로 밀어 본다. */
+.demo-dialog {
+  width: min(720px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+}
+.demo-table {
+  width: 100%;
+  margin: 0 0 16px;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.demo-table th,
+.demo-table td {
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: middle;
+}
+.demo-table th {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+/* 역할 아래에 누구로 무엇을 해 볼 수 있는지 작게 붙인다. */
+.demo-table td small {
+  display: block;
+  margin-top: 2px;
+  color: var(--color-text-muted);
+}
+.demo-table code {
+  font-size: 13px;
+  user-select: all; /* 한 번 누르면 전체 선택돼 복사하기 쉽다 */
+}
+.demo-table button {
+  white-space: nowrap;
+}
+/* 창을 닫은 뒤 다시 여는 버튼: 로그인 제목 아래에 작게 둔다. */
+.login form button.demo-open {
+  align-self: flex-start;
+  margin: -4px 0 8px;
+  padding: 4px 10px;
+  font-size: 13px;
+}

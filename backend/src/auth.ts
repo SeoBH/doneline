@@ -163,7 +163,12 @@ export class AuthController {
       throw e;
     }
     // mailEnabled: 로그인 전 화면(계정 찾기)이 '메일을 확인해 주세요'와 '관리자에게 문의해 주세요' 중 맞는 안내를 고르게 한다.
-    return { csrfToken: req.session.csrf, mailEnabled: Boolean(settings.smtp.host) };
+    // demoAccounts: 시연 모드에서만 채워지는 공개 시연 계정(config.ts). 일반 모드에서는 빈 배열이다.
+    return {
+      csrfToken: req.session.csrf,
+      mailEnabled: Boolean(settings.smtp.host),
+      demoAccounts: settings.demoAccounts,
+    };
   }
   @Post('auth/login')
   @Public()

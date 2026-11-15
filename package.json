@@ -9,6 +9,7 @@
     "seed": "npm run seed --prefix backend",
     "test:browser": "npm run build && node backend/test/registration-browser.cjs && node backend/test/accounts-browser.cjs",
     "manual": "npm run build && node backend/manual-capture.cjs",
+    "demo:seed": "npm run build --prefix backend && node backend/demo-seed.cjs",
     "test:lookup": "node frontend/node_modules/typescript/bin/tsc -p frontend/test/tsconfig.json && node backend/test/lookup-browser.cjs"
   }
 }

@@ -46,6 +46,23 @@
         "SMTP_HOST": "",
         "NODE_USE_SYSTEM_CA": "1"
       }
+    },
+    {
+      "name": "app-demo",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "--env-file=.env.demo",
+        "backend/dist/main.js"
+      ],
+      "port": 3106,
+      "env": {
+        "PORT": "3106",
+        "APP_ORIGIN": "http://127.0.0.1:3106",
+        "PGDATABASE": "doneline_demo",
+        "SLACK_WEBHOOK_URL": "",
+        "SMTP_HOST": "",
+        "NODE_USE_SYSTEM_CA": "1"
+      }
     }
   ]
 }

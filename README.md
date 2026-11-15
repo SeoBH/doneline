@@ -242,7 +242,7 @@ MAIL_FROM=Doneline 알림 <보내는Gmail주소>
 - **중계 표식:** 운영 모드에서 `.env`의 `PROXY_SECRET`(32자 이상)이 있으면 서버는 중계 함수가 이 값을 붙인 요청만 받습니다(`app.ts`). 중계 함수는 Cloudflare가 확인한 접속자 IP도 따로 전달해, 로그인·가입 시도 제한이 접속자별로 동작합니다. 개발 PC의 일반 실행(`npm.cmd start`)에는 적용하지 않습니다.
 - **보안 헤더:** 화면 파일은 Pages가 주므로 서버의 브라우저 보안 헤더(helmet)를 `deploy/pages/_headers`에 똑같이 둡니다. 서버 설정을 바꾸면 이 파일도 맞춥니다(테스트가 CSP 일치를 확인).
 - **무료 한도:** 중계 함수는 Cloudflare 무료 플랜에서 하루 10만 요청까지입니다(화면 파일은 무제한). 하루 종일 쓰는 사용자 한 명이 약 1,000요청이라 대략 80~100명까지입니다. 넘으면 그날 API가 실패하고 한국 시간 오전 9시에 초기화되므로, 사용자가 늘면 Workers 유료 플랜(월 5달러)으로 올립니다.
-- PC가 꺼져 있으면 화면은 열리지만 "서버에 연결할 수 없습니다"가 나옵니다.
+- 서버나 PC가 꺼져 있으면 화면은 열리지만 "지금은 시연 서버가 꺼져 있습니다" 안내가 나옵니다(중계 함수가 Funnel의 502·504와 연결 실패를 이 안내로 바꿉니다).
 
 서버 실행(이 PC, 빌드 후):
 
@@ -250,7 +250,26 @@ MAIL_FROM=Doneline 알림 <보내는Gmail주소>
 powershell -ExecutionPolicy Bypass -File scripts/demo.ps1
 ```
 
-`APP_ORIGIN`을 `https://doneline.pages.dev`로, `NODE_ENV=production`·`TRUST_PROXY=1`로 실행하고 Funnel을 켭니다. 처음 실행하면 Tailscale이 Funnel 승인 링크를 보여줄 수 있습니다. 예시 데이터(한빛IT서비스·서울메디랩, `hanbit_ceo`·`hanbit_park`·`smlab_lee`, 비밀번호는 `backend/manual-capture.cjs`의 `PW`)로 열려면 `-Sample`, 예전처럼 ts.net 주소로 직접 접속하게 하려면 `-Direct`를 붙입니다. 공개를 완전히 끄려면 `& 'C:\Program Files\Tailscale\tailscale.exe' funnel reset`을 실행합니다.
+`APP_ORIGIN`을 `https://doneline.pages.dev`로, `NODE_ENV=production`·`TRUST_PROXY=1`로 실행하고 Funnel을 켭니다. 처음 실행하면 Tailscale이 Funnel 승인 링크를 보여줄 수 있습니다. 예전처럼 ts.net 주소로 직접 접속하게 하려면 `-Direct`를 붙입니다. **Ctrl+C로 서버를 멈추면 Funnel도 함께 닫힙니다.** 서버는 자동으로 켜지지 않으므로, 이 명령을 실행한 동안에만 외부에서 접속할 수 있습니다.
+
+### 시연(원할 때만 켜기)
+
+남에게 보여 줄 때는 시연 모드로 켜고, 끝나면 끕니다.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/demo.ps1 -Sample
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/demo-stop.ps1
+```
+
+- **시연 데이터:** `-Sample`은 켤 때마다 시연 전용 DB `doneline_demo`를 지우고 예시 데이터로 다시 만듭니다(`backend/demo-seed.cjs`, 약 1분). 가상의 업체 '한빛IT서비스', 고객사 5곳(법인·부서 포함), 직원 4명, 고객 사용자 6명, 최근 3개월 요청 60건(완료·취소·확인 대기·처리 중·접수, 댓글·내부 메모·첨부 일부)이 들어가 요청 목록과 월간 리포트가 채워집니다. 지난 시연 상태를 그대로 열려면 `-NoReset`을 붙입니다. 데이터만 다시 만들 때는 `npm.cmd run demo:seed`.
+- **시연 계정 창:** 시연 모드에서는 로그인 화면에 시연 계정 창(역할·아이디·비밀번호, [이 계정으로 입력])이 뜹니다. 비밀번호는 데이터를 만들 때마다 새로 정해 `.env.demo`에 저장되며(저장소에 올리지 않음) 외울 필요가 없습니다. 비밀번호를 공개하는 모드라 서버는 `doneline_demo`가 아닌 DB에서 시연 계정이 설정되면 시작을 거부합니다.
+- **메일·슬랙:** 시연 모드에서는 보내지 않습니다.
+- **끄기:** 창에서 Ctrl+C. 창을 X로 닫았거나 켜져 있는지 모르면 `demo-stop.ps1`을 실행합니다(Funnel을 닫고 3100 포트 서버만 멈춤). 지금 열려 있는지는 `& 'C:\Program Files\Tailscale\tailscale.exe' funnel status`로 확인합니다.
+- 시연 중에는 접속한 누구나 시연 계정으로 데이터를 바꿀 수 있습니다. 다음에 `-Sample`로 켜면 처음 상태로 돌아갑니다.
+- 로컬에서만 볼 때는 `.claude/launch.json`의 `app-demo`(3106 포트, 시연 DB·시연 계정 창)를 씁니다.
 
 Pages 배포(대표님 Cloudflare 계정, 처음 한 번 설정):
 

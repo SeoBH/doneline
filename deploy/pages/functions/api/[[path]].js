@@ -21,19 +21,24 @@ export async function onRequest({ request, env }) {
   headers.set('X-Doneline-Client-IP', request.headers.get('CF-Connecting-IP') || '');
   headers.set('X-Forwarded-Proto', 'https');
   headers.delete('Host');
+  // 서버가 꺼져 있을 때의 안내. 시연할 때만 서버를 켜므로(scripts/demo.ps1·demo-stop.ps1) 고장이 아니라는 점을 알린다.
+  const offline = () =>
+    Response.json(
+      { message: '지금은 시연 서버가 꺼져 있습니다. 시연 시간에 다시 접속해 주세요.' },
+      { status: 503 },
+    );
   try {
     // redirect: 'manual' — 백엔드 응답(쿠키 포함)을 바꾸지 않고 그대로 브라우저에 돌려준다.
-    return await fetch(env.BACKEND_ORIGIN + url.pathname + url.search, {
+    const res = await fetch(env.BACKEND_ORIGIN + url.pathname + url.search, {
       method: request.method,
       headers,
       body: ['GET', 'HEAD'].includes(request.method) ? undefined : request.body,
       redirect: 'manual',
     });
+    // 502·504: 공개 입구(Funnel)는 열려 있는데 서버가 꺼진 경우 Tailscale이 돌려주는 응답. 백엔드 자신은 이 값을 쓰지 않는다.
+    return res.status === 502 || res.status === 504 ? offline() : res;
   } catch {
-    // 서버 PC가 꺼져 있거나 연결이 끊긴 경우.
-    return Response.json(
-      { message: '서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.' },
-      { status: 502 },
-    );
+    // 공개 입구까지 닫혀 있거나(시연 끝) 서버 PC가 꺼진 경우.
+    return offline();
   }
 }
