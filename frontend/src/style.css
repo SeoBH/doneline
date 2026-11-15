@@ -736,6 +736,9 @@ input:focus-visible {
 .users-screen > .account-screen {
   flex: 1;
   min-height: 0;
+  /* 사용자 목록은 열이 많아 왼쪽을 2배로 넓힌다. 1.4:1 비율에서는 1920px 화면에서도 표가 옆으로 넘쳤다(QA 4차 DLV2-013).
+     오른쪽 사용자정보는 340px 아래로 줄지 않는다. 좁은 화면(1000px 이하)은 위 규칙대로 세로로 쌓인다. */
+  grid-template-columns: minmax(0, 2fr) minmax(340px, 1fr);
 }
 .mapping-panels {
   display: flex;
@@ -749,6 +752,9 @@ input:focus-visible {
   flex: 1;
 }
 @media (max-width: 1000px) {
+  .users-screen > .account-screen {
+    grid-template-columns: 1fr;
+  }
   .catalog-columns {
     grid-template-columns: 1fr !important;
   }

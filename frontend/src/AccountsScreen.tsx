@@ -697,17 +697,17 @@ export const AccountsScreen = forwardRef<
                 width: 90,
                 format: (v) => (v ? '완료' : '매핑 필요'),
               },
-              { field: 'resp_name', header: '역할', width: 120 },
-              { field: 'email', header: '이메일', width: 160 },
+              { field: 'resp_name', header: '역할', width: 110 },
+              { field: 'email', header: '이메일', width: 150 },
               // 휴대전화는 오른쪽 사용자정보에서 본다. 1920px 화면에서도 옆으로 넘치던 목록을 줄인다(QA 3차 DLV2-013).
-              { field: 'scopes', header: '법인/부서 범위', width: 170, format: scopeName },
+              { field: 'scopes', header: '법인/부서 범위', width: 150, format: scopeName },
               {
                 field: 'registration_source',
                 header: '등록 경로',
                 width: 90,
                 format: (v) => (v === 'ADMIN' ? '관리자' : '회원가입'),
               },
-              { field: 'review_note', header: '처리 사유', width: 140 },
+              { field: 'review_note', header: '처리 사유', width: 120 },
             ]}
             onChange={(next) =>
               setRows((old) => old.map((r) => next.find((n) => n._key === r._key) || r))

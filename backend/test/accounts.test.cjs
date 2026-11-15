@@ -188,13 +188,17 @@ test('customer catalogs are isolated, parent ownership checked, assigned deletes
 });
 test('selected catalog rows commit together, stale versions and immutable codes reject', async () => {
   const v = await catalog('corporations', 'EDIT', customer.id);
-  await post(system, 'catalogs/corporations/save', {
+  const failed = await post(system, 'catalogs/corporations/save', {
     customerId: customer.id,
     rows: [
       { id: v.id, version: v.version, code: v.code, name: 'changed' },
-      { code: 'A001', name: 'duplicate' },
+      { clientKey: 'new-1', code: 'A001', name: 'duplicate' },
     ],
   }).expect(409);
+  // 실패한 행을 clientKey로 알려 준다(QA 4차 DV4-004). 화면은 이 행을 빨갛게 표시한다.
+  assert.deepEqual(failed.body.rowErrors, [
+    { clientKey: 'new-1', code: 'A001', message: '이미 사용 중인 코드입니다.' },
+  ]);
   assert.equal(
     (await db.query('SELECT name FROM app.corporations WHERE id=$1', [v.id])).rows[0].name,
     'EDIT',

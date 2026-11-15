@@ -260,60 +260,83 @@ export class Accounts {
       const items = [],
         seen = new Set();
       for (const r of body.rows) {
-        fields(r, ['id', 'version', 'clientKey', 'code', 'name']);
-        if (r.id && seen.has(r.id)) throw new BadRequestException('중복 행입니다.');
-        seen.add(r.id);
-        const before = r.id
-          ? (await c.query('SELECT * FROM app.' + kind + ' WHERE id=$1 FOR UPDATE', [id(r.id)]))
-              .rows[0]
-          : null;
-        if (r.id && (!before || before.version !== r.version))
-          throw new ConflictException('다른 작업에서 변경했습니다. 다시 조회해 주세요.');
-        if (
-          before &&
-          kind !== 'customers' &&
-          (before.customer_id !== body.customerId ||
-            (kind === 'departments' && before.corporation_id !== body.corporationId))
-        )
-          throw new ForbiddenException('선택한 상위 코드와 다른 행입니다.');
-        let after = null;
-        if (remove) {
-          if (!before) throw new BadRequestException('신규 행은 행삭제로 제거해 주세요.');
-          await c.query('DELETE FROM app.' + kind + ' WHERE id=$1', [r.id]);
-        } else {
-          const code = text(r.code, 40),
-            name = text(r.name, 120);
-          if (!/^[A-Za-z0-9_-]+$/.test(code))
-            throw new BadRequestException('코드는 영문·숫자·밑줄·하이픈으로 입력해 주세요.');
-          if (before && before.code !== code)
-            throw new BadRequestException('저장된 코드는 변경할 수 없습니다.');
-          const columns = ['code', 'name'],
-            values: any[] = [code, name];
-          if (!before && kind !== 'customers') {
-            columns.push('customer_id');
-            values.push(body.customerId);
+        // 행 하나가 실패하면 전체를 취소하되, 어느 행이 왜 실패했는지 rowErrors로 돌려준다(QA 4차 DV4-004).
+        // 화면은 clientKey로 그 행을 빨갛게 표시한다. 트랜잭션은 change()가 롤백한다.
+        try {
+          fields(r, ['id', 'version', 'clientKey', 'code', 'name']);
+          if (r.id && seen.has(r.id)) throw new BadRequestException('중복 행입니다.');
+          seen.add(r.id);
+          const before = r.id
+            ? (await c.query('SELECT * FROM app.' + kind + ' WHERE id=$1 FOR UPDATE', [id(r.id)]))
+                .rows[0]
+            : null;
+          if (r.id && (!before || before.version !== r.version))
+            throw new ConflictException('다른 작업에서 변경했습니다. 다시 조회해 주세요.');
+          if (
+            before &&
+            kind !== 'customers' &&
+            (before.customer_id !== body.customerId ||
+              (kind === 'departments' && before.corporation_id !== body.corporationId))
+          )
+            throw new ForbiddenException('선택한 상위 코드와 다른 행입니다.');
+          let after = null;
+          if (remove) {
+            if (!before) throw new BadRequestException('신규 행은 행삭제로 제거해 주세요.');
+            await c.query('DELETE FROM app.' + kind + ' WHERE id=$1', [r.id]);
+          } else {
+            const code = text(r.code, 40),
+              name = text(r.name, 120);
+            if (!/^[A-Za-z0-9_-]+$/.test(code))
+              throw new BadRequestException('코드는 영문·숫자·밑줄·하이픈으로 입력해 주세요.');
+            if (before && before.code !== code)
+              throw new BadRequestException('저장된 코드는 변경할 수 없습니다.');
+            const columns = ['code', 'name'],
+              values: any[] = [code, name];
+            if (!before && kind !== 'customers') {
+              columns.push('customer_id');
+              values.push(body.customerId);
+            }
+            if (!before && kind === 'departments') {
+              columns.push('corporation_id');
+              values.push(body.corporationId);
+            }
+            after = (
+              await c.query(
+                before
+                  ? 'UPDATE app.' + kind + ' SET name=$2 WHERE id=$1 RETURNING *'
+                  : 'INSERT INTO app.' +
+                      kind +
+                      '(' +
+                      columns.join(',') +
+                      ') VALUES(' +
+                      values.map((_, i) => '$' + (i + 1)).join(',') +
+                      ') RETURNING *',
+                before ? [r.id, name] : values,
+              )
+            ).rows[0];
           }
-          if (!before && kind === 'departments') {
-            columns.push('corporation_id');
-            values.push(body.corporationId);
-          }
-          after = (
-            await c.query(
-              before
-                ? 'UPDATE app.' + kind + ' SET name=$2 WHERE id=$1 RETURNING *'
-                : 'INSERT INTO app.' +
-                    kind +
-                    '(' +
-                    columns.join(',') +
-                    ') VALUES(' +
-                    values.map((_, i) => '$' + (i + 1)).join(',') +
-                    ') RETURNING *',
-              before ? [r.id, name] : values,
-            )
-          ).rows[0];
+          await this.log(c, req, kind, before?.id || after.id, before, after);
+          items.push({ clientKey: r.clientKey, item: after });
+        } catch (e: any) {
+          // 23505=고유값 중복. 같은 고객사(또는 업체) 안에 같은 코드가 이미 있거나, 이번에 함께 보낸 행끼리 겹친 경우다.
+          const duplicate = e?.code === '23505';
+          const status = duplicate ? 409 : e instanceof HttpException ? e.getStatus() : 0;
+          if (!status) throw e;
+          throw new HttpException(
+            {
+              message: duplicate ? '이미 사용 중인 코드입니다.' : (e as HttpException).message,
+              rowErrors: [
+                {
+                  clientKey:
+                    typeof r?.clientKey === 'string' ? r.clientKey.slice(0, 100) : undefined,
+                  code: typeof r?.code === 'string' ? r.code.slice(0, 40) : undefined,
+                  message: duplicate ? '이미 사용 중인 코드입니다.' : (e as HttpException).message,
+                },
+              ],
+            },
+            status,
+          );
         }
-        await this.log(c, req, kind, before?.id || after.id, before, after);
-        items.push({ clientKey: r.clientKey, item: after });
       }
       return { items };
     });

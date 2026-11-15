@@ -1,6 +1,6 @@
 /** 고객사/법인/부서등록의 공통 그리드. 화면별 부모 선택 깊이만 다르며 체크 행만 저장한다. */
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { api } from './api';
+import { api, ApiError } from './api';
 import { DataGrid, GridHandle, GridRow } from './DataGrid';
 import { Screen, ScreenHandle, ViewState } from './types';
 import { Notify } from './Toasts';
@@ -219,10 +219,24 @@ export const CustomersScreen = forwardRef<
       notify(`${target}${selected.length}개를 ${remove ? '삭제' : '저장'}했습니다.`, 'success');
       return true;
     } catch (e) {
+      // 서버가 실패한 행(rowErrors의 clientKey)을 알려 주면 그 행을 빨갛게 표시하고 몇 번째 행인지 함께 알린다(QA 4차 DV4-004).
+      // 입력값과 체크는 그대로 두어 고친 뒤 다시 저장할 수 있게 한다.
+      const bad = !committed && e instanceof ApiError ? e.rowErrors[0] : undefined;
+      const nth = bad ? latest.current.findIndex((r) => r._key === bad.clientKey) + 1 : 0;
+      if (nth)
+        update(
+          latest.current.map((r) => ({
+            ...r,
+            _error: r._key === bad.clientKey ? bad.message : undefined,
+          })),
+        );
       notify(
         (committed
           ? '변경은 완료됐지만 재조회하지 못했습니다. 조회 버튼으로 확인해 주세요. '
-          : '') + (e as Error).message,
+          : '') +
+          (nth
+            ? `${nth}번째 행${bad.code ? `(${bad.code})` : ''}: ${bad.message} 전체 저장을 취소했습니다.`
+            : (e as Error).message),
         'error',
       );
       return committed;

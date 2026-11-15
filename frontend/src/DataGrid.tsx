@@ -101,6 +101,21 @@ export const DataGrid = forwardRef<
   const selectedKey = active === undefined ? localActive : active;
   const latest = useRef(rows);
   latest.current = rows;
+  // 화면 낭독기 안내: AG Grid는 불러오기 시작 때 '불러오는 중…'만 알리고 끝났다는 안내가 없어 그 문장이 계속 남는다(QA 4차).
+  // loading이 true→false로 바뀌면 같은 안내 칸(aria-live=polite, 화면에는 안 보임)에 완료와 건수를 넣어 읽어 주게 한다.
+  const wasLoading = useRef(false);
+  useEffect(() => {
+    if (loading) wasLoading.current = true;
+    else if (wasLoading.current) {
+      wasLoading.current = false;
+      // AG Grid는 안내 문장을 0.25초쯤 늦게 쓰므로(200ms 묶음 처리 + 50ms), 그 뒤에 덮어쓰도록 0.4초 기다린다.
+      const timer = setTimeout(() => {
+        const live = container.current?.querySelector('.ag-aria-description-container');
+        if (live) live.textContent = `불러오기 완료 · ${latest.current.length}건`;
+      }, 400);
+      return () => clearTimeout(timer);
+    }
+  }, [loading]);
   // 재조회·상위 코드 변경으로 원래 행이 교체되면 열린 팝업 결과를 적용하지 않는다.
   useEffect(() => {
     if (lookup && (busy || !rows.includes(lookup.source))) setLookup(null);
