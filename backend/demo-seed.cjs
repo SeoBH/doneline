@@ -23,6 +23,12 @@ process.env.PGDATABASE = DB;
 process.env.SLACK_WEBHOOK_URL = '';
 process.env.SMTP_HOST = '';
 process.env.DEMO_ACCOUNTS = '';
+// scripts/demo.ps1은 서버용 운영 설정(NODE_ENV=production·HTTPS 출처·중계 표식)을 먼저 넣고 이 스크립트를 부른다.
+// 이 스크립트는 같은 프로세스 안에서 http로 API를 부르므로 일반 개발 설정으로 되돌린다(보안 쿠키·중계 표식 검사 끔).
+process.env.NODE_ENV = 'development';
+process.env.APP_ORIGIN = 'http://127.0.0.1:3000';
+process.env.TRUST_PROXY = '0';
+process.env.PROXY_SECRET = '';
 
 // 다시 만들 때마다 새 비밀번호를 쓴다. 로그인 화면에 공개되는 값이라 외울 필요는 없고,
 // 지난 시연에서 본 사람이 다음 시연 때 미리 들어와 데이터를 바꾸지 못하게 한다.
@@ -553,7 +559,12 @@ const HOUR = 3600 * 1000;
   );
   const count = plans.reduce((m, p) => ((m[p.final] = (m[p.final] || 0) + 1), m), {});
   console.log('완료: 요청', plans.length, '건', JSON.stringify(count), '· 시연 계정은 .env.demo');
-})().catch((e) => {
-  console.error(e);
-  process.exitCode = 1;
-});
+})().then(
+  // 앱의 배경 작업(메일 발송·자동 완료 타이머)이 남아 있어도 끝나도록 명시적으로 종료한다.
+  // 실패 때 그대로 두면 창이 멈춘 것처럼 보이고 demo.ps1이 다음 단계로 넘어가지 못한다.
+  () => process.exit(0),
+  (e) => {
+    console.error(e);
+    process.exit(1);
+  },
+);

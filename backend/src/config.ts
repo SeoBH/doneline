@@ -58,6 +58,12 @@ function parseDemoAccounts(raw: string) {
 // 비밀번호를 공개하는 모드라 실제 업무 DB에서 켜지면 안 된다. 시연 전용 DB가 아니면 서버 시작을 막는다.
 if (settings.demoAccounts.length && process.env.PGDATABASE !== 'doneline_demo')
   throw new Error('DEMO_ACCOUNTS is allowed only with PGDATABASE=doneline_demo');
+// 시연 모드에서는 메일·슬랙을 항상 끈다. PowerShell은 환경변수에 빈 값을 넣으면 변수를 지워 버려
+// .env의 실제 값이 다시 읽히므로, 실행 스크립트가 아니라 여기서 확실히 끈다.
+if (settings.demoAccounts.length) {
+  settings.smtp.host = '';
+  settings.slackWebhookUrl = '';
+}
 if (settings.production && !settings.origin.startsWith('https://'))
   throw new Error('Production requires HTTPS origin');
 if (!Number.isInteger(settings.trustProxy) || settings.trustProxy < 0 || settings.trustProxy > 5)

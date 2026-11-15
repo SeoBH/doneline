@@ -29,11 +29,11 @@ $env:NODE_ENV = 'production'
 $env:APP_ORIGIN = $origin
 $env:TRUST_PROXY = '1'
 $env:NODE_USE_SYSTEM_CA = '1'
-# 시연 모드: 접속 DB를 시연 DB로 바꾸고(.env 값보다 이 창의 환경변수가 우선한다) 실제 메일·슬랙 알림을 끈다.
+# 시연 모드: 접속 DB를 시연 DB로 바꾼다(.env 값보다 이 창의 환경변수가 우선한다).
+# 메일·슬랙은 서버가 시연 계정이 설정된 것을 보고 스스로 끈다(config.ts). PowerShell에서 $env:X = ''는 변수를
+# 지워 .env 값이 다시 읽히므로 여기서 빈 값으로 끄지 않는다.
 if ($Sample) {
   $env:PGDATABASE = 'doneline_demo'
-  $env:SMTP_HOST = ''
-  $env:SLACK_WEBHOOK_URL = ''
   if (-not $NoReset -or -not (Test-Path '.env.demo')) {
     Write-Host '시연 데이터를 새로 만듭니다(1분 정도 걸립니다)...'
     node backend/demo-seed.cjs
