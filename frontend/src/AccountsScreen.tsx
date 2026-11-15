@@ -324,10 +324,16 @@ export const AccountsScreen = forwardRef<
     // 여러 명을 한꺼번에 승인할 때도 이메일 미인증 인원을 알린다(QA DL-030).
     const unverified =
       action === 'approve' ? selected.filter((r) => !r.email_verified_at).length : 0;
+    // 확인 창에 대상 계정을 '아이디(이름)'으로 보여 준다(QA 4차 DV4-002). 많으면 앞 5명만 적고 '외 n명'.
+    const names = selected.slice(0, 5).map((r) => `${r.login_id}(${r.display_name})`);
+    const who =
+      (selected.length > 1 ? `${selected.length}개 계정 ` : '') +
+      names.join(', ') +
+      (selected.length > 5 ? ` 외 ${selected.length - 5}명` : '');
     if (
       !(await confirmAction(
-        selected.length +
-          '개 계정을 ' +
+        who +
+          (selected.length > 1 ? '을 ' : ' 계정을 ') +
           label +
           '할까요?' +
           (reapprove ? ' 다시 사용 가능 상태로 변경합니다.' : '') +

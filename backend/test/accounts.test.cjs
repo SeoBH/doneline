@@ -287,6 +287,16 @@ test('manager approves same manager RESP; approval alone does not allow login; e
     },
     managerRoot,
   ).expect(201);
+  // 승인 감사 기록의 역할도 번호가 아니라 'CODE 이름'으로 남는다(QA 4차 DV4-001).
+  const approved = (
+    await db.query(
+      `SELECT c.after_values->>'respId' AS resp, (SELECT code||' '||name FROM app.responsibilities WHERE id=$2) AS label
+       FROM audit.audit_changes c JOIN audit.audit_events e ON e.event_id=c.event_id
+       WHERE e.action='USER_APPROVE' AND c.entity_key=$1 ORDER BY e.occurred_at DESC LIMIT 1`,
+      [String(u.id), managerResp],
+    )
+  ).rows[0];
+  assert.equal(approved.resp, approved.label);
   await login('applicant', 401);
   assert.equal(
     (await map('applicant', [corp.id, corp2.id], [dept.id], manager, managerRoot)).status,

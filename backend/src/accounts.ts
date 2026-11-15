@@ -904,8 +904,13 @@ export class Accounts {
             'users',
             u.id,
             'UPDATE',
-            { status: u.account_status, respId: u.resp_id },
-            { status, note, respId: action === 'approve' ? respId : undefined },
+            // 역할 번호를 'CODE 이름'으로 바꿔 남긴다(QA 4차 DV4-001: 이 경로만 번호 2가 그대로 보였다).
+            await readableAudit(c, { status: u.account_status, respId: u.resp_id }),
+            await readableAudit(c, {
+              status,
+              note,
+              respId: action === 'approve' ? respId : undefined,
+            }),
           ],
         );
       }

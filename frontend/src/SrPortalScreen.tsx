@@ -9,7 +9,7 @@ import { api } from './api';
 import { Screen, ScreenHandle, ViewState } from './types';
 import { Notify } from './Toasts';
 import { categoryLabel, dateTime, eventText, priorityLabel, statusLabel } from './srLabels';
-import { Attachments, sizeText } from './Attachments';
+import { Attachments, fileProblem, sizeText } from './Attachments';
 import { ImageText, PastePreview, usePastedImages } from './PastedImages';
 import { upload } from './api';
 import { askText, confirmAction } from './ConfirmDialog';
@@ -410,7 +410,11 @@ export const SrPortalScreen = forwardRef<
                     className="visually-hidden"
                     onChange={(e) => {
                       // 여러 번 골라도 앞서 고른 파일에 덧붙인다. 같은 파일을 다시 고를 수 있게 칸은 비운다.
-                      setNewFiles([...newFiles, ...Array.from(e.target.files || [])]);
+                      // 크기·실행 파일 검사는 고르는 즉시 한다(등록 버튼을 누른 뒤 거절되지 않게).
+                      const picked = Array.from(e.target.files || []);
+                      const problem = fileProblem(picked);
+                      if (problem) notify(problem, 'error');
+                      else setNewFiles([...newFiles, ...picked]);
                       e.target.value = '';
                     }}
                   />
