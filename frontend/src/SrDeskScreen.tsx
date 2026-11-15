@@ -35,7 +35,9 @@ export const SrDeskScreen = forwardRef<
     [selected, setSelected] = useState<string | null>(null),
     [detail, setDetail] = useState<any>(null),
     [form, setForm] = useState(emptyForm),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    // 첫 목록을 받았는지. 받기 전에는 '요청이 없습니다' 대신 '불러오는 중…'을 보인다(QA R1·DLV3-004).
+    [loaded, setLoaded] = useState(false);
   // 답변/메모 칸의 캡처 붙여넣기(PastedImages.tsx).
   const memoImgs = usePastedImages(form.comment, (v) => setForm((f) => ({ ...f, comment: v })));
   const call = (path: string, body?: unknown) =>
@@ -69,6 +71,7 @@ export const SrDeskScreen = forwardRef<
     setItems(r.items);
     setAssignees(r.assignees);
     setMe(r.me);
+    setLoaded(true);
     if (listOnly) return;
     if (keep) fill(await call('/' + keep));
     else {
@@ -340,6 +343,7 @@ export const SrDeskScreen = forwardRef<
           rows={rows}
           checks={false}
           busy={busy}
+          loading={!loaded}
           active={selected || undefined}
           onPick={(r) => pick(r._key)}
           columns={[
@@ -589,9 +593,11 @@ export const SrDeskScreen = forwardRef<
         ) : (
           // 목록이 비었을 때는 같은 '없음' 문구를 두 번 보여 주지 않고, 끝난 요청을 찾는 방법을 알려 준다(QA DL-022).
           <div className="empty">
-            {items.length
-              ? '목록에서 요청을 선택하세요.'
-              : '지금 조건에 맞는 요청이 없습니다. 처리가 끝난 요청은 위의 상태에서 [완료]나 [확인 대기]를 고르면 볼 수 있습니다.'}
+            {!loaded
+              ? '요청 목록을 불러오는 중…'
+              : items.length
+                ? '목록에서 요청을 선택하세요.'
+                : '지금 조건에 맞는 요청이 없습니다. 처리가 끝난 요청은 위의 상태에서 [완료]나 [확인 대기]를 고르면 볼 수 있습니다.'}
           </div>
         )}
       </section>

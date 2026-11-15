@@ -10,7 +10,7 @@ import { Screen, ScreenHandle, ViewState } from './types';
 import { Notify } from './Toasts';
 import { confirmAction } from './ConfirmDialog';
 import { checkForm, clearInvalid } from './formCheck';
-import { CATALOG_CHANGED } from './CustomersScreen';
+import { CATALOG_CHANGED } from './events';
 export const AccountsScreen = forwardRef<
   ScreenHandle,
   { screen: Screen; notify: Notify; onState: (s: ViewState) => void }
@@ -321,13 +321,17 @@ export const AccountsScreen = forwardRef<
       return;
     }
     const label = { approve: '승인', reject: '반려', suspend: '정지' }[action];
+    // 여러 명을 한꺼번에 승인할 때도 이메일 미인증 인원을 알린다(QA DL-030).
+    const unverified =
+      action === 'approve' ? selected.filter((r) => !r.email_verified_at).length : 0;
     if (
       !(await confirmAction(
         selected.length +
           '개 계정을 ' +
           label +
           '할까요?' +
-          (reapprove ? ' 다시 사용 가능 상태로 변경합니다.' : ''),
+          (reapprove ? ' 다시 사용 가능 상태로 변경합니다.' : '') +
+          (unverified ? ` 이 중 ${unverified}명은 이메일 미인증입니다.` : ''),
       ))
     )
       return;
@@ -564,6 +568,14 @@ export const AccountsScreen = forwardRef<
           >
             <h2>{quick.display_name}님 가입 승인</h2>
             <p className="hint">역할과 소속 부서를 고르고 승인하면 바로 로그인할 수 있습니다.</p>
+            {/* 이메일을 인증하지 않은 신청은 본인 확인이 덜 된 상태라 승인 전에 알린다(QA DL-030).
+                승인을 막지는 않는다: 메일 발송이 아직 꺼져 있으면 인증 메일을 받을 방법이 없기 때문이다. */}
+            {!quick.email_verified_at && (
+              <p className="hint approve-warn" role="note">
+                ⚠ 이메일 미인증 신청입니다. 신청자가 실제 고객사 담당자인지 전화 등으로 확인한 뒤
+                승인하세요.
+              </p>
+            )}
             <label>
               역할
               <select value={quickResp} onChange={(e) => setQuickResp(e.target.value)}>
@@ -679,16 +691,17 @@ export const AccountsScreen = forwardRef<
                 width: 90,
                 format: (v) => (v ? '완료' : '매핑 필요'),
               },
-              { field: 'resp_name', header: '역할', width: 130 },
-              { field: 'email', header: '이메일', width: 170 },
-              { field: 'mobile', header: '휴대전화', width: 120 },
-              { field: 'scopes', header: '법인/부서 범위', width: 200, format: scopeName },
+              { field: 'resp_name', header: '역할', width: 120 },
+              { field: 'email', header: '이메일', width: 160 },
+              // 휴대전화는 오른쪽 사용자정보에서 본다. 1920px 화면에서도 옆으로 넘치던 목록을 줄인다(QA 3차 DLV2-013).
+              { field: 'scopes', header: '법인/부서 범위', width: 170, format: scopeName },
               {
                 field: 'registration_source',
                 header: '등록 경로',
+                width: 90,
                 format: (v) => (v === 'ADMIN' ? '관리자' : '회원가입'),
               },
-              { field: 'review_note', header: '처리 사유', width: 200 },
+              { field: 'review_note', header: '처리 사유', width: 140 },
             ]}
             onChange={(next) =>
               setRows((old) => old.map((r) => next.find((n) => n._key === r._key) || r))

@@ -61,9 +61,11 @@ export const DataGrid = forwardRef<
     checks?: boolean;
     label: string;
     busy?: boolean;
+    // 첫 조회가 끝나기 전이면 true. '조회된 데이터가 없습니다' 대신 '불러오는 중…'을 보인다(QA R1·DLV3-004).
+    loading?: boolean;
   }
 >(function DataGrid(
-  { rows, columns, onChange, onPick, onDoublePick, active, checks = true, label, busy },
+  { rows, columns, onChange, onPick, onDoublePick, active, checks = true, label, busy, loading },
   ref,
 ) {
   // forwardRef는 부모가 전달한 ref를 받는다. useRef는 렌더 사이에 값을 보관하며,
@@ -320,6 +322,8 @@ export const DataGrid = forwardRef<
             'grid-row-current': (p) => p.data?._key === selectedKey,
           }}
           overlayNoRowsTemplate="<span>조회된 데이터가 없습니다.</span>"
+          // loading: AG Grid가 표 위에 '불러오는 중…'(GRID_TEXT.loadingOoo) 안내를 덮어 보여 준다.
+          loading={loading}
         />
       </div>
       {lookup && (

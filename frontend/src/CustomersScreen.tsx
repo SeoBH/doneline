@@ -5,13 +5,11 @@ import { DataGrid, GridHandle, GridRow } from './DataGrid';
 import { Screen, ScreenHandle, ViewState } from './types';
 import { Notify } from './Toasts';
 import { confirmAction } from './ConfirmDialog';
+// 고객사·법인·부서를 저장·삭제했음을 같은 브라우저 창의 다른 화면(탭)에 알리는 이벤트(events.ts).
+// 화면들은 처음 열 때만 목록을 읽으므로, 이 신호를 받으면 편집 중이 아닐 때 목록을 다시 읽는다(QA DLV2-002).
+// CustomEvent: 브라우저가 제공하는 '내가 이름 붙인 이벤트'. detail에 바뀐 종류(customers 등)를 담는다.
+import { CATALOG_CHANGED } from './events';
 const wrap = (r: any): GridRow => ({ ...r, _key: r.id, _checked: false });
-/**
- * 고객사·법인·부서를 저장·삭제했음을 같은 브라우저 창의 다른 화면(탭)에 알리는 이벤트 이름.
- * 화면들은 처음 열 때만 목록을 읽으므로, 이 신호를 받으면 편집 중이 아닐 때 목록을 다시 읽는다(QA DLV2-002).
- * CustomEvent: 브라우저가 제공하는 '내가 이름 붙인 이벤트'. detail에 바뀐 종류(customers 등)를 담는다.
- */
-export const CATALOG_CHANGED = 'doneline:catalog-changed';
 export const CustomersScreen = forwardRef<
   ScreenHandle,
   { screen: Screen; notify: Notify; onState: (s: ViewState) => void }
@@ -30,12 +28,18 @@ export const CustomersScreen = forwardRef<
     latest = useRef<GridRow[]>([]),
     grid = useRef<GridHandle>(null);
   const [busy, setBusy] = useState(false),
+    // 첫 목록을 받았는지. 받기 전에는 표에 '없음' 대신 '불러오는 중…'을 보인다(QA R1).
+    [loaded, setLoaded] = useState(false),
     [active, setActive] = useState(''),
     [code, setCode] = useState(''),
     [name, setName] = useState('');
   const epoch = useRef(0),
     headers = { 'X-Menu-ID': screen.menu_id };
-  const dirty = rows.some((r) => r._checked);
+  // 미저장 표시(*): 새 행이 있거나 코드·이름이 DB 값과 다를 때만. 체크만 한 행은 바뀐 게 없으므로 세지 않는다(QA R3).
+  const dirty = rows.some((r) => {
+    const db = r.id && data[kind].find((x: any) => x.id === r.id);
+    return !db || db.code !== r.code || db.name !== r.name;
+  });
   useEffect(() => onState({ busy, dirty }), [busy, dirty, onState]);
   function update(r: GridRow[]) {
     latest.current = r;
@@ -60,6 +64,7 @@ export const CustomersScreen = forwardRef<
       const d = await api('catalogs/' + kind, { headers });
       if (ticket !== epoch.current) return;
       setData(d);
+      setLoaded(true);
       // 상위 고객사는 사용자가 직접 고른 것만 유지한다. 예전에는 첫 고객사를 자동으로 골라
       // 고객사를 누르지 않고 저장한 법인이 첫 고객사에 들어갔다(QA DLV2-003). 고객사가 1곳뿐이면 그곳을 고른다.
       const customer = d.customers.some((r: any) => r.id === customerId)
@@ -167,7 +172,8 @@ export const CustomersScreen = forwardRef<
       notify('처리할 행을 체크해 주세요.');
       return false;
     }
-    // 확인 창에 어느 고객사(·법인)에 저장하는지 함께 보여 준다(QA DLV2-003).
+    // 어느 고객사(·법인)에 저장·삭제하는지 함께 알려 준다(QA DLV2-003).
+    // 저장은 되돌릴 수 있는 동작이라 확인 없이 바로 하고 결과 알림에 대상을 보여 준다(QA DLV2-009). 삭제만 묻는다.
     const parentName = [
       kind !== 'customers' && data.customers.find((r: any) => r.id === customerId)?.name,
       kind === 'departments' && data.corporations.find((r: any) => r.id === corporationId)?.name,
@@ -175,9 +181,7 @@ export const CustomersScreen = forwardRef<
       .filter(Boolean)
       .join(' · ');
     const target = parentName ? `${parentName}에 ${title} ` : `${title} `;
-    if (
-      !(await confirmAction(`${target}${selected.length}개를 ${remove ? '삭제' : '저장'}할까요?`))
-    )
+    if (remove && !(await confirmAction(`${target}${selected.length}개를 삭제할까요?`)))
       return false;
     let committed = false;
     setBusy(true);
@@ -212,7 +216,7 @@ export const CustomersScreen = forwardRef<
       if (again) setActive(again._key);
       // 다른 탭에 열려 있는 고객사·법인·부서·사용자 화면도 새 목록을 읽게 알린다(QA DLV2-002).
       window.dispatchEvent(new CustomEvent(CATALOG_CHANGED, { detail: kind }));
-      notify((remove ? '삭제' : '저장') + '했습니다.', 'success');
+      notify(`${target}${selected.length}개를 ${remove ? '삭제' : '저장'}했습니다.`, 'success');
       return true;
     } catch (e) {
       notify(
@@ -315,6 +319,7 @@ export const CustomersScreen = forwardRef<
           <section>
             <h2>고객사</h2>
             <DataGrid
+              loading={!loaded}
               label="고객사 목록"
               columns={columns}
               rows={data.customers.map(wrap)}
@@ -329,6 +334,7 @@ export const CustomersScreen = forwardRef<
           <section>
             <h2>법인</h2>
             <DataGrid
+              loading={!loaded}
               label="법인 목록"
               columns={columns}
               rows={data.corporations.filter((r: any) => r.customer_id === customerId).map(wrap)}
@@ -354,10 +360,11 @@ export const CustomersScreen = forwardRef<
             <p className="hint parent-hint">
               {kind === 'departments' && customerId
                 ? '가운데 법인 목록에서 법인을 먼저 눌러 선택하세요. 그다음 [행추가]로 부서를 추가합니다.'
-                : `왼쪽 고객사 목록에서 고객사를 먼저 눌러 선택하세요. 그다음 ${kind === 'departments' ? '법인을 고르고 ' : ''}[행추가]로 ${title}을(를) 추가합니다.`}
+                : `왼쪽 고객사 목록에서 고객사를 먼저 눌러 선택하세요. 그다음 ${kind === 'departments' ? '법인을 고르고 ' : ''}[행추가]로 ${title}${kind === 'corporations' ? '을' : '를'} 추가합니다.`}
             </p>
           )}
           <DataGrid
+            loading={!loaded}
             ref={grid}
             label={title + ' 편집'}
             rows={rows}

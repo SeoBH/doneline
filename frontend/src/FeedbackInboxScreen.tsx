@@ -8,7 +8,6 @@ import { api } from './api';
 import { Screen, ScreenHandle, ViewState } from './types';
 import { Notify } from './Toasts';
 import { dateTime } from './srLabels';
-import { confirmAction } from './ConfirmDialog';
 
 const KIND: Record<string, string> = {
   IMPROVEMENT: '개선 제안',
@@ -56,7 +55,7 @@ export const FeedbackInboxScreen = forwardRef<
       notify('변경된 내용이 없습니다.');
       return false;
     }
-    if (!(await confirmAction(changed.length + '건의 상태를 저장할까요?'))) return false;
+    // 상태는 언제든 다시 바꿀 수 있어 확인 없이 저장한다(QA DLV2-009).
     for (const r of changed)
       await api('feedback/' + r.id + '/status', {
         method: 'POST',

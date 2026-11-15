@@ -15,6 +15,23 @@ type TextAsk = Ask & {
 type Pending = Ask & { input?: TextAsk['input']; resolve: (ok: boolean, text?: string) => void };
 // 화면에 떠 있는 ConfirmHost에 질문을 넘기는 통로. Host가 없으면(드문 경우) 브라우저 기본 창으로 대신한다.
 let show: ((p: Pending) => void) | null = null;
+// 확인 창이 열려 있는지 알고 싶은 곳(main.tsx의 '처리 중…' 표시)에 알려 주는 구독 목록.
+const openListeners = new Set<(open: boolean) => void>();
+
+/**
+ * 확인 창이 지금 열려 있는지(true/false). 툴바 버튼을 누르면 처리가 시작된 것으로 보지만,
+ * 확인 창에서 답을 기다리는 동안은 '처리 중…'을 보이지 않게 하는 데 쓴다(QA DLV3-002).
+ */
+export function useConfirmOpen() {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    openListeners.add(setOpen);
+    return () => {
+      openListeners.delete(setOpen);
+    };
+  }, []);
+  return open;
+}
 
 /** 확인을 묻고 답을 기다린다. 문자열만 주면 제목 없이 내용만 보여 준다. */
 export function confirmAction(ask: Ask | string): Promise<boolean> {
@@ -56,6 +73,7 @@ export function ConfirmHost() {
   // 창이 열리면 확인 버튼에 초점을 둔다(Enter로 바로 확인, Tab으로 취소 이동).
   // 글 입력 창이면 입력 칸에 초점을 둔다(바로 사유를 적을 수 있게).
   useEffect(() => {
+    openListeners.forEach((f) => f(Boolean(pending)));
     if (!pending) return;
     setText(pending.input?.initial || '');
     if (pending.input) textBox.current?.focus();

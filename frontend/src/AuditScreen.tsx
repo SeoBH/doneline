@@ -22,7 +22,6 @@ const ACTION: Record<string, string> = {
   SIGNUP_REQUEST: '고객 회원가입 신청',
   USER_CREATE: '사용자 등록',
   USER_UPDATE: '사용자 정보 변경',
-  USER_DELETE: '사용자 삭제',
   USER_APPROVE: '가입 승인',
   USER_REJECT: '가입 반려',
   USER_SUSPEND: '사용자 정지',
@@ -56,13 +55,24 @@ const ACTION: Record<string, string> = {
   AUDIT_DETAIL: '감사 상세 조회',
   MENU_LAYOUT_QUERY: '화면 구성 조회',
   REGISTER_QUERY: '등록 목록 조회',
-  RESP_LINK_QUERY: 'RESP 연결 조회',
+  RESP_LINK_QUERY: '역할 연결 조회',
   SCREEN_REGISTER: '화면 등록',
   MENU_REGISTER: '메뉴 등록',
   MENU_APPLY: '메뉴 구성 적용',
-  RESP_REGISTER: 'RESP 등록',
-  RESP_APPLY: 'RESP 시작 메뉴 적용',
+  RESP_REGISTER: '역할 등록',
+  RESP_APPLY: '역할 시작 메뉴 적용',
 };
+// 업체가 처음 한 번 맞춰 두는 화면·메뉴·역할 구성 기능. 평소에는 쓰지 않아 기능 목록 아래 '시스템 구성'으로 묶는다(QA DLV3-006).
+const SYSTEM_ACTIONS = new Set([
+  'MENU_LAYOUT_QUERY',
+  'REGISTER_QUERY',
+  'RESP_LINK_QUERY',
+  'SCREEN_REGISTER',
+  'MENU_REGISTER',
+  'MENU_APPLY',
+  'RESP_REGISTER',
+  'RESP_APPLY',
+]);
 const OUTCOME: Record<string, string> = {
   SUCCESS: '성공',
   FAILURE: '실패',
@@ -126,7 +136,7 @@ const ENTITY: Record<string, string> = {
   user_scopes: '법인·부서 지정',
   menus: '메뉴',
   screens: '화면',
-  responsibilities: 'RESP',
+  responsibilities: '역할',
   menu_edges: '메뉴 연결',
   menu_screens: '메뉴 화면 연결',
 };
@@ -138,8 +148,9 @@ const FIELD: Record<string, string> = {
   customerId: '고객사',
   customer_id: '고객사',
   corporation_id: '법인',
-  respId: 'RESP',
-  resp_id: 'RESP',
+  respId: '역할',
+  resp_id: '역할',
+  department_id: '부서',
   email: '이메일',
   status: '상태',
   note: '사유',
@@ -157,12 +168,23 @@ const FIELD: Record<string, string> = {
 };
 // 사람이 볼 필요가 없는 내부 번호·버전·시각 칸은 변경 내용 표에서 뺀다.
 const HIDDEN_FIELDS = new Set(['id', 'workspace_id', 'version', 'created_at', 'updated_at']);
-function show(v: unknown) {
+// 칸 값으로 저장된 영문 코드 → 한국어(QA DL-014). 상태·접근 구분·작업 종류처럼 정해진 값만 바꾼다.
+const VALUE: Record<string, Record<string, string>> = {
+  status: { PENDING: '승인 대기', ACTIVE: '사용 중', REJECTED: '반려', SUSPENDED: '정지' },
+  account_status: { PENDING: '승인 대기', ACTIVE: '사용 중', REJECTED: '반려', SUSPENDED: '정지' },
+  authority_type: { SYSTEM: '우리 업체', CUSTOMER: '고객사' },
+  action: { PASSWORD_LINK_PREPARED: '비밀번호 설정 링크 준비' },
+};
+function show(v: unknown, key = ''): string {
   if (v === undefined || v === null || v === '') return '—';
   if (typeof v === 'boolean') return v ? '예' : '아니요';
-  if (Array.isArray(v)) return v.length ? v.join(', ') : '없음';
-  if (typeof v === 'object') return JSON.stringify(v);
-  return String(v);
+  if (Array.isArray(v)) return v.length ? v.map((x) => show(x)).join(', ') : '없음';
+  // 예전 법인·부서 지정 기록은 [{corporation_id: 3}]처럼 객체 묶음이라 안의 값만 꺼내 보인다.
+  if (typeof v === 'object')
+    return Object.values(v as object)
+      .map((x) => show(x))
+      .join(' ');
+  return VALUE[key]?.[String(v)] || String(v);
 }
 /** 변경 전·후 값을 '항목 | 변경 전 | 변경 후' 줄로 펼친다. 바뀐 줄을 위로, 같은 값은 아래로 보낸다. */
 function changeRows(before: any, after: any) {
@@ -172,8 +194,8 @@ function changeRows(before: any, after: any) {
   return keys
     .map((k) => ({
       label: FIELD[k] || k,
-      before: show(before?.[k]),
-      after: show(after?.[k]),
+      before: show(before?.[k], k),
+      after: show(after?.[k], k),
     }))
     .map((r) => ({ ...r, changed: r.before !== r.after }))
     .sort((a, b) => Number(b.changed) - Number(a.changed));
@@ -258,11 +280,23 @@ export const AuditScreen = forwardRef<
           기능
           <select value={filter.action} onChange={(e) => set('action', e.target.value)}>
             <option value="">전체</option>
-            {Object.entries(ACTION).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v}
-              </option>
-            ))}
+            {/* optgroup: 선택 목록 안의 묶음 제목. 자주 쓰는 기능을 위에, 시스템 구성 기능을 아래 묶음에 둔다. */}
+            {Object.entries(ACTION)
+              .filter(([k]) => !SYSTEM_ACTIONS.has(k))
+              .map(([k, v]) => (
+                <option key={k} value={k}>
+                  {v}
+                </option>
+              ))}
+            <optgroup label="시스템 구성(화면·메뉴·역할)">
+              {Object.entries(ACTION)
+                .filter(([k]) => SYSTEM_ACTIONS.has(k))
+                .map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {v}
+                  </option>
+                ))}
+            </optgroup>
           </select>
         </label>
         <label>

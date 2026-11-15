@@ -191,8 +191,8 @@ export const RegistrationScreen = forwardRef<ScreenHandle, Props>(function Regis
       notify('첫 열에서 처리할 행을 체크해 주세요.');
       return false;
     }
-    if (!(await confirmAction(chosen.length + '개 행을 ' + (remove ? '삭제' : '저장') + '할까요?')))
-      return false;
+    // 저장은 다시 고칠 수 있어 바로 실행하고, 삭제만 확인을 받는다(QA DLV2-009).
+    if (remove && !(await confirmAction(chosen.length + '개 행을 삭제할까요?'))) return false;
     setBusy(true);
     const payload = chosen.map((r) => ({
       clientKey: r._key,

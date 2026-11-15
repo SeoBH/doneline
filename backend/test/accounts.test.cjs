@@ -217,6 +217,22 @@ test('selected catalog rows commit together, stale versions and immutable codes 
     customerId: customer.id,
     rows: [{ id: v.id, version: saved.version }],
   }).expect(201);
+  // 감사 기록: 고객사는 번호 대신 'CODE 이름'으로, 삭제는 _DELETE 기능 코드로 남는다(QA 3차 DLV3-001·DL-014).
+  const label = (
+    await db.query("SELECT code||' '||name AS l FROM app.customers WHERE id=$1", [customer.id])
+  ).rows[0].l;
+  const logged = (
+    await db.query(
+      `SELECT e.action,c.change_type,c.before_values,c.after_values FROM audit.audit_changes c
+       JOIN audit.audit_events e ON e.event_id=c.event_id
+       WHERE c.entity_type='corporations' AND c.entity_key=$1 ORDER BY e.occurred_at`,
+      [String(v.id)],
+    )
+  ).rows;
+  assert.equal(logged[0].after_values.customer_id, label);
+  const removed = logged.find((r) => r.change_type === 'DELETE');
+  assert.equal(removed.action, 'CORPORATIONS_DELETE');
+  assert.equal(removed.before_values.customer_id, label);
 });
 test('signup stores no RESP and rejects injected customer, scopes and RESP', async () => {
   const data = (await get(system, signupPath).expect(200)).body;

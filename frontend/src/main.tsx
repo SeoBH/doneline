@@ -19,34 +19,46 @@ import './style.css';
 import { useToasts } from './Toasts';
 import { useSidebar } from './useSidebar';
 import { checkForm, clearInvalid } from './formCheck';
-import { ConfirmHost } from './ConfirmDialog';
+import { ConfirmHost, useConfirmOpen } from './ConfirmDialog';
 /*
  * 업무 화면 나눠 받기(QA DL-029: 화면 파일 하나가 1.4MB). lazy: 그 화면을 처음 열 때 해당 파일만 내려받는다.
  * 표 편집기(AG Grid)를 쓰는 등록·관리 화면이 크므로 나누고, 로그인·고객 요청 화면은 첫 파일에 남겨 바로 뜨게 한다.
  * import(...).then(m => ({ default: m.이름 })): lazy는 기본 내보내기(default)를 기대하므로 이름 있는 내보내기를 감싼다.
  */
-const AuditScreen = lazy(() => import('./AuditScreen').then((m) => ({ default: m.AuditScreen })));
+// 화면 파일 내려받기 함수 모음. 같은 함수를 lazy와 '미리 받기'(아래 prefetchScreens)가 함께 쓴다.
+// 브라우저는 한 번 받은 파일을 기억하므로, 미리 받아 두면 화면을 열 때 기다림 없이 뜬다.
+const loaders = {
+  audit: () => import('./AuditScreen'),
+  registration: () => import('./RegistrationScreen'),
+  accounts: () => import('./AccountsScreen'),
+  customers: () => import('./CustomersScreen'),
+  desk: () => import('./SrDeskScreen'),
+  sla: () => import('./SlaSettingsScreen'),
+  report: () => import('./SrReportScreen'),
+  feedback: () => import('./FeedbackInboxScreen'),
+};
+const AuditScreen = lazy(() => loaders.audit().then((m) => ({ default: m.AuditScreen })));
 const RegistrationScreen = lazy(() =>
-  import('./RegistrationScreen').then((m) => ({ default: m.RegistrationScreen })),
+  loaders.registration().then((m) => ({ default: m.RegistrationScreen })),
 );
-const AccountsScreen = lazy(() =>
-  import('./AccountsScreen').then((m) => ({ default: m.AccountsScreen })),
-);
+const AccountsScreen = lazy(() => loaders.accounts().then((m) => ({ default: m.AccountsScreen })));
 const CustomersScreen = lazy(() =>
-  import('./CustomersScreen').then((m) => ({ default: m.CustomersScreen })),
+  loaders.customers().then((m) => ({ default: m.CustomersScreen })),
 );
-const SrDeskScreen = lazy(() =>
-  import('./SrDeskScreen').then((m) => ({ default: m.SrDeskScreen })),
-);
-const SlaSettingsScreen = lazy(() =>
-  import('./SlaSettingsScreen').then((m) => ({ default: m.SlaSettingsScreen })),
-);
-const SrReportScreen = lazy(() =>
-  import('./SrReportScreen').then((m) => ({ default: m.SrReportScreen })),
-);
+const SrDeskScreen = lazy(() => loaders.desk().then((m) => ({ default: m.SrDeskScreen })));
+const SlaSettingsScreen = lazy(() => loaders.sla().then((m) => ({ default: m.SlaSettingsScreen })));
+const SrReportScreen = lazy(() => loaders.report().then((m) => ({ default: m.SrReportScreen })));
 const FeedbackInboxScreen = lazy(() =>
-  import('./FeedbackInboxScreen').then((m) => ({ default: m.FeedbackInboxScreen })),
+  loaders.feedback().then((m) => ({ default: m.FeedbackInboxScreen })),
 );
+/**
+ * 로그인 뒤 잠시 쉬었다가 업무 화면 파일을 미리 받는다(QA 3차 DL-029: 고객사등록 첫 진입에 '화면을 불러오는 중…' 약 15초).
+ * 고객 요청 화면만 쓰는 고객 사용자는 큰 표 부품(약 1MB)을 받을 필요가 없어 건너뛴다.
+ * 실패해도(네트워크 끊김 등) 화면을 열 때 다시 받으므로 오류를 무시한다.
+ */
+function prefetchScreens() {
+  for (const load of Object.values(loaders)) void load().catch(() => undefined);
+}
 const emptyNav: Nav = { rootMenuId: '', menus: [], edges: [], screens: [] };
 // 너비 우선 탐색으로 시작 메뉴부터 대상까지 첫 경로를 찾고 방문 집합으로 중복 탐색을 막는다.
 function pathFor(n: Nav, id: string) {
@@ -145,7 +157,11 @@ function onAuthChange(handler: (userId: string) => void) {
 }
 function App() {
   // 고객사 회원가입 링크의 가입 토큰. 고객사등록 화면이 만든 /?signup=<토큰> 주소에서 읽는다.
-  const signupToken = new URLSearchParams(window.location.search).get('signup') || '';
+  // useState(() => ...): 처음 한 번만 읽어 기억한다. 로그인하면 주소창의 토큰을 지우는데(DLV2-021),
+  // 매번 주소창에서 다시 읽으면 로그아웃 뒤 초대 화면에서 [회원가입] 버튼이 사라졌다(QA DLV3-003).
+  const [signupToken] = useState(
+    () => new URLSearchParams(window.location.search).get('signup') || '',
+  );
   const [signup, setSignup] = useState(false);
   // 업체(워크스페이스) 무료 가입 화면 표시 여부. 링크 없이 로그인 화면에서 바로 연다.
   // 소개 페이지(landing)의 [무료로 시작하기]는 /?start=1로 들어와 이 화면을 바로 연다(로그인 화면을 한 번 더 거치지 않게).
@@ -190,6 +206,9 @@ function App() {
   const [states, setStates] = useState<Record<string, ViewState>>({}),
     [context, setContext] = useState<{ x: number; y: number; key: string } | null>(null);
   const [running, setRunning] = useState(false);
+  // 확인 창에서 답을 기다리는 중이면 아직 처리가 시작된 것이 아니므로 '처리 중' 표시를 숨긴다(QA DLV3-002).
+  // 버튼은 그동안에도 막아 둔다(같은 동작이 두 번 시작되지 않게).
+  const asking = useConfirmOpen();
   const handles = useRef(new Map<string, ScreenHandle>());
   /*
    * 탭 화면의 툴바 동작(handle)을 등록하는 ref 함수. 탭마다 같은 함수를 재사용한다.
@@ -332,6 +351,13 @@ function App() {
       window.removeEventListener('pointerdown', activity);
     };
   }, [user]);
+  // 업무 화면이 하나라도 메뉴에 있으면 2초 뒤 화면 파일을 미리 받는다(첫 화면 표시를 방해하지 않게 조금 늦춘다).
+  useEffect(() => {
+    if (!user || !nav.screens.some((x) => x.component_key && x.component_key !== 'sr-portal'))
+      return;
+    const timer = setTimeout(prefetchScreens, 2000);
+    return () => clearTimeout(timer);
+  }, [user, nav]);
   // 로그인 폼의 오류 문장. 우하단 알림은 금방 사라지고 폼과 멀어 놓치기 쉬워 폼 안에 남긴다(QA DL-024).
   const [loginError, setLoginError] = useState('');
   async function submit(e: React.FormEvent<HTMLFormElement>) {
@@ -606,7 +632,7 @@ function App() {
                 ? '처음 로그인했습니다. 사용할 비밀번호를 설정해 주세요.'
                 : signupInfo
                   ? '처음이면 아래 [회원가입]으로 신청하세요. 승인 후 로그인할 수 있습니다.'
-                  : '고객 요청 접수부터 처리·월간 리포트까지 한곳에서 관리합니다.'}
+                  : '고객 요청 접수부터 처리·월간 리포트까지 한 화면에서 관리합니다.'}
             </p>
             {/* key: 변경 화면과 로그인 화면의 입력칸을 서로 다른 요소로 만든다. key가 없으면 React가 같은 자리의
                 입력칸을 재사용해, 변경 후 로그인 화면의 '아이디' 칸(글자가 보이는 칸)에 방금 입력한 비밀번호가 남는다. */}
@@ -715,7 +741,7 @@ function App() {
       {toasts}
       <header>
         {/* 저장·조회 등 처리 중에는 화면 맨 위에 움직이는 줄을 보여 '멈춘 것'으로 오해하지 않게 한다(QA DL-006). */}
-        {(running || states[active]?.busy) && (
+        {(running || states[active]?.busy) && !asking && (
           <div className="progress-line" role="progressbar" aria-label="처리 중" />
         )}
         {/* 휴대폰에서는 사이드 메뉴를 숨기고 이 버튼으로 연다(style.css의 좁은 화면 규칙). */}
@@ -795,7 +821,7 @@ function App() {
           <div className="toolbar-actions">
             {/* 처리 중에는 버튼 옆에 글자로도 알린다. 맨 위 줄만으로는 눈에 잘 띄지 않았다(QA DL-006).
                 role="status": 화면 낭독기가 '처리 중'을 읽어 준다. */}
-            {(running || states[active]?.busy) && (
+            {(running || states[active]?.busy) && !asking && (
               <span className="busy-note" role="status">
                 처리 중…
               </span>

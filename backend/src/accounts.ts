@@ -63,6 +63,47 @@ function auditValues(row: any) {
   const { signup_token: _token, ...rest } = row;
   return rest;
 }
+// 감사 기록에서 사람이 알아볼 수 없는 참조 번호 칸 → 이름을 찾을 표(QA DLV3-001).
+// 예: 법인 행의 customer_id=5는 '고객사 5번'일 뿐이라, 기록 시점의 'CODE 이름'으로 바꿔 남긴다.
+const AUDIT_REFS: Record<string, string> = {
+  customer_id: 'app.customers',
+  customerId: 'app.customers',
+  corporation_id: 'app.corporations',
+  department_id: 'app.departments',
+  resp_id: 'app.responsibilities',
+  respId: 'app.responsibilities',
+};
+/**
+ * 감사 기록 값의 참조 번호를 'CODE 이름' 글자로 바꾼다. 비밀값 제거(auditValues)도 함께 한다.
+ * 입력: DB 행 또는 { corporations: [{corporation_id}], ... } 같은 요약 객체. 출력: 화면에 그대로 보여 줄 수 있는 객체.
+ * 이름을 찾지 못하면(이미 삭제됨 등) 번호를 그대로 둔다. 같은 트랜잭션(c)에서 읽어 저장 직후의 이름이 남는다.
+ */
+async function readableAudit(c: PoolClient, row: any) {
+  const v = auditValues(row);
+  if (!v || typeof v !== 'object') return v;
+  const label = async (table: string, key: unknown) => {
+    if (key === null || key === undefined || key === '') return key;
+    const r = (
+      await c.query(`SELECT code||' '||name AS label FROM ${table} WHERE id=$1::bigint`, [key])
+    ).rows[0];
+    return r?.label ?? key;
+  };
+  const out: any = { ...v };
+  for (const [k, table] of Object.entries(AUDIT_REFS))
+    if (k in out) out[k] = await label(table, out[k]);
+  // 법인·부서 지정 기록은 [{corporation_id: 3}, ...] 또는 [3, 4] 모양이라 하나씩 이름으로 바꾼다.
+  for (const [k, table] of [
+    ['corporations', 'app.corporations'],
+    ['departments', 'app.departments'],
+  ] as const)
+    if (Array.isArray(out[k]))
+      out[k] = await Promise.all(
+        out[k].map((x: any) =>
+          label(table, typeof x === 'object' ? (x?.corporation_id ?? x?.department_id) : x),
+        ),
+      );
+  return out;
+}
 
 @Injectable()
 export class Accounts {
@@ -128,7 +169,8 @@ export class Accounts {
     key: string,
     before: any,
     after: any,
-    action = kind.toUpperCase() + '_SAVE',
+    // 기본 기능 코드: 저장은 KIND_SAVE, 삭제(after 없음)는 KIND_DELETE. 예전에는 삭제도 _SAVE로 남아 '저장'처럼 보였다.
+    action = kind.toUpperCase() + (after ? '_SAVE' : '_DELETE'),
   ) {
     const event = await this.audit.write(
       {
@@ -146,8 +188,8 @@ export class Accounts {
         kind,
         key,
         !after ? 'DELETE' : !before ? 'INSERT' : 'UPDATE',
-        auditValues(before),
-        auditValues(after),
+        await readableAudit(c, before),
+        await readableAudit(c, after),
       ],
     );
   }

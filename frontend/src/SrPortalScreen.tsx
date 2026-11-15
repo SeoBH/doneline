@@ -153,7 +153,7 @@ export const SrPortalScreen = forwardRef<
       notify('새 요청을 작성하거나, 요청을 선택해 댓글을 입력해 주세요.');
       return false;
     }
-    if (!(await confirmAction('댓글을 등록할까요?'))) return false;
+    // 댓글은 [등록]을 누른 것 자체가 의사 표시라 다시 묻지 않는다(QA DLV2-009).
     // 댓글의 이미지는 먼저 올린다(실패하면 댓글을 남기지 않고 입력을 그대로 둔다).
     const pasted = commentImgs.tokens();
     await commentImgs.uploadAll(pasted.used, 'requests/portal/' + selected, screen.menu_id);

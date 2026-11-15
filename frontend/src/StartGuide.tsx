@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react';
 import { api } from './api';
 import { User } from './types';
+import { CATALOG_CHANGED } from './events';
 
 type Counts = {
   customers: number;
@@ -30,9 +31,22 @@ export function StartGuide({
   useEffect(() => {
     if (!user.staff) return;
     // 진행 현황은 보조 정보라 실패하면 안내 문구만 보여 준다.
-    api('workspaces/onboarding')
-      .then(setCounts)
-      .catch(() => setCounts(null));
+    const load = () =>
+      api('workspaces/onboarding')
+        .then(setCounts)
+        .catch(() => setCounts(null));
+    void load();
+    // 다른 브라우저 탭에서 승인·삭제를 하고 돌아오면 숫자가 옛날 그대로였다(QA DLV3-005).
+    // visibilitychange: 이 탭이 다시 보이게 될 때 발생. 그때와 같은 탭의 등록 화면이 저장했을 때 다시 읽는다.
+    const onVisible = () => document.visibilityState === 'visible' && void load();
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    window.addEventListener(CATALOG_CHANGED, load);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+      window.removeEventListener(CATALOG_CHANGED, load);
+    };
   }, [user.staff]);
   if (!user.staff || !counts)
     return <div className="empty">메뉴(휴대폰은 왼쪽 위 ☰)에서 화면을 선택해 주세요.</div>;
