@@ -22,6 +22,7 @@ import { Db, useWorkspace } from './db';
 import { Audit } from './audit';
 import { Recovery, emailAddress } from './recovery';
 import { Notifier } from './notifier';
+import { settings } from './config';
 import { AppRequest, Public } from './security';
 
 // DTO: 요청 본문의 형식을 선언한다. 전역 ValidationPipe가 형식이 틀리거나 선언되지 않은 필드가 있으면 400으로 거절한다.
@@ -125,7 +126,12 @@ export class Workspaces {
         (early?.early_adopter ? ` · 초기 업체 ${early.n}/30` : ''),
     );
     return {
-      message: '업체 가입을 완료했습니다.',
+      // 첫 관리자에게 이메일 인증 메일을 보낸다(SMTP 설정 시). 새 발신 주소는 스팸함으로 갈 수 있어 함께 안내한다.
+      message:
+        '업체 가입을 완료했습니다.' +
+        (settings.smtp.host
+          ? ' 이메일 인증 메일을 보냈습니다. 받은편지함에 없으면 스팸함도 확인해 주세요.'
+          : ''),
     };
   }
   /**

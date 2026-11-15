@@ -17,6 +17,8 @@ export function SignupScreen({
     [draft, setDraft] = useState(emptyAccount),
     [busy, setBusy] = useState(true),
     [done, setDone] = useState(false),
+    // 서버가 인증 메일을 실제로 보냈는지(메일 발송 켜짐). 완료 안내에 스팸함 확인 문구를 덧붙이는 데 쓴다.
+    [mailed, setMailed] = useState(false),
     // 비밀번호 오타로 가입 후 로그인하지 못하는 일을 막기 위한 확인 입력.
     [confirm, setConfirm] = useState('');
   useEffect(() => {
@@ -57,6 +59,7 @@ export function SignupScreen({
         body: JSON.stringify(body),
       });
       setDraft(emptyAccount());
+      setMailed(Boolean(r.mailed));
       setDone(true);
       notify(r.message, 'success');
     } catch (e) {
@@ -79,6 +82,8 @@ export function SignupScreen({
           <p role="status">
             가입 신청이 완료되었습니다. {customer?.workspaceName || '업체'} 관리자가 승인하고 소속
             부서를 지정하면 로그인할 수 있습니다. 급하면 담당 업체에 승인을 요청해 주세요.
+            {mailed &&
+              ' 이메일 인증 메일을 보냈습니다. 받은편지함에 없으면 스팸함도 확인해 주세요.'}
           </p>
         ) : customer ? (
           <>

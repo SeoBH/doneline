@@ -108,10 +108,12 @@ export class Recovery {
       await this.db.query('SELECT app.recovery_workspaces($1) AS id', [email])
     ).rows.map((r) => String(r.id));
     for (const workspaceId of workspaces) await this.requestIn(workspaceId, email, body);
-    // 외부 발송 미연결 상태를 숨기지 않는다. 계정 일치 여부와 무관하게 같은 메시지를 반환한다.
+    // 계정 일치 여부와 무관하게 같은 메시지를 반환한다(등록된 이메일인지 알아내지 못하게).
+    // 메일 발송(SMTP)이 꺼져 있으면 그 사실을 숨기지 않고 관리자에게 링크를 요청하도록 안내한다.
     return {
-      message:
-        '정보가 일치하면 안내를 준비합니다. 메일 자동 발송은 준비 중이므로, 소속 업체 관리자에게 비밀번호 설정 링크를 요청해 주세요.',
+      message: settings.smtp.host
+        ? '정보가 일치하면 안내 메일을 보냅니다. 받은편지함에 없으면 스팸함도 확인해 주세요. 메일을 받지 못하면 소속 업체 관리자에게 비밀번호 설정 링크를 요청해 주세요.'
+        : '정보가 일치하면 안내를 준비합니다. 메일 발송이 꺼져 있으므로, 소속 업체 관리자에게 비밀번호 설정 링크를 요청해 주세요.',
     };
   }
   /** 한 워크스페이스 안에서 조건에 맞는 계정에 아이디 안내 또는 일회용 링크를 준비한다. */
