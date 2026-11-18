@@ -636,7 +636,7 @@ function App() {
               </div>
             )}
             <h1>{user ? '비밀번호 변경' : '로그인'}</h1>
-            {/* 시연 모드에서만 보이는 시연 계정 창. 고르면 아래 로그인 칸에 아이디·비밀번호를 채운다. */}
+            {/* 시연 모드에서만 보이는 시연 계정 창. 고르면 아래 로그인 칸을 채우고 바로 로그인한다. */}
             {!user && (
               <DemoAccounts
                 accounts={demoAccounts}
@@ -648,10 +648,9 @@ function App() {
                   fill('loginId', a.loginId);
                   fill('password', a.password);
                   setLoginError('');
-                  // 로그인 버튼(type 없는 제출 버튼)에 초점: Enter 한 번으로 로그인.
-                  document
-                    .querySelector<HTMLButtonElement>('main.login form button:not([type="button"])')
-                    ?.focus();
+                  // requestSubmit: [로그인] 버튼을 누른 것과 같게 폼을 제출한다(입력 검사·onSubmit 그대로 실행).
+                  // 시연 중에 Enter를 한 번 더 누르지 않고 버튼 한 번으로 들어가게 하려는 것이다.
+                  document.querySelector<HTMLFormElement>('main.login form')?.requestSubmit();
                 }}
               />
             )}

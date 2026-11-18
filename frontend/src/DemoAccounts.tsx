@@ -1,7 +1,7 @@
 /**
  * 시연 계정 안내 창. 시연 모드 서버(scripts/demo.ps1 -Sample)가 /api/auth/csrf로 계정 목록을 주면
  * 로그인 화면에 처음 한 번 자동으로 띄우고, 닫은 뒤에도 [시연 계정 보기] 버튼으로 다시 열 수 있다.
- * [이 계정으로 입력]을 누르면 로그인 칸에 아이디·비밀번호를 채워 바로 로그인할 수 있게 한다.
+ * [이 계정으로 로그인]을 누르면 로그인 칸에 아이디·비밀번호를 채우고 바로 로그인한다.
  * 관련: backend/demo-seed.cjs(계정 생성), backend/src/config.ts(demoAccounts), main.tsx(로그인 화면).
  */
 import { useEffect, useRef, useState } from 'react';
@@ -10,7 +10,7 @@ export type DemoAccount = { role: string; loginId: string; password: string; not
 
 /**
  * accounts: 서버가 준 시연 계정(비어 있으면 아무것도 그리지 않는다).
- * onPick: 고른 계정의 아이디·비밀번호를 로그인 칸에 넣는 함수(main.tsx).
+ * onPick: 고른 계정으로 로그인 칸을 채우고 제출하는 함수(main.tsx).
  */
 export function DemoAccounts({
   accounts,
@@ -56,7 +56,7 @@ export function DemoAccounts({
               <th>역할</th>
               <th>아이디</th>
               <th>비밀번호</th>
-              <th>바로 입력</th>
+              <th>바로 로그인</th>
             </tr>
           </thead>
           <tbody>
@@ -81,7 +81,7 @@ export function DemoAccounts({
                       setOpen(false);
                     }}
                   >
-                    이 계정으로 입력
+                    이 계정으로 로그인
                   </button>
                 </td>
               </tr>
