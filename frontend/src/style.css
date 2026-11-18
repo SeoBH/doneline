@@ -2224,6 +2224,7 @@ footer {
 .demo-table td small {
   display: block;
   margin-top: 2px;
+  white-space: normal; /* 설명이 길면 줄을 바꿔 창에 가로 스크롤이 생기지 않게 한다 */
   color: var(--color-text-muted);
 }
 .demo-table code {

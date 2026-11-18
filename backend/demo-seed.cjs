@@ -1,6 +1,6 @@
 /**
  * 시연용 예시 데이터 만들기. 시연 전용 DB(doneline_demo)를 지우고 새로 만든 뒤
- * 가상의 업체 '한빛IT서비스'와 고객사 5곳, 직원 4명, 고객 사용자 6명, 최근 3개월 치 요청 약 60건을 넣는다.
+ * 가상의 업체 '한빛IT서비스'와 고객사 5곳, 직원 4명, 고객 사용자 6명, 운영 워크스페이스의 서비스 운영자 1명, 최근 3개월 치 요청 약 60건을 넣는다.
  * 요청은 실제 API(등록 → 처리 시작 → 답변·내부 메모 → 처리 완료 → 고객 확인)로 만들어 상태 규칙·알림·감사 기록이
  * 실제 사용과 같게 남고, 마지막에 관리 계정으로 날짜만 과거로 옮겨 목록·월간 리포트가 자연스럽게 채워지게 한다.
  *
@@ -126,6 +126,7 @@ const STAFF = [
 ];
 // 로그인 화면 '시연 계정' 창에 보여 줄 계정(역할별 대표 1명씩).
 const SHOWN = [
+  ['서비스 운영자', 'demo_ops', '메뉴·버튼 권한(RESP) 편집 · 업체 데이터는 안 보임'],
   ['업체 관리자', 'demo_admin', '김한빛 · 요청 배정, 월간 리포트, 고객사·사용자 관리'],
   ['업체 담당자', 'demo_kim', '김지훈 · 맡은 요청 처리'],
   ['고객 사용자', 'sml_lee', '서울메디랩 이지은 · 요청 등록·확인'],
@@ -306,6 +307,17 @@ const HOUR = 3600 * 1000;
       }
     }
   }, ws);
+  // 서비스 운영자: 화면·메뉴·RESP 등록(메뉴·버튼 권한 편집)은 운영 워크스페이스에서만 열리므로(security.ts)
+  // 그 워크스페이스에 관리 메뉴(seed.ts setupAdminMenu)와 시스템 관리자 RESP 계정을 하나 만든다.
+  const { setupAdminMenu } = require('./dist/seed');
+  await db.tx(async (c) => {
+    const resp = await setupAdminMenu(c);
+    await c.query(
+      `INSERT INTO app.users(login_id,password_hash,display_name,resp_id,must_change_password,email)
+       VALUES('demo_ops',$1,'서비스 운영자',$2,false,'demo_ops@example.com')`,
+      [hash, resp],
+    );
+  });
 
   // 실제 화면과 같은 경로(로그인 → 메뉴 권한 헤더)로 API를 부른다. 시험(test/requests.test.cjs)과 같은 방식.
   const post = (who, url, data) =>
