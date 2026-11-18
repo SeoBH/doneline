@@ -132,6 +132,81 @@ const SHOWN = [
   ['고객 사용자', 'sml_lee', '서울메디랩 이지은 · 요청 등록·확인'],
   ['고객 사용자', 'grn_jung', '그린물산 정하늘 · 요청 등록·확인'],
 ];
+/**
+ * 메뉴 트리 예시. 기본 메뉴는 역할마다 최상위 메뉴 하나에 화면이 바로 달린 1단이라, 시연에서 메뉴 아래에
+ * 메뉴를 붙이는 구조(app.menu_edges)가 보이도록 업체 관리자·서비스 운영자 메뉴를 2~3단으로 나눈다.
+ * - 업체 관리: 요청 업무 / 기준정보 > 고객사 구조(3단) / 설정
+ * - 운영 관리(ROOT): 업무 / 시스템 구성 + 업체 관리와 같은 '기준정보'·'설정' 메뉴를 함께 붙인다(공유 메뉴).
+ * 화면은 menu_screens 행의 메뉴만 바꿔 옮기므로 버튼 허용(menu_screen_buttons)이 그대로 유지된다.
+ * c: 시연 DB 관리 계정 연결(트랜잭션 안). 공통 구성 표는 앱 계정으로 직접 바꾸지 않는다.
+ */
+async function nestMenus(c) {
+  const menuId = async (code, name) =>
+    (
+      await c.query(
+        'INSERT INTO app.menus(code,name) VALUES($1,$2) ON CONFLICT(code) DO UPDATE SET name=EXCLUDED.name RETURNING id',
+        [code, name],
+      )
+    ).rows[0].id;
+  const edge = (parent, child, sort) =>
+    c.query(
+      'INSERT INTO app.menu_edges(parent_menu_id,child_menu_id,sort_order) VALUES($1,$2,$3)',
+      [parent, child, sort],
+    );
+  // 상위 메뉴(from)에 달린 화면들을 하위 메뉴(to)로 옮긴다. 표시 순서는 목록 순서대로 다시 매긴다.
+  const move = async (from, to, codes) => {
+    for (const [i, code] of codes.entries())
+      await c.query(
+        `UPDATE app.menu_screens SET menu_id=$2, sort_order=$4
+         WHERE menu_id=$1 AND screen_id=(SELECT id FROM app.screens WHERE code=$3)`,
+        [from, to, code, i + 1],
+      );
+  };
+  // 공유 메뉴로 대신하는 화면은 원래 자리에서 뺀다(버튼 허용 → 화면 연결 순서로 지운다).
+  const drop = async (from, codes) => {
+    const where = 'menu_id=$1 AND screen_id IN (SELECT id FROM app.screens WHERE code=ANY($2))';
+    await c.query(
+      `DELETE FROM app.menu_screen_buttons WHERE menu_screen_id IN (SELECT id FROM app.menu_screens WHERE ${where})`,
+      [from, codes],
+    );
+    await c.query(`DELETE FROM app.menu_screens WHERE ${where}`, [from, codes]);
+  };
+  const wsRoot = await menuId('WORKSPACE_ADMIN_ROOT', '업체 관리');
+  const work = await menuId('DEMO_WS_WORK', '요청 업무');
+  const master = await menuId('DEMO_MASTER', '기준정보');
+  const customer = await menuId('DEMO_CUSTOMER_TREE', '고객사 구조');
+  const settings = await menuId('DEMO_SETTINGS', '설정');
+  await move(wsRoot, work, ['SR_DESK', 'SR_REPORT']);
+  await move(wsRoot, customer, [
+    'CUSTOMER_REGISTER',
+    'CORPORATION_REGISTER',
+    'DEPARTMENT_REGISTER',
+  ]);
+  await move(wsRoot, master, ['USER_REGISTER']);
+  await move(wsRoot, settings, ['SLA_SETTINGS', 'AUDIT']);
+  await edge(wsRoot, work, 1);
+  await edge(wsRoot, master, 2);
+  await edge(master, customer, 0);
+  await edge(wsRoot, settings, 3);
+
+  const opsRoot = await menuId('ROOT', '운영 관리');
+  const opsWork = await menuId('DEMO_OPS_WORK', '업무');
+  const config = await menuId('DEMO_OPS_CONFIG', '시스템 구성');
+  await move(opsRoot, opsWork, ['SR_DESK', 'SR_REPORT', 'FEEDBACK_INBOX']);
+  await move(opsRoot, config, ['SCREEN_REGISTER', 'MENU_REGISTER', 'RESP_REGISTER']);
+  await drop(opsRoot, [
+    'USER_REGISTER',
+    'CUSTOMER_REGISTER',
+    'CORPORATION_REGISTER',
+    'DEPARTMENT_REGISTER',
+    'SLA_SETTINGS',
+    'AUDIT',
+  ]);
+  await edge(opsRoot, opsWork, 1);
+  await edge(opsRoot, config, 2);
+  await edge(opsRoot, master, 3);
+  await edge(opsRoot, settings, 4);
+}
 // 요청 예시 문장. [분류, 제목, 내용, 처리 답변]
 const TEMPLATES = [
   [
@@ -557,6 +632,7 @@ const HOUR = 3600 * 1000;
        read_at = CASE WHEN r.updated_at < now() - interval '3 days' THEN r.updated_at END
      FROM app.service_requests r WHERE r.id=n.request_id`,
   );
+  await nestMenus(c);
   await c.query('COMMIT');
   await c.end();
 
