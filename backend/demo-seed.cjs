@@ -626,6 +626,13 @@ const HOUR = 3600 * 1000;
   await c.query(
     "UPDATE app.request_attachments a SET created_at=r.created_at + interval '5 minutes' FROM app.service_requests r WHERE r.id=a.request_id",
   );
+  // 첨부를 올리면 이력에 ATTACH 이벤트가 생기는데, 위 단계별 시각 맞추기(경계 ID 이하만)보다 나중에 생겨 오늘 날짜로 남았다.
+  // 이력 화면에서 첨부 줄만 '오늘'로 보이지 않도록 해당 첨부 파일의 시각(등록 5분 뒤)과 같게 맞춘다.
+  await c.query(
+    `UPDATE app.request_events e SET created_at=a.created_at
+       FROM app.request_attachments a
+      WHERE e.request_id=a.request_id AND e.kind='ATTACH' AND e.body=a.file_name`,
+  );
   // 알림: 요청의 마지막 변경 시각으로 맞추고, 사흘보다 오래된 것은 읽음으로 둔다(종 아이콘에 최근 것만 남게).
   await c.query(
     `UPDATE app.notifications n SET created_at=r.updated_at,

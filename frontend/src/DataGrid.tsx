@@ -103,19 +103,30 @@ export const DataGrid = forwardRef<
   latest.current = rows;
   // 화면 낭독기 안내: AG Grid는 불러오기 시작 때 '불러오는 중…'만 알리고 끝났다는 안내가 없어 그 문장이 계속 남는다(QA 4차).
   // loading이 true→false로 바뀌면 같은 안내 칸(aria-live=polite, 화면에는 안 보임)에 완료와 건수를 넣어 읽어 주게 한다.
+  // 화면에 따라 loading이 먼저 꺼지고 새 행 목록이 뒤따라 들어오는 경우가 있어(QA 5차 DV5-001: 삭제 후 2행인데 '3건'),
+  // 안내를 쓰기 전에 rows가 다시 바뀌면 타이머를 새로 걸어 마지막 목록 기준으로 한 번만 안내한다.
   const wasLoading = useRef(false);
+  const announcePending = useRef(false);
   useEffect(() => {
-    if (loading) wasLoading.current = true;
-    else if (wasLoading.current) {
-      wasLoading.current = false;
-      // AG Grid는 안내 문장을 0.25초쯤 늦게 쓰므로(200ms 묶음 처리 + 50ms), 그 뒤에 덮어쓰도록 0.4초 기다린다.
-      const timer = setTimeout(() => {
-        const live = container.current?.querySelector('.ag-aria-description-container');
-        if (live) live.textContent = `불러오기 완료 · ${latest.current.length}건`;
-      }, 400);
-      return () => clearTimeout(timer);
+    if (loading) {
+      wasLoading.current = true;
+      return;
     }
-  }, [loading]);
+    if (wasLoading.current) {
+      wasLoading.current = false;
+      announcePending.current = true;
+    }
+    if (!announcePending.current) return;
+    // AG Grid는 안내 문장을 0.25초쯤 늦게 쓰므로(200ms 묶음 처리 + 50ms), 그 뒤에 덮어쓰도록 0.4초 기다린다.
+    const timer = setTimeout(() => {
+      announcePending.current = false;
+      const live = container.current?.querySelector('.ag-aria-description-container');
+      // getDisplayedRowCount: 그리드가 실제로 화면에 그린 행 수. 목록 배열과 어긋나면 화면 쪽을 믿는다.
+      const count = grid.current?.api?.getDisplayedRowCount() ?? latest.current.length;
+      if (live) live.textContent = `불러오기 완료 · ${count}건`;
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [loading, rows]);
   // 재조회·상위 코드 변경으로 원래 행이 교체되면 열린 팝업 결과를 적용하지 않는다.
   useEffect(() => {
     if (lookup && (busy || !rows.includes(lookup.source))) setLookup(null);
