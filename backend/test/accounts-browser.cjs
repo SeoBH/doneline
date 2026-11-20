@@ -249,6 +249,10 @@ const path = require('node:path');
       toolbar.getByRole('button', { name: '저장', exact: true }).click(),
     ]);
     expect(updated.status()).toBe(201);
+    // 결과 알림에 대상 계정이 보인다(QA 5차 DV5-004).
+    await expect(
+      page.getByText(code + '_direct(수정된 사용자) 계정 정보를 변경했습니다.'),
+    ).toBeVisible();
     await expect(panel.getByText('수정된 사용자', { exact: true })).toBeVisible();
     await expect(panel.getByText('매핑 필요', { exact: true })).toBeVisible();
     await panel.getByRole('checkbox', { name: '사용자 목록 행 선택 1', exact: true }).click();
@@ -257,6 +261,10 @@ const path = require('node:path');
       toolbar.getByRole('button', { name: '삭제', exact: true }).click(),
     ]);
     expect(deleted.status()).toBe(201);
+    // 삭제 확인 창에 지울 계정이 '아이디(이름)'으로 적혀 있었다(QA 5차 DV5-002).
+    expect(await page.evaluate(() => window.__confirms.at(-1))).toContain(
+      code + '_direct(수정된 사용자) 사용자를 실제 삭제할까요?',
+    );
     await expect(panel.getByText('수정된 사용자', { exact: true })).toHaveCount(0);
     expect(
       (await db.query('SELECT id FROM app.users WHERE login_id=$1', [code + '_direct'])).rowCount,

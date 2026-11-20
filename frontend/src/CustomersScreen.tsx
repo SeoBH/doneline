@@ -9,6 +9,7 @@ import { confirmAction } from './ConfirmDialog';
 // 화면들은 처음 열 때만 목록을 읽으므로, 이 신호를 받으면 편집 중이 아닐 때 목록을 다시 읽는다(QA DLV2-002).
 // CustomEvent: 브라우저가 제공하는 '내가 이름 붙인 이벤트'. detail에 바뀐 종류(customers 등)를 담는다.
 import { CATALOG_CHANGED } from './events';
+import { listNames } from './targetNames';
 const wrap = (r: any): GridRow => ({ ...r, _key: r.id, _checked: false });
 export const CustomersScreen = forwardRef<
   ScreenHandle,
@@ -181,7 +182,12 @@ export const CustomersScreen = forwardRef<
       .filter(Boolean)
       .join(' · ');
     const target = parentName ? `${parentName}에 ${title} ` : `${title} `;
-    if (remove && !(await confirmAction(`${target}${selected.length}개를 삭제할까요?`)))
+    // 삭제 확인 창에는 지울 행의 '이름(코드)'도 적는다. 고객사는 상위 이름이 없어 대상이 안 보였다(QA 5차 DV5-002).
+    const names = listNames(
+      selected.map((r) => `${r.name}(${r.code})`),
+      '개',
+    );
+    if (remove && !(await confirmAction(`${target}${selected.length}개(${names})를 삭제할까요?`)))
       return false;
     let committed = false;
     setBusy(true);

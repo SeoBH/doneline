@@ -11,6 +11,7 @@ import { Notify } from './Toasts';
 import { confirmAction } from './ConfirmDialog';
 import { checkForm, clearInvalid } from './formCheck';
 import { CATALOG_CHANGED } from './events';
+import { accountNames } from './targetNames';
 export const AccountsScreen = forwardRef<
   ScreenHandle,
   { screen: Screen; notify: Notify; onState: (s: ViewState) => void }
@@ -268,9 +269,11 @@ export const AccountsScreen = forwardRef<
           customerId: editCustomer === 'system' ? null : editCustomer,
         }),
       });
+      // newAccount()가 편집 대상을 비우므로 알림 문구용 이름을 먼저 만들어 둔다(QA 5차 DV5-004). 이름은 방금 저장한 값.
+      const who = accountNames([{ login_id: editing.login_id, display_name: draft.name }]);
       newAccount();
       await query();
-      notify('변경했습니다.', 'success');
+      notify(`${who} 계정 정보를 변경했습니다.`, 'success');
       return true;
     } catch (e) {
       notify((e as Error).message, 'error');
@@ -324,12 +327,7 @@ export const AccountsScreen = forwardRef<
     // 여러 명을 한꺼번에 승인할 때도 이메일 미인증 인원을 알린다(QA DL-030).
     const unverified =
       action === 'approve' ? selected.filter((r) => !r.email_verified_at).length : 0;
-    // 확인 창에 대상 계정을 '아이디(이름)'으로 보여 준다(QA 4차 DV4-002). 많으면 앞 5명만 적고 '외 n명'.
-    const names = selected.slice(0, 5).map((r) => `${r.login_id}(${r.display_name})`);
-    const who =
-      (selected.length > 1 ? `${selected.length}개 계정 ` : '') +
-      names.join(', ') +
-      (selected.length > 5 ? ` 외 ${selected.length - 5}명` : '');
+    const who = accountNames(selected);
     if (
       !(await confirmAction(
         who +
@@ -355,7 +353,8 @@ export const AccountsScreen = forwardRef<
           })),
         }),
       });
-      notify(label + '했습니다.', 'success');
+      // 결과 알림에도 누구를 처리했는지 남긴다(QA 5차 DV5-004).
+      notify(`${who} 계정을 ${label}했습니다.`, 'success');
       await query();
     } catch (e) {
       notify((e as Error).message, 'error');
@@ -456,9 +455,13 @@ export const AccountsScreen = forwardRef<
   async function remove() {
     if (
       !checked.length ||
-      !(await confirmAction(checked.length + '개 사용자를 실제 삭제할까요? 복구할 수 없습니다.'))
+      !(await confirmAction(
+        // 누구를 지우는지 확인 창에서 바로 보이게 한다(QA 5차 DV5-002).
+        `${accountNames(checked)} 사용자를 실제 삭제할까요? 복구할 수 없습니다.`,
+      ))
     )
       return;
+    const who = accountNames(checked);
     setBusy(true);
     try {
       await api('accounts/delete', {
@@ -467,7 +470,7 @@ export const AccountsScreen = forwardRef<
         body: JSON.stringify({ rows: checked.map((r) => ({ id: r.id, version: r.version })) }),
       });
       await query();
-      notify('삭제했습니다.', 'success');
+      notify(`${who} 사용자를 삭제했습니다.`, 'success');
     } catch (e) {
       notify((e as Error).message, 'error');
     } finally {
