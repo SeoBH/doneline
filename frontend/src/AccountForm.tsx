@@ -118,8 +118,10 @@ export function AccountForm({
             autoComplete="email"
           />
         </label>
+        {/* 주소는 업무에 쓰지 않아 서버도 빈 값을 허용한다. 개인정보 최소 수집 원칙(개인정보 보호법 16조)에 맞게
+            필수처럼 보이지 않도록 '(선택)'을 붙인다(2026-11-21 정기회의, 법무·재무 검토). */}
         <label className="account-wide">
-          주소
+          주소 (선택)
           <input
             value={value.address}
             onChange={(e) => set('address', e.target.value)}

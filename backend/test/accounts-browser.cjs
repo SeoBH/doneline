@@ -81,6 +81,13 @@ const path = require('node:path');
       await expect(
         grid.getByRole('checkbox', { name: new RegExp('행 선택') }).last(),
       ).not.toBeChecked();
+      // 저장 직후 같은 값이 두 줄로 보이면 안 된다(QA 5차 DV5-003): 임시 키(UUID) 행은 사라지고 DB 행 1개만 남는다.
+      await expect(grid.locator('.ag-row[row-id="' + key + '"]')).toHaveCount(0);
+      // 고객사 목록은 테스트 DB에 쌓인 다른 고객사 때문에 새 행이 화면 밖일 수 있어, 상위가 새로 만든 고객사인 법인·부서에서만 센다.
+      if (kind !== 'customers')
+        await expect(
+          grid.locator('[role="gridcell"][col-id="code"]').filter({ hasText: entry }),
+        ).toHaveCount(1);
     }
     await open('고객사등록');
     await catalog('customers', '고객사', code, '브라우저 고객사');
@@ -112,7 +119,7 @@ const path = require('node:path');
     await signup.getByLabel('비밀번호', { exact: true }).fill(password);
     await signup.getByLabel('비밀번호 확인', { exact: true }).fill(password);
     await signup.getByLabel('휴대전화번호', { exact: true }).fill('010-1111-2222');
-    await signup.getByLabel('주소', { exact: true }).fill('서울');
+    await signup.getByLabel('주소 (선택)', { exact: true }).fill('서울');
     await signup.getByLabel('이메일', { exact: true }).fill(code + '@example.com');
     await expect(signup.getByLabel('역할', { exact: true })).toHaveCount(0);
     await signup.getByRole('button', { name: '가입 신청', exact: true }).click();
