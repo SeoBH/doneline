@@ -166,6 +166,7 @@ npm.cmd run test:lookup
 ## 보관 자료와 운영 파일
 
 - `참고/`의 이미지·텍스트와 `RESP_MENU_FORM_메뉴얼.pptx`: 사용자가 제공한 설계 원본. 최신 확정 동작은 설계문서를 따릅니다.
+- `참고/약관·개인정보-초안.md`: 이용약관·개인정보처리방침 초안(시행 전, 미게시). 공개 시 `/terms`·`/privacy`로 옮깁니다. `landing/`에 두면 소개 페이지 배포 때 함께 공개되므로 넣지 않습니다.
 - `runtime/backend.pid`, `backend.stdout.log`, `backend.stderr.log`: 기존 서버 실행 기록. PID만 믿고 종료하지 말고 실제 프로세스 경로를 확인합니다.
 - `runtime/audit-fallback.jsonl`: DB 실패 시 감사 기록. 단순 임시 파일로 삭제하지 않습니다.
 - `runtime/before-registration.dump`: 등록 변경 전 DB 백업. 복구 자료로 보관합니다.
