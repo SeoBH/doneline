@@ -50,7 +50,7 @@ export async function setupAdminMenu(c: PoolClient): Promise<string> {
   for (const [i, [code, name, key]] of [
     ['SCREEN_REGISTER', '화면등록', 'screen-register'],
     ['MENU_REGISTER', '메뉴등록', 'menu-register'],
-    ['RESP_REGISTER', 'RESP등록', 'resp-register'],
+    ['RESP_REGISTER', '역할등록', 'resp-register'],
     ['USER_REGISTER', '사용자등록', 'user-register'],
     ['CUSTOMER_REGISTER', '고객사등록', 'customer-register'],
     ['CORPORATION_REGISTER', '법인등록', 'corporation-register'],

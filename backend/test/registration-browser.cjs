@@ -303,13 +303,13 @@ const assert = require('node:assert/strict');
     await sg.getByText('두 번째 화면', { exact: true }).click();
     await expect(sg.locator('.grid-row-current')).toHaveCount(1);
     await expect(sg.locator('.grid-row-current')).toContainText('두 번째 화면');
-    await open('RESP등록');
+    await open('역할등록');
     await active()
       .locator('.register-left .query-bar')
-      .getByLabel('RESP코드', { exact: true })
+      .getByLabel('역할코드', { exact: true })
       .fill(name + '_resp');
     const rk = await newRow(),
-      rg = active().locator('[aria-label="RESP 등록"]');
+      rg = active().locator('[aria-label="역할 등록"]');
     await edit(rg, rk, 'code', name + '_resp');
     await edit(rg, rk, 'name', '브라우저 RESP');
     const respSaved = await requestClick(

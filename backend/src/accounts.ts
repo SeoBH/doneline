@@ -627,7 +627,7 @@ export class Accounts {
         throw new BadRequestException('SYSTEM은 고객사 없음, CUSTOMER는 고객사를 선택해 주세요.');
       // 승인 대기에서 SYSTEM으로 변경하면 공개 신청의 권한 제한이 우회되므로 금지한다.
       if (u.account_status === 'PENDING' && r.authority_type === 'SYSTEM')
-        throw new BadRequestException('가입 신청에는 CUSTOMER RESP만 배정할 수 있습니다.');
+        throw new BadRequestException('가입 신청에는 CUSTOMER 역할만 배정할 수 있습니다.');
       const name = text(body.name, 120),
         mobile = text(body.mobile, 30),
         address = text(body.address, 500, true),

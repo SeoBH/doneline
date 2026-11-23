@@ -69,7 +69,7 @@ function message(e: any) {
   if (e.code === '23505') return '동일 코드 또는 연결이 이미 존재합니다.';
   if (e.code === '23503') return '다른 데이터에서 참조 중이므로 삭제할 수 없습니다.';
   if (e.code === '23514')
-    return '순환 연결, 저장된 코드 변경 또는 배정된 RESP의 접근 구분 변경은 허용하지 않습니다.';
+    return '순환 연결, 저장된 코드 변경 또는 배정된 역할의 접근 구분 변경은 허용하지 않습니다.';
   return '처리 중 오류가 발생했습니다.';
 }
 @Injectable()
@@ -222,7 +222,7 @@ export class RegistrationService {
               (await c.query('SELECT 1 FROM app.users WHERE resp_id=$1 LIMIT 1', [key])).rowCount
             )
               throw new ConflictException(
-                '사용자에게 부여된 RESP입니다. 사용자 RESP를 먼저 변경해 주세요.',
+                '사용자에게 부여된 역할입니다. 사용자 역할을 먼저 변경해 주세요.',
               );
             if (k === 'screens')
               await c.query('DELETE FROM app.screen_buttons WHERE screen_id=$1', [key]);
@@ -248,7 +248,7 @@ export class RegistrationService {
               // 0이 최상위이며 동급도 허용한다. 현재 권한 검사에는 사용하지 않는다.
               const level = r.level ?? before?.level ?? 100;
               if (!Number.isInteger(level) || level < 0 || level > 9999)
-                throw new BadRequestException('RESP 레벨은 0~9999 정수입니다.');
+                throw new BadRequestException('역할 레벨은 0~9999 정수입니다.');
               fields.push('authority_type', 'level');
               values.push(authority, level);
             }
@@ -462,7 +462,7 @@ export class RegistrationService {
         [ident(id)],
       )
     ).rows;
-    if (!rows[0]) throw new NotFoundException('RESP가 없습니다.');
+    if (!rows[0]) throw new NotFoundException('역할이 없습니다.');
     return { parent: rows[0], menus: (await this.list('menus')).items };
   }
   // 버전과 메뉴 존재를 확인한 뒤 시작 메뉴를 교체하고 변경 전후를 기록한다.
@@ -476,7 +476,7 @@ export class RegistrationService {
       await this.lock(c, req, 'RESP_REGISTER', 'SAVE');
       const before = await this.row(c, 'responsibilities', id);
       if (!before || before.version !== body.version)
-        throw new ConflictException('RESP가 변경되었습니다. 다시 선택해 주세요.');
+        throw new ConflictException('역할이 변경되었습니다. 다시 선택해 주세요.');
       if (!(await c.query('SELECT 1 FROM app.menus WHERE id=$1', [body.menuId])).rowCount)
         throw new BadRequestException('메뉴가 없습니다.');
       await c.query('UPDATE app.responsibilities SET root_menu_id=$2 WHERE id=$1', [

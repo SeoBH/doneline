@@ -9,7 +9,8 @@ import { actions, labels, Screen, ScreenHandle, ViewState } from './types';
 import { Notify } from './Toasts';
 import { confirmAction } from './ConfirmDialog';
 export type RegisterKind = 'screens' | 'menus' | 'responsibilities';
-const titles = { screens: '화면', menus: '메뉴', responsibilities: 'RESP' };
+// 화면에 보이는 이름. 설계·DB 용어 RESP는 사용자등록·감사 로그와 맞춰 '역할'로 보여 준다(2026-11-23 QA P3 잔여).
+const titles = { screens: '화면', menus: '메뉴', responsibilities: '역할' };
 const time = (v: any) => (v ? new Date(v).toLocaleString('ko-KR') : '');
 const blankFlags = () => Object.fromEntries(actions.map((a) => [a, false]));
 // map은 각 동작을 [이름, 값] 쌍으로 바꾸고 fromEntries는 그 쌍들을 객체로 만든다.
@@ -368,7 +369,7 @@ export const RegistrationScreen = forwardRef<ScreenHandle, Props>(function Regis
       !(await confirmAction(
         kind === 'menus'
           ? '현재 하위 메뉴·화면 구성을 적용할까요?'
-          : '선택한 메뉴를 RESP에 적용할까요?',
+          : '선택한 메뉴를 역할에 적용할까요?',
       ))
     )
       return;
