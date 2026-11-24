@@ -20,14 +20,14 @@ const { createApp } = require('../dist/app');
 const { Db } = require('../dist/db');
 const { openMail } = require('../dist/mail');
 const argon2 = require('argon2');
-const { randomBytes } = require('node:crypto');
 const { mkdir } = require('node:fs/promises');
 const path = require('node:path');
 (async () => {
   let app, browser, page, signup;
-  // 코드 앞의 '0': 테스트 DB에 고객사가 쌓여도 코드순 목록 맨 앞에 오게 한다. 표는 화면에 보이는 줄만 그리므로
-  // 뒤로 밀리면 테스트가 행을 찾지 못한다.
-  const code = '0browser_' + randomBytes(4).toString('hex'),
+  // 코드는 테스트 DB에 고객사가 쌓여도 코드순 목록(ORDER BY code) 맨 앞에 와야 한다. 표는 화면에 보이는 줄만 그리므로
+  // 뒤로 밀리면 테스트가 행을 찾지 못한다. 예전 '0browser_임의값' 방식은 그런 행이 쌓이며 새 행이 밀려났다(2026-11-24).
+  // '00b' + (9조 − 현재 ms): 예전 코드보다 앞서고, 실행할 때마다 숫자가 작아져 가장 최근 고객사가 항상 맨 위에 온다.
+  const code = '00b' + String(9e12 - Date.now()),
     password = 'Browser account password 123!';
   try {
     app = await createApp();
@@ -244,8 +244,44 @@ const path = require('node:path');
     await recovery.getByRole('button', { name: '완료', exact: true }).click();
     await expect(recovery.getByRole('status').filter({ hasText: '처리를 완료' })).toBeVisible();
     await recovery.close();
+    // 처리 중 줄(QA DL-006): 짧은 조회에서도 줄이 최소 0.6초 보인다.
+    // 로컬 서버는 너무 빨라 줄이 아예 안 뜰 수 있으므로 조회의 첫 API 응답 하나만 0.3초 늦춰 QA가 본 상황(0.27초)을 만든다.
+    // (모든 요청을 늦추면 조회가 여러 요청이라 처리 자체가 0.6초를 넘어 최소 시간 검사가 의미 없어진다.)
+    let delayed = false;
+    await page.route('**/api/**', async (route) => {
+      if (!delayed) {
+        delayed = true;
+        await new Promise((r) => setTimeout(r, 300));
+      }
+      await route.continue();
+    });
+    await page.evaluate(() => {
+      // MutationObserver: 화면 요소가 붙고 떨어지는 순간을 기록해 줄이 보인 시간을 잰다.
+      // 줄(.progress-line)과 '처리 중…' 글자(.busy-note, 실제 처리 상태)를 함께 재서 비교한다.
+      window.__seen = { line: {}, note: {} };
+      new MutationObserver(() => {
+        for (const [k, sel] of [
+          ['line', '.progress-line'],
+          ['note', '.busy-note'],
+        ]) {
+          const t = window.__seen[k],
+            on = !!document.querySelector(sel);
+          if (on && !t.shown) t.shown = performance.now();
+          if (!on && t.shown && !t.hidden) t.hidden = performance.now();
+        }
+      }).observe(document.body, { childList: true, subtree: true });
+    });
     await toolbar.getByRole('button', { name: '조회', exact: true }).click();
     await expect(toolbar.getByRole('button', { name: '조회', exact: true })).toBeEnabled();
+    await expect(page.locator('.progress-line')).toHaveCount(0);
+    const { line, note } = await page.evaluate(() => window.__seen);
+    await page.unroute('**/api/**');
+    expect(line.shown).toBeTruthy();
+    // 기준 0.56초: 최소 0.6초에서 화면 그리기 지연(수십 ms)만큼 여유. 최소 시간이 없던 때는 이 조건에서 약 0.45초였다.
+    const lineMs = line.hidden - line.shown;
+    expect(lineMs).toBeGreaterThanOrEqual(560);
+    // 줄은 실제 처리('처리 중…' 글자)가 끝나기 전에 사라지지 않는다.
+    expect(line.hidden).toBeGreaterThanOrEqual(note.hidden);
     await panel.getByText(code + '_direct', { exact: true }).click();
     await expect(panel.getByLabel('아이디', { exact: true })).toHaveValue(code + '_direct');
     // 행을 고르기만 했을 때는 탭 제목에 '저장 안 한 변경(*)' 표시가 붙지 않는다(QA R3·DLV2-013).

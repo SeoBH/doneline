@@ -18,6 +18,7 @@ import { actions, Nav, Screen, ScreenHandle, Tab, tabKey, User, ViewState } from
 import './style.css';
 import { useToasts } from './Toasts';
 import { useSidebar } from './useSidebar';
+import { useMinVisible } from './useMinVisible';
 import { checkForm, clearInvalid } from './formCheck';
 import { ConfirmHost, useConfirmOpen } from './ConfirmDialog';
 import { DemoAccount, DemoAccounts } from './DemoAccounts';
@@ -210,6 +211,8 @@ function App() {
   // 확인 창에서 답을 기다리는 중이면 아직 처리가 시작된 것이 아니므로 '처리 중' 표시를 숨긴다(QA DLV3-002).
   // 버튼은 그동안에도 막아 둔다(같은 동작이 두 번 시작되지 않게).
   const asking = useConfirmOpen();
+  // 맨 위 처리 중 줄의 표시 여부. 실제 처리 상태(running·busy)는 그대로 두고 보이는 시간만 조절한다(QA DL-006).
+  const showLine = useMinVisible(running || !!states[active]?.busy, 100, 600);
   const handles = useRef(new Map<string, ScreenHandle>());
   /*
    * 탭 화면의 툴바 동작(handle)을 등록하는 ref 함수. 탭마다 같은 함수를 재사용한다.
@@ -767,10 +770,11 @@ function App() {
     >
       {toasts}
       <header>
-        {/* 저장·조회 등 처리 중에는 화면 맨 위에 움직이는 줄을 보여 '멈춘 것'으로 오해하지 않게 한다(QA DL-006). */}
-        {(running || states[active]?.busy) && !asking && (
-          <div className="progress-line" role="progressbar" aria-label="처리 중" />
-        )}
+        {/* 저장·조회 등 처리 중에는 머리줄 아래에 움직이는 줄을 보여 '멈춘 것'으로 오해하지 않게 한다(QA DL-006).
+            showLine: 0.1초 넘게 걸릴 때만 띄우고, 띄우면 최소 0.6초 유지(useMinVisible.ts).
+            aria-hidden: 줄은 눈으로 보는 장식이다. 낭독은 툴바의 '처리 중…' 글자(role=status)가 맡으므로,
+            처리가 끝난 뒤 남아 있는 줄을 화면 낭독기가 '진행 중'으로 읽지 않게 숨긴다. */}
+        {showLine && !asking && <div className="progress-line" aria-hidden="true" />}
         {/* 휴대폰에서는 사이드 메뉴를 숨기고 이 버튼으로 연다(style.css의 좁은 화면 규칙). */}
         <button
           className="menu-toggle"
