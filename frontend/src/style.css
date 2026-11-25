@@ -530,11 +530,33 @@ input:focus-visible {
 .resp-candidates {
   grid-template-columns: minmax(0, 1fr);
 }
+.grid-row-current {
+  background: var(--color-row-current) !important;
+}
+/* 저장 실패 행은 방금 편집해 '현재 행'인 경우가 많다. 둘 다 !important라 뒤에 둔 규칙이 이기므로
+   실패 색을 현재 행 색 뒤에 두어 실패 표시가 가려지지 않게 한다(DV4-004). */
 .grid-row-error {
   background: var(--color-row-error) !important;
 }
-.grid-row-current {
-  background: var(--color-row-current) !important;
+/* 선택 칸: 체크박스와 저장 실패 표식(!)을 한 줄에 놓는다(QA 4차 DV4-004). */
+.grid-check-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.grid-row-error-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #dc2626;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  /* 표 칸의 큰 줄 높이를 물려받으면 '!'가 원 아래로 밀리므로 1로 고정한다. */
+  line-height: 1;
+  cursor: help;
 }
 .registration-grid input:not([type='checkbox']) {
   margin: 0;

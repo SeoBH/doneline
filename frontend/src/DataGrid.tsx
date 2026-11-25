@@ -278,7 +278,8 @@ export const DataGrid = forwardRef<
       columnsDef.unshift({
         field: '_checked',
         headerName: '선택',
-        width: 52,
+        // 체크박스 옆에 저장 실패 표식(!)이 들어갈 자리까지 포함한 너비다(DV4-004).
+        width: 64,
         pinned: 'left',
         resizable: false,
         headerComponent: () => (
@@ -294,16 +295,42 @@ export const DataGrid = forwardRef<
             }}
           />
         ),
-        cellRenderer: (p: any) => (
-          <input
-            type="checkbox"
-            aria-label={label + ' 행 선택 ' + (p.node.rowIndex + 1)}
-            checked={Boolean(p.data._checked)}
-            disabled={busy}
-            onClick={(e) => e.stopPropagation()}
-            onChange={(e) => update(p.data._key, '_checked', e.target.checked)}
-          />
-        ),
+        // 저장에 실패한 행(_error)은 배경색만으로는 화면 낭독기·색 구분이 어려운 사용자에게 전달되지 않는다(QA 4차 DV4-004).
+        // 그래서 그 행의 선택 칸에 aria-invalid(잘못된 입력 표시)를 붙이고, aria-describedby(추가 설명을 가리키는 id)로
+        // 숨긴 사유 문장을 연결해 낭독기가 '행 선택 N, 잘못됨, 이미 사용 중인 코드입니다'처럼 읽게 한다.
+        // 눈으로 보는 사용자에게는 '!' 표식을 두고 마우스를 올리면 title로 사유가 보인다(키보드 사용자는 알림·낭독으로 전달).
+        // 사유는 React 글자로만 넣으므로 서버 문장에 태그가 섞여도 HTML로 해석되지 않는다.
+        cellRenderer: (p: any) => {
+          // id에는 공백이 들어가면 안 되므로(aria-describedby는 공백으로 여러 id를 나눈다) 표 이름의 공백을 '-'로 바꾼다.
+          const errorId = p.data._error
+            ? ('grid-error-' + label + '-' + p.data._key).replace(/\s+/g, '-')
+            : undefined;
+          return (
+            <span className="grid-check-cell">
+              <input
+                type="checkbox"
+                aria-label={label + ' 행 선택 ' + (p.node.rowIndex + 1)}
+                aria-invalid={errorId ? true : undefined}
+                aria-describedby={errorId}
+                checked={Boolean(p.data._checked)}
+                disabled={busy}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => update(p.data._key, '_checked', e.target.checked)}
+              />
+              {errorId && (
+                <>
+                  {/* 표식은 낭독에서 빼고(aria-hidden) 사유는 아래 숨긴 문장으로 한 번만 읽힌다. */}
+                  <span className="grid-row-error-mark" title={p.data._error} aria-hidden="true">
+                    !
+                  </span>
+                  <span id={errorId} className="visually-hidden">
+                    {p.data._error}
+                  </span>
+                </>
+              )}
+            </span>
+          );
+        },
       });
     return columnsDef;
   }, [columns, rows, busy, label, checks, onChange]);

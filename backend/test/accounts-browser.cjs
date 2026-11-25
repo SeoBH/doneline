@@ -97,6 +97,45 @@ const path = require('node:path');
       .getByText(code, { exact: true })
       .click();
     await catalog('corporations', '법인', 'A001', '법인 하나');
+    {
+      // 저장 실패 행 표시(QA 4차 DV4-004): 같은 코드 A001을 또 저장하면 서버가 그 행을 rowErrors로 돌려주고,
+      // 그 행의 선택 칸에만 aria-invalid와 사유(aria-describedby)·'!' 표식이 붙는다. 값을 고치면 표시가 사라진다.
+      const panel = active(),
+        grid = panel.getByLabel('법인 편집', { exact: true });
+      await panel.getByRole('button', { name: '행추가', exact: true }).click();
+      const key = await grid.locator('.ag-row[row-id*="-"]').getAttribute('row-id'),
+        row = grid.locator('.ag-row[row-id="' + key + '"]');
+      for (const [field, value] of [
+        ['code', 'A001'],
+        ['name', '법인 둘'],
+      ]) {
+        const cell = row.locator('[col-id="' + field + '"]');
+        await cell.dblclick();
+        await cell.locator('input').fill(value);
+        await cell.locator('input').press('Enter');
+      }
+      const [failed] = await Promise.all([
+        page.waitForResponse((r) => r.url().includes('/catalogs/corporations/save')),
+        toolbar.getByRole('button', { name: '저장', exact: true }).click(),
+      ]);
+      expect(failed.status()).toBe(409);
+      const check = row.getByRole('checkbox', { name: /행 선택/ });
+      await expect(check).toHaveAttribute('aria-invalid', 'true');
+      await expect(check).toHaveAccessibleDescription('이미 사용 중인 코드입니다.');
+      await expect(row.locator('.grid-row-error-mark')).toBeVisible();
+      await expect(grid.locator('[aria-invalid="true"]')).toHaveCount(1);
+      const codeCell = row.locator('[col-id="code"]');
+      await codeCell.dblclick();
+      await codeCell.locator('input').fill('A002');
+      await codeCell.locator('input').press('Enter');
+      await expect(grid.locator('[aria-invalid="true"]')).toHaveCount(0);
+      await expect(grid.locator('.grid-row-error-mark')).toHaveCount(0);
+      const [saved] = await Promise.all([
+        page.waitForResponse((r) => r.url().includes('/catalogs/corporations/save')),
+        toolbar.getByRole('button', { name: '저장', exact: true }).click(),
+      ]);
+      expect(saved.status()).toBe(201);
+    }
     await open('부서등록');
     await active()
       .getByLabel('고객사 목록', { exact: true })
