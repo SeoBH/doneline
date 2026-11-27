@@ -6,8 +6,11 @@
 #   powershell -ExecutionPolicy Bypass -File scripts/deploy-pages.ps1 -Setup   # 처음 한 번: 프로젝트 생성 + 비밀값 등록 + 앱 배포
 #   powershell -ExecutionPolicy Bypass -File scripts/deploy-pages.ps1          # 앱과 소개 페이지 모두 배포
 #   ... -App / -Landing                                                        # 하나만 배포
+#   ... -App -SkipTests                                                        # 급할 때만: 배포 전 화면 검사를 건너뜀
+# 앱 배포(-App·-Setup) 전에는 화면 검사(npm run test:browser·test:lookup)를 먼저 돌리고, 하나라도 실패하면 배포하지 않는다.
+#   검사는 로컬 PostgreSQL의 doneline_test DB와 Edge 브라우저가 필요하고 몇 분 걸린다. 소개 페이지(-Landing)만 올릴 때는 돌리지 않는다.
 # 비밀값은 .env(PROXY_SECRET)와 Tailscale 주소에서 읽어 바로 Cloudflare로 보내며 화면·파일에 남기지 않는다.
-param([switch]$Setup, [switch]$App, [switch]$Landing)
+param([switch]$Setup, [switch]$App, [switch]$Landing, [switch]$SkipTests)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 Set-Location $root
@@ -44,8 +47,22 @@ if ($Setup) {
 }
 
 if ($App) {
-  # 화면을 새로 빌드하고, 화면 파일과 보안 헤더를 배포용 폴더(deploy/pages/dist-app, Git 제외)에 모은다.
-  npm.cmd run build --prefix frontend
+  if ($SkipTests) {
+    Write-Warning '화면 검사를 건너뛰고 배포합니다(-SkipTests). 배포 뒤 npm run test:browser를 꼭 돌려 주세요.'
+    # 검사를 건너뛰면 화면 빌드가 안 되어 있으므로 여기서 빌드한다.
+    npm.cmd run build --prefix frontend
+    if ($LASTEXITCODE) { throw '화면 빌드 실패' }
+  } else {
+    # npm 같은 외부 명령은 실패해도 $ErrorActionPreference='Stop'으로 멈추지 않으므로 종료 코드($LASTEXITCODE)를 직접 본다.
+    # test:browser는 백엔드·화면 빌드를 함께 하므로 따로 빌드하지 않는다(같은 빌드 결과를 배포).
+    $started = Get-Date
+    npm.cmd run test:browser
+    if ($LASTEXITCODE) { throw '화면 검사(test:browser) 실패 — 배포하지 않았습니다.' }
+    npm.cmd run test:lookup
+    if ($LASTEXITCODE) { throw '화면 검사(test:lookup) 실패 — 배포하지 않았습니다.' }
+    Write-Host ('화면 검사 통과({0:N0}초). 배포를 계속합니다.' -f ((Get-Date) - $started).TotalSeconds)
+  }
+  # 빌드된 화면 파일과 보안 헤더를 배포용 폴더(deploy/pages/dist-app, Git 제외)에 모은다.
   $out = Join-Path $root 'deploy/pages/dist-app'
   if (Test-Path $out) { Remove-Item -Recurse -Force $out }
   Copy-Item -Recurse (Join-Path $root 'frontend/dist') $out

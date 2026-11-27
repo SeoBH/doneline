@@ -284,7 +284,7 @@ npx.cmd --yes wrangler@4 login
 powershell -ExecutionPolicy Bypass -File scripts/deploy-pages.ps1 -Setup
 ```
 
-`login`은 브라우저에서 Cloudflare 로그인과 허용을 묻습니다. **주의:** 최신 wrangler는 `pages project create`를 그대로 실행하면 Workers 자동 설정으로 넘어가 실행한 폴더 전체를 공개 파일로 올립니다(2026-11-14 실제 발생, 즉시 삭제). 프로젝트 생성은 반드시 스크립트(`-Setup`, 빈 폴더 + `--force`)로 하고 저장소 폴더에서 wrangler를 직접 실행하지 않습니다. `-Setup`은 Pages 프로젝트 2개(`doneline`=앱, `doneline-info`=소개 페이지)를 만들고, `.env`의 `PROXY_SECRET`과 이 PC의 Funnel 주소를 앱 프로젝트 비밀값으로 등록한 뒤 앱만 배포합니다(값은 화면에 표시하지 않음). 소개 페이지는 공개 시점을 정한 뒤 `-Landing`으로 올립니다. 이후 화면이나 소개 페이지를 고치면 `scripts/deploy-pages.ps1`(둘 다), `-App`, `-Landing`으로 다시 배포합니다. 프로젝트 이름이 이미 쓰이고 있으면 Cloudflare가 다른 주소를 주므로, 그 주소에 맞춰 `scripts/demo.ps1`의 출처와 `landing/index.html`의 링크를 바꿉니다.
+`login`은 브라우저에서 Cloudflare 로그인과 허용을 묻습니다. **주의:** 최신 wrangler는 `pages project create`를 그대로 실행하면 Workers 자동 설정으로 넘어가 실행한 폴더 전체를 공개 파일로 올립니다(2026-11-14 실제 발생, 즉시 삭제). 프로젝트 생성은 반드시 스크립트(`-Setup`, 빈 폴더 + `--force`)로 하고 저장소 폴더에서 wrangler를 직접 실행하지 않습니다. `-Setup`은 Pages 프로젝트 2개(`doneline`=앱, `doneline-info`=소개 페이지)를 만들고, `.env`의 `PROXY_SECRET`과 이 PC의 Funnel 주소를 앱 프로젝트 비밀값으로 등록한 뒤 앱만 배포합니다(값은 화면에 표시하지 않음). 소개 페이지는 공개 시점을 정한 뒤 `-Landing`으로 올립니다. 이후 화면이나 소개 페이지를 고치면 `scripts/deploy-pages.ps1`(둘 다), `-App`, `-Landing`으로 다시 배포합니다. 앱 배포(`-App`·`-Setup`) 전에는 스크립트가 `npm run test:browser`와 `npm run test:lookup`을 먼저 돌리고 하나라도 실패하면 배포하지 않습니다(로컬 PostgreSQL `doneline_test`와 Edge 필요, 몇 분 걸림). 급할 때만 `-SkipTests`로 건너뛰고 배포 뒤 검사를 따로 돌립니다. 프로젝트 이름이 이미 쓰이고 있으면 Cloudflare가 다른 주소를 주므로, 그 주소에 맞춰 `scripts/demo.ps1`의 출처와 `landing/index.html`의 링크를 바꿉니다.
 
 데모는 개발 DB(`doneline_dev`)를 사용하며 방문자는 **업체 무료 가입**으로 자기 업체를 만들어 체험합니다. 업체 가입·개선 요청·서버 시작·서버 오류·메일 발송 실패는 운영 슬랙으로 알립니다. 회사 PC·회사망에서는 실행하지 않습니다.
 
