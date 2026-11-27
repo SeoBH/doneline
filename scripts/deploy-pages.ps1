@@ -47,6 +47,19 @@ if ($Setup) {
 }
 
 if ($App) {
+  # 약관·개인정보처리방침·로그인 화면의 문의 메일(= 앱의 보내는 메일 주소, 2026-11-27 CEO 결정)을 .env의
+  # MAIL_FROM(없으면 SMTP_USER) 한 줄에서 꺼내 빌드 환경변수로 넘긴다(frontend/src/PolicyLinks.tsx).
+  # 'Doneline 알림 <a@b.com>' 형식이면 꺾쇠 안 주소만 쓴다. 다른 값은 읽지 않고, 주소를 화면에 출력하지 않는다.
+  $mailLines = @(Select-String -Path .env -Pattern '^(MAIL_FROM|SMTP_USER)=(.+)$')
+  $pick = ($mailLines | Where-Object { $_.Matches[0].Groups[1].Value -eq 'MAIL_FROM' } | Select-Object -First 1)
+  if (-not $pick) { $pick = $mailLines | Select-Object -First 1 }
+  $contact = if ($pick) { $pick.Matches[0].Groups[2].Value.Trim() } else { '' }
+  if ($contact -match '<([^<>\s]+@[^<>\s]+)>') { $contact = $Matches[1] }
+  if ($contact -notmatch '^[^@\s<>]+@[^@\s<>]+\.[^@\s<>]+$') { throw '문의 메일(MAIL_FROM/SMTP_USER)을 .env에서 찾지 못했습니다.' }
+  $env:VITE_CONTACT_EMAIL = $contact
+  # 소개 페이지에 적힌 문의 메일과 같은지만 알려 준다. 다르면 둘 중 하나를 맞춘다.
+  $same = (Get-Content landing/index.html -Raw).Contains('mailto:' + $contact)
+  Write-Host ('문의 메일: 소개 페이지와 ' + $(if ($same) { '같음' } else { '다름 — landing/index.html의 mailto를 확인하세요' }))
   if ($SkipTests) {
     Write-Warning '화면 검사를 건너뛰고 배포합니다(-SkipTests). 배포 뒤 npm run test:browser를 꼭 돌려 주세요.'
     # 검사를 건너뛰면 화면 빌드가 안 되어 있으므로 여기서 빌드한다.

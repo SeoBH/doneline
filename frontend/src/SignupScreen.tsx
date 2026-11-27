@@ -4,6 +4,7 @@ import { api } from './api';
 import { AccountForm, emptyAccount } from './AccountForm';
 import { Notify } from './Toasts';
 import { checkForm, clearInvalid } from './formCheck';
+import { PolicyConsent } from './PolicyLinks';
 export function SignupScreen({
   code,
   onBack,
@@ -96,6 +97,7 @@ export function SignupScreen({
               confirm={confirm}
               onConfirm={setConfirm}
             />
+            <PolicyConsent disabled={busy} />
             <button className="primary" disabled={busy}>
               가입 신청
             </button>

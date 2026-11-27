@@ -223,3 +223,25 @@ test('first password change blocks business access and revokes existing sessions
     .rows[0];
   assert.equal(u.must_change_password, false);
 });
+// 개인정보처리방침의 '이용 기록 1년 보관 후 자동 삭제'(026). 1년 넘은 기록만 지우고 최근 기록은 남는지,
+// 그리고 앱 계정이 여전히 감사 기록을 직접 지울 수 없는지(권한 원칙 유지) 확인한다.
+test('audit retention purges only events older than one year', async () => {
+  const { Audit } = require('../dist/audit');
+  const oldId = crypto.randomUUID(),
+    newId = crypto.randomUUID();
+  const sql =
+    "INSERT INTO audit.audit_events(event_id,operation_id,source,action,phase,outcome,occurred_at) VALUES($1,$1,'SERVER','RETENTION_TEST','END','SUCCESS',$2)";
+  await db.query(sql, [oldId, new Date(Date.now() - 400 * 24 * 3600 * 1000)]);
+  await db.query(sql, [newId, new Date(Date.now() - 300 * 24 * 3600 * 1000)]);
+  assert.ok((await app.get(Audit).purgeExpired()) >= 1);
+  const left = (
+    await db.query('SELECT event_id FROM audit.audit_events WHERE event_id = ANY($1)', [
+      [oldId, newId],
+    ])
+  ).rows.map((r) => r.event_id);
+  assert.deepEqual(left, [newId]);
+  await assert.rejects(
+    db.query('DELETE FROM audit.audit_events WHERE event_id=$1', [newId]),
+    (e) => e.code === '42501', // 42501 = 권한 없음(DB 언어 설정과 상관없는 오류 코드)
+  );
+});

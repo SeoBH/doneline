@@ -8,6 +8,7 @@ import { api } from './api';
 import { Notify } from './Toasts';
 import { User } from './types';
 import { checkForm, clearInvalid } from './formCheck';
+import { PolicyConsent } from './PolicyLinks';
 
 const empty = {
   workspaceName: '',
@@ -116,6 +117,8 @@ export function WorkspaceSignupScreen({
                 {hint && <small>{hint}</small>}
               </label>
             ))}
+            {/* 필수 동의 체크. 체크하지 않으면 checkForm이 '동의가 필요합니다'로 막는다(QA DL-005). */}
+            <PolicyConsent />
             <button className="account-wide primary">{busy ? '처리 중…' : '가입하기'}</button>
           </fieldset>
         )}

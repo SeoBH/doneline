@@ -1,11 +1,12 @@
 /**
  * 백엔드 진입점. 공통 앱 초기화 후 설정된 주소와 포트에서 HTTP 요청을 받는다.
- * 요청을 받기 시작하면 주기 작업(메일 발송기 mail.ts, 확인 대기 자동 완료 requests.ts)을 켜고,
+ * 요청을 받기 시작하면 주기 작업(메일 발송기 mail.ts, 확인 대기 자동 완료 requests.ts, 1년 지난 감사 기록 파기 audit.ts)을 켜고,
  * 운영 슬랙에 서버 시작을 알린다(서버 PC가 재부팅·재시작된 것을 알 수 있게).
  * 테스트는 createApp만 쓰므로 이 작업들은 실행되지 않는다.
  */
 import { createApp } from './app';
 import { settings } from './config';
+import { Audit } from './audit';
 import { Mail } from './mail';
 import { Notifier } from './notifier';
 import { Requests } from './requests';
@@ -16,6 +17,7 @@ createApp()
     const mail = app.get(Mail);
     mail.start();
     app.get(Requests).startAutoClose();
+    app.get(Audit).startRetention(); // 1년 지난 감사 기록 자동 파기(하루 한 번)
     void app
       .get(Notifier)
       .ops(

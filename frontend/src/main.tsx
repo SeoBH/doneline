@@ -7,6 +7,7 @@ import { createRoot } from 'react-dom/client';
 import { api, ApiError } from './api';
 import { SignupScreen } from './SignupScreen';
 import { WorkspaceSignupScreen } from './WorkspaceSignupScreen';
+import { PolicyFooter } from './PolicyLinks';
 import { SrPortalScreen } from './SrPortalScreen';
 import { NotificationBell } from './NotificationBell';
 import { FeedbackButton } from './FeedbackButton';
@@ -752,6 +753,8 @@ function App() {
             <a className="login-manual" href="/manual/" target="_blank" rel="noopener">
               처음이신가요? 사용 설명서 보기
             </a>
+            {/* 서비스 정보 줄: 이용약관·개인정보처리방침·문의 메일(PolicyLinks.tsx). */}
+            <PolicyFooter />
           </form>
         </main>
       </>
@@ -1016,9 +1019,21 @@ function App() {
   );
 }
 // ConfirmHost: 어느 화면에서든 confirmAction()으로 띄우는 공통 확인 창(ConfirmDialog.tsx).
+// /terms·/privacy는 로그인과 상관없는 공개 문서라 앱(App) 대신 문서 화면만 그린다(PolicyScreen.tsx).
+// lazy: 문서 화면 코드는 그 주소로 들어올 때만 내려받는다(앱 첫 화면을 무겁게 하지 않게).
+const policyKind = ({ '/terms': 'terms', '/privacy': 'privacy' } as const)[
+  window.location.pathname.replace(/\/+$/, '') as '/terms' | '/privacy'
+];
+const PolicyScreen = lazy(() => import('./PolicyScreen'));
 createRoot(document.getElementById('root')!).render(
-  <>
-    <App />
-    <ConfirmHost />
-  </>,
+  policyKind ? (
+    <Suspense fallback={null}>
+      <PolicyScreen kind={policyKind} />
+    </Suspense>
+  ) : (
+    <>
+      <App />
+      <ConfirmHost />
+    </>
+  ),
 );

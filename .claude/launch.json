@@ -25,7 +25,7 @@
       "env": {
         "PORT": "3102",
         "APP_ORIGIN": "http://127.0.0.1:3102",
-        "PGDATABASE": "doneline_manual",
+        "PGDATABASE": "doneline_dev",
         "SLACK_WEBHOOK_URL": "",
         "SMTP_HOST": "",
         "NODE_USE_SYSTEM_CA": "1"

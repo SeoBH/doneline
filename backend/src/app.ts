@@ -7,6 +7,7 @@ import { Module, ValidationPipe } from '@nestjs/common';
 import { APP_GUARD, NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import session from 'express-session';
+import type { Express } from 'express';
 import helmet from 'helmet';
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { isIP } from 'node:net';
@@ -160,6 +161,13 @@ export async function createApp() {
   );
   app.useGlobalFilters(app.get(ErrorFilter));
   app.useStaticAssets(join(__dirname, '../../frontend/dist'));
+  // 이용약관·개인정보처리방침 주소도 같은 화면 파일(index.html)을 준다. 화면(main.tsx)이 주소를 보고 문서를 그린다.
+  // Cloudflare Pages는 없는 경로에 index.html을 자동으로 주지만, 이 서버를 직접 쓰는 시연·시험에서는 여기서 맞춘다.
+  // 경로를 두 개로 한정해 /api 오류 응답(404 JSON)은 그대로 둔다.
+  const indexHtml = join(__dirname, '../../frontend/dist/index.html');
+  // getInstance(): Nest가 감싼 Express 앱 원본. 경로 두 개를 배열로 한 번에 등록한다.
+  const express: Express = app.getHttpAdapter().getInstance();
+  express.get(['/terms', '/privacy'], (_req, res) => res.sendFile(indexHtml));
   app.enableShutdownHooks();
   await app.init();
   return app;

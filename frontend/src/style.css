@@ -1423,6 +1423,92 @@ header .header-actions span {
   font-size: 14px;
   color: var(--color-text-muted);
 }
+/* 로그인 화면 아래 서비스 정보 줄(이용약관·개인정보처리방침·문의). 개인정보처리방침은 법령 권고대로 굵게 구분한다. */
+.policy-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 12px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+.policy-footer a {
+  color: inherit;
+}
+/* 가입 폼의 필수 동의 체크: 체크 상자와 문장을 한 줄로, 좁은 화면에서는 문장만 줄바꿈. */
+.policy-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 14px;
+}
+.policy-consent input {
+  width: auto;
+  margin-top: 3px;
+}
+.policy-consent[aria-invalid='true'],
+.policy-consent:has(input[aria-invalid='true']) {
+  color: var(--color-danger);
+}
+/* /terms·/privacy 문서 화면: 읽기 좋은 폭(약 72자)과 줄 간격. */
+.policy-page {
+  min-height: 100vh;
+  padding: 32px 16px;
+  background: var(--color-bg-page);
+}
+.policy-card {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 32px;
+  background: #fff;
+  border-radius: 12px;
+  line-height: 1.7;
+}
+.policy-card h1 {
+  margin: 8px 0 4px;
+}
+.policy-card h2 {
+  margin-top: 28px;
+  font-size: 17px;
+}
+.policy-card table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.policy-card th,
+.policy-card td {
+  padding: 6px 8px;
+  border: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: top;
+  /* 앱 공통 표는 한 줄 표시(nowrap)라 문서 표에서는 풀어 준다. keep-all: 한글 단어 중간에서 줄을 바꾸지 않는다. */
+  white-space: normal;
+  word-break: keep-all;
+}
+.policy-meta {
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+.policy-nav {
+  display: flex;
+  gap: 16px;
+  font-size: 14px;
+}
+.policy-nav a[aria-current='page'] {
+  font-weight: 700;
+}
+@media (max-width: 640px) {
+  .policy-card {
+    padding: 20px 14px;
+  }
+  /* 표가 넓으면 표만 가로로 밀어 본다(화면 전체 가로 스크롤 방지). */
+  .policy-card table {
+    display: block;
+    overflow-x: auto;
+  }
+}
 .header-actions > button:hover,
 .bell > button:hover {
   background: var(--color-header-hover);

@@ -16,8 +16,11 @@ function labelOf(el: Field) {
 }
 function reasonOf(el: Field) {
   const v = el.validity;
-  if (v.valueMissing)
-    return el instanceof HTMLSelectElement ? '선택해 주세요.' : '필수 입력입니다.';
+  if (v.valueMissing) {
+    if (el instanceof HTMLSelectElement) return '선택해 주세요.';
+    // 필수 체크(약관 동의 등)는 '입력'이 아니라 '동의'를 요구한다.
+    return el.type === 'checkbox' ? '동의가 필요합니다.' : '필수 입력입니다.';
+  }
   if (v.tooShort) return `${(el as HTMLInputElement).minLength}자 이상 입력해 주세요.`;
   if (v.tooLong) return `${(el as HTMLInputElement).maxLength}자 이하로 입력해 주세요.`;
   if (v.typeMismatch && el.type === 'email')

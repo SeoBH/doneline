@@ -237,6 +237,7 @@ const overlayScript = () => {
       await type(ceo, field(ceo, label), value);
     await field(ceo, '비밀번호').fill(PW);
     await field(ceo, '비밀번호 확인').fill(PW);
+    await ceo.getByRole('checkbox', { name: /이용약관.*동의/ }).check(); // 필수 약관 동의(DL-005)
     await shot(ceo, '02-workspace-signup', [ceo.getByRole('button', { name: '가입하기' })]);
     await click(ceo, ceo.getByRole('button', { name: '가입하기' }));
     await expect(ceo.getByRole('button', { name: '로그아웃' })).toBeVisible();
@@ -334,6 +335,7 @@ const overlayScript = () => {
   await field(lee, '비밀번호').fill(PW);
   await field(lee, '비밀번호 확인').fill(PW);
   await shot(lee, '11-customer-signup-form');
+  await lee.getByRole('checkbox', { name: /이용약관.*동의/ }).check(); // 필수 약관 동의(DL-005)
   await lee.getByRole('button', { name: '가입 신청', exact: true }).click();
   await expect(lee.getByRole('status').filter({ hasText: '가입 신청이 완료' })).toBeVisible();
 

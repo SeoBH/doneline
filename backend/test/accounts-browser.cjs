@@ -161,8 +161,25 @@ const path = require('node:path');
     await signup.getByLabel('주소 (선택)', { exact: true }).fill('서울');
     await signup.getByLabel('이메일', { exact: true }).fill(code + '@example.com');
     await expect(signup.getByLabel('역할', { exact: true })).toHaveCount(0);
+    // 약관·개인정보처리방침 동의 없이는 가입 신청이 막힌다(QA DL-005). 문서 링크는 새 탭용 /terms·/privacy.
+    const agree = signup.getByRole('checkbox', { name: /이용약관.*개인정보처리방침.*동의/ });
+    await signup.getByRole('button', { name: '가입 신청', exact: true }).click();
+    await expect(signup.locator('.form-error')).toContainText('동의가 필요합니다');
+    await expect(signup.getByRole('link', { name: '개인정보처리방침' })).toHaveAttribute(
+      'href',
+      '/privacy',
+    );
+    await agree.check();
     await signup.getByRole('button', { name: '가입 신청', exact: true }).click();
     await expect(signup.getByRole('status').filter({ hasText: '가입 신청이 완료' })).toBeVisible();
+    // 공개 문서 화면: 로그인 없이 열리고 제목·시행일이 보인다. 가입 화면은 뒤에서 다시 쓰므로 새 탭에서 연다.
+    const doc = await browser.newPage();
+    await doc.goto('http://127.0.0.1:3002/privacy');
+    await expect(doc.getByRole('heading', { level: 1, name: '개인정보처리방침' })).toBeVisible();
+    await expect(doc.getByText(/시행일 2026년 11월 27일/)).toBeVisible();
+    await doc.goto('http://127.0.0.1:3002/terms');
+    await expect(doc.getByRole('heading', { level: 1, name: '이용약관' })).toBeVisible();
+    await doc.close();
     await page.locator('aside').getByRole('button', { name: '사용자등록', exact: true }).click();
     const panel = page.locator('.account-screen:visible');
     // 고르기 칸 글에는 사용자 수가 붙는다(예: '… · 브라우저 고객사 (1명 · 승인 대기 1)'). 코드로 찾아 고른다.
