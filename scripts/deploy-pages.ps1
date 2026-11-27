@@ -1,5 +1,5 @@
 ﻿# Doneline Cloudflare Pages 배포 스크립트(대표님 Cloudflare 계정으로 실행).
-# - 앱(doneline.pages.dev): 화면 파일(frontend/dist) + 보안 헤더(deploy/pages/_headers) + API 중계 함수(deploy/pages/functions)
+# - 앱(doneline.pages.dev): 화면 파일(frontend/dist) + 보안 헤더(deploy/pages/_headers) + 주소 규칙(deploy/pages/_redirects) + API 중계 함수(deploy/pages/functions)
 # - 소개 페이지(doneline-info.pages.dev): landing 폴더
 # 처음 한 번: npx.cmd wrangler login (브라우저에서 Cloudflare 로그인·허용) 후 -Setup으로 프로젝트와 비밀값을 만든다.
 # 실행(프로젝트 루트에서):
@@ -80,6 +80,7 @@ if ($App) {
   if (Test-Path $out) { Remove-Item -Recurse -Force $out }
   Copy-Item -Recurse (Join-Path $root 'frontend/dist') $out
   Copy-Item (Join-Path $root 'deploy/pages/_headers') $out
+  Copy-Item (Join-Path $root 'deploy/pages/_redirects') $out # /terms·/privacy를 화면 파일로(설명은 그 파일)
   # wrangler는 실행 위치의 functions 폴더를 함께 올리므로 deploy/pages에서 실행한다.
   Push-Location (Join-Path $root 'deploy/pages')
   try { Wrangler pages deploy dist-app --project-name doneline --branch main --commit-dirty=true }
