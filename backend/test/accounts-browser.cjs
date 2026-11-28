@@ -49,6 +49,11 @@ const path = require('node:path');
     await page.getByLabel('아이디', { exact: true }).fill(code);
     await page.getByLabel('비밀번호', { exact: true }).fill(password);
     await page.getByRole('button', { name: '로그인', exact: true }).click();
+    // 시작하기 안내: '우리 직원 등록'은 선택 단계라 완료 건수(필수 6단계)에 들어가지 않는다.
+    // 1인 업체가 직원을 늘리지 않아도 준비를 끝낼 수 있어야 한다(2026-11-28 정기회의).
+    const guide = page.locator('.start-guide');
+    await expect(guide.getByText('우리 직원 등록 (선택)', { exact: true })).toBeVisible();
+    await expect(guide.locator('.hint')).toContainText(/\/6 완료\)|준비가 모두 끝났습니다/);
     const toolbar = page.locator('.toolbar'),
       active = () => page.locator('.content>div:not([hidden])');
     const open = async (name) =>

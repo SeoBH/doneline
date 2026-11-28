@@ -2,6 +2,7 @@
  * 첫 화면 '시작하기' 안내. 탭이 하나도 열려 있지 않을 때 업체 직원에게 처음 해야 할 일을 순서대로 보여 준다.
  * 각 단계의 완료 여부는 GET /api/workspaces/onboarding(건수)으로 판단하고, [열기]로 해당 화면을 바로 연다.
  * 업체 직원이 아니면(고객사 사용자) 메뉴 선택 안내만 보여 준다.
+ * '우리 직원 등록'은 선택 단계다. 1인 업체는 관리자 혼자 요청을 처리하므로 직원이 늘지 않아도 준비가 끝나야 한다.
  */
 import { useEffect, useState } from 'react';
 import { api } from './api';
@@ -50,8 +51,9 @@ export function StartGuide({
   }, [user.staff]);
   if (!user.staff || !counts)
     return <div className="empty">메뉴(휴대폰은 왼쪽 위 ☰)에서 화면을 선택해 주세요.</div>;
-  // [화면 코드, 제목, 설명, 완료 여부]. 순서대로 하면 고객이 첫 요청을 올릴 수 있는 상태가 된다.
-  const steps: [string, string, string, boolean][] = [
+  // [화면 코드, 제목, 설명, 완료 여부, 선택 단계?]. 순서대로 하면 고객이 첫 요청을 올릴 수 있는 상태가 된다.
+  // 타입 끝의 `boolean?`는 '넣어도 되고 빼도 되는 칸'이라는 뜻이다. 빼면 필수 단계, true면 선택 단계.
+  const steps: [string, string, string, boolean, boolean?][] = [
     [
       'CUSTOMER_REGISTER',
       '고객사 등록',
@@ -72,9 +74,11 @@ export function StartGuide({
     ],
     [
       'USER_REGISTER',
-      '우리 직원 등록',
-      '요청을 처리할 엔지니어를 추가하고 비밀번호 설정 링크를 전달합니다.',
+      '우리 직원 등록 (선택)',
+      '요청을 처리할 엔지니어를 추가하고 비밀번호 설정 링크를 전달합니다. 혼자 처리하면 건너뛰어도 됩니다.',
+      // staff는 관리자 본인을 포함한 업체 직원 수라서 1명보다 많아야 '추가했다'고 본다.
       counts.staff > 1,
+      true,
     ],
     [
       'CUSTOMER_REGISTER',
@@ -97,14 +101,16 @@ export function StartGuide({
       counts.requests > 0,
     ],
   ];
-  const done = steps.filter((s) => s[3]).length;
+  // 완료 건수·전체 건수는 필수 단계만 센다. 선택 단계를 세면 1인 업체는 영원히 'n−1/n 완료'에 머물렀다.
+  const required = steps.filter((s) => !s[4]);
+  const done = required.filter((s) => s[3]).length;
   return (
     <div className="start-guide">
       <h2>처음 준비할 일</h2>
       <p className="hint">
-        {done === steps.length
+        {done === required.length
           ? '준비가 모두 끝났습니다. 메뉴(휴대폰은 왼쪽 위 ☰)에서 화면을 선택하세요.'
-          : `순서대로 진행하면 고객이 요청을 올릴 수 있습니다. (${done}/${steps.length} 완료)`}{' '}
+          : `순서대로 진행하면 고객이 요청을 올릴 수 있습니다. (${done}/${required.length} 완료)`}{' '}
         <a href="/manual/#admin" target="_blank" rel="noopener">
           사진·영상으로 보기
         </a>
